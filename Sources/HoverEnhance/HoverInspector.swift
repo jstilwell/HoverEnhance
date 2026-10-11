@@ -67,7 +67,7 @@ final class HoverInspector: @unchecked Sendable {
             Thread.sleep(forTimeInterval: 0.3)
             if let retried = systemWide.element(at: point).0 { element = retried }
         }
-        return .success(describe(element, pid: pid))
+        return .success(describe(element, pid: pid, at: point))
     }
 
     /// Returns true if this call just switched the app's tree on.
@@ -87,7 +87,7 @@ final class HoverInspector: @unchecked Sendable {
         return true
     }
 
-    private func describe(_ element: AXElement, pid: pid_t) -> HoverInfo {
+    private func describe(_ element: AXElement, pid: pid_t, at point: CGPoint) -> HoverInfo {
         let app = NSRunningApplication(processIdentifier: pid)
         var info = HoverInfo(pid: pid, appName: app?.localizedName, bundleID: app?.bundleIdentifier)
         info.role = element.role
@@ -108,7 +108,41 @@ final class HoverInspector: @unchecked Sendable {
             if role == kAXWindowRole { break }
             node = current.parent
         }
+
+        if element.role == kAXImageRole, let url = info.url {
+            info.imageURL = url
+            info.imageFrame = info.frame
+        } else if info.pageURL != nil, let image = image(at: point, near: element) {
+            info.imageURL = image.url
+            info.imageFrame = image.frame
+        }
         return info
+    }
+
+    /// Sites often cover images with transparent links or buttons, so the hit element isn't the image.
+    /// Look for one under the point among the descendants of the element, its parent, and its
+    /// grandparent. Each node costs a few AX round-trips, so the search is capped.
+    private func image(at point: CGPoint, near element: AXElement) -> (url: URL, frame: CGRect)? {
+        var budget = 40
+        var searched: AXElement?
+        var root: AXElement? = element
+        for _ in 0..<3 {
+            guard let current = root, current.role != "AXWebArea" else { return nil }
+            var queue = [current]
+            while !queue.isEmpty, budget > 0 {
+                for child in queue.removeFirst().children {
+                    if let searched, CFEqual(child.ref, searched.ref) { continue }
+                    budget -= 1
+                    guard budget > 0 else { break }
+                    guard let frame = child.frame, frame.contains(point) else { continue }
+                    if child.role == kAXImageRole, let url = child.url { return (url, frame) }
+                    queue.append(child)
+                }
+            }
+            searched = current
+            root = current.parent
+        }
+        return nil
     }
 }
 

@@ -6,5 +6,6 @@ let package = Package(
     platforms: [.macOS(.v14)],
     targets: [
         .executableTarget(name: "HoverEnhance"),
+        .testTarget(name: "HoverEnhanceTests", dependencies: ["HoverEnhance"]),
     ]
 )
