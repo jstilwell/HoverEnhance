@@ -139,7 +139,7 @@ final class HoverInspector: @unchecked Sendable {
         // A photo outside any link, as in Instagram's feed: the post it's from, which may hold more.
         if info.linkURL == nil, info.videoFrame == nil, let webArea, let image = imageElement, let frame = info.imageFrame,
            let site = info.pageURL?.host().flatMap(MediaSite.init(host:)) {
-            info.postURL = postLink(before: image, frame: frame, in: webArea, site: site)
+            (info.postURL, info.postSearch) = postLink(before: image, frame: frame, in: webArea, site: site)
         }
         if info.bundleID == FinderItem.bundleID {
             info.fileURL = FinderItem.url(at: element)
@@ -200,14 +200,24 @@ final class HoverInspector: @unchecked Sendable {
     /// The link to the post a photo is from: the nearest before it in the page that leads to a post on
     /// the page's site, as the time in a post's header does, just above its photos. It must be close
     /// above the photo and across from it, or it's another post's.
-    private func postLink(before image: AXElement, frame: CGRect, in webArea: AXElement, site: MediaSite) -> URL? {
+    /// Also returns what it passed over, for the inspector.
+    private func postLink(before image: AXElement, frame: CGRect, in webArea: AXElement, site: MediaSite) -> (URL?, String) {
+        var passed: [String] = []
         for link in webArea.search("AXLinkSearchKey", limit: 8, from: image, backward: true) {
-            guard let url = link.url, let source = SiteLinks.source(forLink: url), source.isPost, source.site == site else { continue }
+            guard let url = link.url else { continue }
+            guard let source = SiteLinks.source(forLink: url), source.isPost, source.site == site else {
+                passed.append(url.path())
+                continue
+            }
             guard let linkFrame = link.frame, linkFrame.maxY <= frame.minY + 1, frame.minY - linkFrame.maxY < 400,
-                  linkFrame.maxX > frame.minX, linkFrame.minX < frame.maxX else { return nil }
-            return url
+                  linkFrame.maxX > frame.minX, linkFrame.minX < frame.maxX else {
+                let at = link.frame.map { "\(Int($0.minX)),\(Int($0.minY)) \(Int($0.width))×\(Int($0.height))" } ?? "nowhere"
+                let photo = "\(Int(frame.minX)),\(Int(frame.minY)) \(Int(frame.width))×\(Int(frame.height))"
+                return (nil, (passed + ["\(url.path()) at \(at), not just above the photo at \(photo)"]).joined(separator: " · "))
+            }
+            return (url, passed.joined(separator: " · "))
         }
-        return nil
+        return (nil, passed.isEmpty ? "no links before the photo" : (passed + ["no post link"]).joined(separator: " · "))
     }
 
     /// The frame of a video the page shows under the point. Sites cover videos with their controls as
