@@ -358,7 +358,7 @@ struct FinderSettingsView: View {
             .disabled(!settings.finderCards)
         }
         .formStyle(.grouped)
-        .frame(width: settingsWidth, height: 780)
+        .frame(width: settingsWidth, height: 860)
     }
 }
 
