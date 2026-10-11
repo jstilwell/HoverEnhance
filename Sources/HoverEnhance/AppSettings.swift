@@ -128,6 +128,7 @@ final class AppSettings {
         static let disabledSites = "disabledSites"
         static let minimumEnlargement = "minimumEnlargement"
         static let maximumSize = "maximumSize"
+        static let largestImageMegabytes = "largestImageMegabytes"
         static let showsNotch = "showsNotch"
         static let imageScroll = "imageScroll"
         static let videoScroll = "videoScroll"
@@ -178,6 +179,9 @@ final class AppSettings {
     var minimumEnlargement: Double { didSet { defaults.set(minimumEnlargement, forKey: Key.minimumEnlargement) } }
     /// The largest preview, as a fraction of the room beside the cursor.
     var maximumSize: Double { didSet { defaults.set(maximumSize, forKey: Key.maximumSize) } }
+    /// Images larger than this aren't downloaded unless asked for.
+    var largestImageMegabytes: Int { didSet { defaults.set(largestImageMegabytes, forKey: Key.largestImageMegabytes) } }
+    var largestImageBytes: Int64 { Int64(largestImageMegabytes) * 1_000_000 }
     var showsNotch: Bool { didSet { defaults.set(showsNotch, forKey: Key.showsNotch) } }
     var imageScroll: ImageScroll { didSet { defaults.set(imageScroll.rawValue, forKey: Key.imageScroll) } }
 
@@ -226,6 +230,7 @@ final class AppSettings {
             Key.showCards: true,
             Key.minimumEnlargement: 1.2,
             Key.maximumSize: 1.0,
+            Key.largestImageMegabytes: 25,
             Key.showsNotch: true,
             Key.imageScroll: ImageScroll.zoom.rawValue,
             Key.videoScroll: VideoScroll.scrub.rawValue,
@@ -262,6 +267,7 @@ final class AppSettings {
         disabledSites = Set((defaults.stringArray(forKey: Key.disabledSites) ?? []).compactMap(MediaSite.init(rawValue:)))
         minimumEnlargement = defaults.double(forKey: Key.minimumEnlargement)
         maximumSize = defaults.double(forKey: Key.maximumSize)
+        largestImageMegabytes = defaults.integer(forKey: Key.largestImageMegabytes)
         showsNotch = defaults.bool(forKey: Key.showsNotch)
         imageScroll = defaults.string(forKey: Key.imageScroll).flatMap(ImageScroll.init(rawValue:)) ?? .zoom
         videoScroll = defaults.string(forKey: Key.videoScroll).flatMap(VideoScroll.init(rawValue:)) ?? .scrub

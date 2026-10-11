@@ -183,31 +183,51 @@ final class PreviewController {
         task = Task { await display(next) }
     }
 
-    private func display(_ position: Int, unlessSmallerThan shown: CGSize? = nil) async {
-        guard let media, media.items.indices.contains(position), let target else { return }
+    /// Shows the item at `position`, once it has loaded. Returns whether it did. `allowingLarge` loads an
+    /// image of any size, after the user asked for one over the limit.
+    @discardableResult
+    private func display(_ position: Int, unlessSmallerThan shown: CGSize? = nil, allowingLarge: Bool = false) async -> Bool {
+        guard let media, media.items.indices.contains(position), let target else { return false }
         let requested = target
         let counter = media.items.count > 1 ? "\(position + 1)/\(media.items.count)" : nil
+        let settings = AppSettings.shared
 
         switch media.items[position] {
         case .image(let candidates):
-            let image = await loader.load(candidates, page: target.page, maxPixelSize: Self.maxPixelSize())
-            guard let image, !Task.isCancelled, self.target == requested else { return }
-            let enlargement = AppSettings.shared.minimumEnlargement
-            if let shown, image.pixelSize.width <= shown.width * enlargement, image.pixelSize.height <= shown.height * enlargement { return }
-            playback.stop()
-            panel.show(image, counter: counter, anchor: requested.anchor, focus: Self.focus(of: requested.anchor, in: requested.element))
-            log.infoPrivateInRelease("preview \(position + 1)/\(media.items.count): \(image.url.absoluteString)")
+            let outcome = await loader.load(candidates, page: target.page, maxPixelSize: Self.maxPixelSize(),
+                                            byteLimit: allowingLarge ? nil : settings.largestImageBytes)
+            guard !Task.isCancelled, self.target == requested else { return false }
+            switch outcome {
+            case .loaded(let image):
+                let enlargement = settings.minimumEnlargement
+                if let shown, image.pixelSize.width <= shown.width * enlargement, image.pixelSize.height <= shown.height * enlargement {
+                    return false
+                }
+                playback.stop()
+                panel.show(image, counter: counter, anchor: requested.anchor, focus: Self.focus(of: requested.anchor, in: requested.element))
+                log.infoPrivateInRelease("preview \(position + 1)/\(media.items.count): \(image.url.absoluteString)")
+            case .tooLarge(let url, let bytes):
+                let card = NSHostingView(rootView: TooLargeCardView(url: url, bytes: bytes, limit: settings.largestImageBytes) { [weak self] in
+                    await self?.loadAnyway(position) ?? false
+                })
+                card.appearance = NSAppearance(named: .darkAqua)
+                playback.stop()
+                panel.show(card, counter: counter, anchor: requested.anchor)
+                log.infoPrivateInRelease("preview \(position + 1)/\(media.items.count): over the size limit, \(url.absoluteString)")
+            case .failed:
+                return false
+            }
 
         case .video(let url, let reportedSize):
             // Keyed by source and position, so the same video resumes however it was reached.
             let key = "\(requested.source)#\(position)"
             guard let size = await playback.start(url, key: key), !Task.isCancelled, self.target == requested,
-                  let player = playback.player else { return }
+                  let player = playback.player else { return false }
             panel.show(player, videoSize: reportedSize ?? size, counter: counter, anchor: requested.anchor)
             log.infoPrivateInRelease("preview \(position + 1)/\(media.items.count): video \(url.absoluteString)")
 
         case .embed(let embed):
-            guard let view = embeds.view(for: embed) else { return }
+            guard let view = embeds.view(for: embed) else { return false }
             playback.stop()
             panel.show(view, size: embed.size, counter: counter, anchor: requested.anchor)
             log.infoPrivateInRelease("preview \(position + 1)/\(media.items.count): embed \(String(describing: embed))")
@@ -222,13 +242,12 @@ final class PreviewController {
 
         case .file(let url):
             // Cards wait longer than other previews, so sweeping across a folder doesn't flash them.
-            let settings = AppSettings.shared
             let extraWait = settings.finderDelay - settings.hoverDelay
             if extraWait > 0 { try? await Task.sleep(for: .milliseconds(extraWait)) }
-            guard !Task.isCancelled, self.target == requested else { return }
+            guard !Task.isCancelled, self.target == requested else { return false }
             let options = settings.fileCard
             let details = await Task.detached { FileDetails.load(url, options: options) }.value
-            guard !Task.isCancelled, self.target == requested else { return }
+            guard !Task.isCancelled, self.target == requested else { return false }
             let view = CardHostingView(rootView: FileCardView(card: FileCard(url: url, details: details, options: options)))
             view.appearance = NSAppearance(named: .darkAqua)
             // The list of apps using the file fills in after the card appears.
@@ -244,6 +263,16 @@ final class PreviewController {
         showing = media.items[position]
         scrollTap.isEnabled = true
         prefetch(position + 1)
+        return true
+    }
+
+    /// The too-large card's Load Anyway: loads the image at `position` whatever its size.
+    private func loadAnyway(_ position: Int) async -> Bool {
+        task?.cancel()
+        // Kept as the current task, so moving on cancels it like any other load.
+        return await withCheckedContinuation { continuation in
+            task = Task { continuation.resume(returning: await display(position, allowingLarge: true)) }
+        }
     }
 
     /// Where the cursor rests on the thumbnail, as fractions from its top left: the part of the
@@ -273,7 +302,8 @@ final class PreviewController {
     private func prefetch(_ position: Int) {
         guard let media, media.items.indices.contains(position), case .image(let candidates) = media.items[position] else { return }
         let page = target?.page
-        Task { [loader] in _ = await loader.load(candidates, page: page, maxPixelSize: Self.maxPixelSize()) }
+        let limit = AppSettings.shared.largestImageBytes
+        Task { [loader] in _ = await loader.load(candidates, page: page, maxPixelSize: Self.maxPixelSize(), byteLimit: limit) }
     }
 
     /// Longest screen edge in pixels; larger images are downsampled to this when decoded.

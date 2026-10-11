@@ -25,7 +25,7 @@ Content-Length, or by bytes received when there's none) stops downloading and th
 it is, with Load Anyway, which loads it.
 **Tests**: Capped downloads through a stub URLProtocol: under the limit, over by Content-Length, over
 without one; the setting persists.
-**Status**: Not Started
+**Status**: Complete
 
 ## Stage 3: Welcome window
 **Goal**: Nothing runs until Accessibility is on, and the first thing seen explains how to turn it on.

@@ -23,6 +23,7 @@ struct AppSettingsTests {
         #expect(settings.videosStartMuted)
         #expect(settings.loopVideos && settings.resumeVideos)
         #expect(settings.filter == PreviewFilter())
+        #expect(settings.largestImageBytes == 25_000_000)
     }
 
     @Test func otherAppsStartOffWithTheSafeChoices() {
