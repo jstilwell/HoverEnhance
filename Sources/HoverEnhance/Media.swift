@@ -40,6 +40,24 @@ enum MediaItem: Sendable, Equatable {
 /// Resolved media: a single item, or an album.
 struct Media: Sendable, Equatable {
     var items: [MediaItem]
+
+    /// Without images and videos anywhere but the web, or nil if nothing is left. Lookups read what
+    /// sites answer, and an answer mustn't point HoverEnhance at local files.
+    func webOnly() -> Media? {
+        func isWeb(_ url: URL) -> Bool { ["http", "https"].contains(url.scheme?.lowercased()) }
+        let items = items.compactMap { item -> MediaItem? in
+            switch item {
+            case .image(let urls):
+                let web = urls.filter(isWeb)
+                return web.isEmpty ? nil : .image(web)
+            case .video(let url, _):
+                return isWeb(url) ? item : nil
+            case .embed, .channel, .file:
+                return item
+            }
+        }
+        return items.isEmpty ? nil : Media(items: items)
+    }
 }
 
 /// Works out what to preview for a hover result.
@@ -48,6 +66,13 @@ enum MediaResolver {
         if let file = info.fileURL {
             // A card would cover Quick Look's panel, or the name being edited.
             return info.finderIsBusy ? nil : .file(file, onDesktop: info.fileIsOnDesktop)
+        }
+        var info = info
+        // Only a local page may lead to local files. Browsers don't let web pages open them either:
+        // besides reading the disk, a path under /net/<host> mounts that host's shares.
+        if info.pageURL?.isFileURL != true {
+            if info.linkURL?.isFileURL == true { info.linkURL = nil }
+            if info.imageURL?.isFileURL == true { info.imageURL = nil }
         }
         // On YouTube itself, its thumbnails and hover previews are left alone. Text links to its
         // videos and channels get a card about the creator; text links elsewhere preview as usual.

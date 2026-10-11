@@ -58,6 +58,11 @@ final class PreviewController {
             reset(because: "nothing to preview")
             return
         }
+        let keyHeld = NSEvent.modifierFlags.contains(settings.activationKey.flag)
+        guard settings.otherApps.allows(source, in: info.appKind, keyHeld: keyHeld) else {
+            reset(because: "not previewed outside browsers")
+            return
+        }
         // Still on the same thing: it's loading, showing, or was dismissed by a click.
         if target?.source == source { return }
 
@@ -191,7 +196,7 @@ final class PreviewController {
             if let shown, image.pixelSize.width <= shown.width * enlargement, image.pixelSize.height <= shown.height * enlargement { return }
             playback.stop()
             panel.show(image, counter: counter, anchor: requested.anchor, focus: Self.focus(of: requested.anchor, in: requested.element))
-            log.info("preview \(position + 1)/\(media.items.count): \(image.url.absoluteString, privacy: .public)")
+            log.infoPrivateInRelease("preview \(position + 1)/\(media.items.count): \(image.url.absoluteString)")
 
         case .video(let url, let reportedSize):
             // Keyed by source and position, so the same video resumes however it was reached.
@@ -199,13 +204,13 @@ final class PreviewController {
             guard let size = await playback.start(url, key: key), !Task.isCancelled, self.target == requested,
                   let player = playback.player else { return }
             panel.show(player, videoSize: reportedSize ?? size, counter: counter, anchor: requested.anchor)
-            log.info("preview \(position + 1)/\(media.items.count): video \(url.absoluteString, privacy: .public)")
+            log.infoPrivateInRelease("preview \(position + 1)/\(media.items.count): video \(url.absoluteString)")
 
         case .embed(let embed):
             guard let view = embeds.view(for: embed) else { return }
             playback.stop()
             panel.show(view, size: embed.size, counter: counter, anchor: requested.anchor)
-            log.info("preview \(position + 1)/\(media.items.count): embed \(String(describing: embed), privacy: .public)")
+            log.infoPrivateInRelease("preview \(position + 1)/\(media.items.count): embed \(String(describing: embed))")
             logPlaybackState(of: view, after: .seconds(5))
 
         case .channel(let channel):
@@ -213,7 +218,7 @@ final class PreviewController {
             card.appearance = NSAppearance(named: .darkAqua)
             playback.stop()
             panel.show(card, counter: counter, anchor: requested.anchor)
-            log.info("preview: creator card for \(channel.title, privacy: .public)")
+            log.infoPrivateInRelease("preview: creator card for \(channel.title)")
 
         case .file(let url):
             // Cards wait longer than other previews, so sweeping across a folder doesn't flash them.
@@ -233,7 +238,7 @@ final class PreviewController {
             }
             playback.stop()
             panel.show(view, counter: counter, anchor: requested.anchor)
-            log.info("preview: file card for \(url.path(percentEncoded: false), privacy: .public)")
+            log.infoPrivateInRelease("preview: file card for \(url.path(percentEncoded: false))")
         }
         index = position
         showing = media.items[position]

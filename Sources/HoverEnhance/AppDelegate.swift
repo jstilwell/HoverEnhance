@@ -3,6 +3,19 @@ import OSLog
 
 let log = Logger(subsystem: Bundle.main.bundleIdentifier ?? "HoverEnhance", category: "hover")
 
+extension Logger {
+    /// For messages holding URLs, paths, or text from other apps: readable in debug builds, where
+    /// `make log` shows them, and redacted in release builds, where the log is no place for what the
+    /// user looks at.
+    func infoPrivateInRelease(_ message: String) {
+        #if DEBUG
+        info("\(message, privacy: .public)")
+        #else
+        info("\(message, privacy: .private)")
+        #endif
+    }
+}
+
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let settings = AppSettings.shared
@@ -66,9 +79,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             preview.hovered(info)
             guard info != lastInfo else { return }
             lastInfo = info
-            print(info.summary + "\n")
-            // Info-level messages stay in memory rather than the persisted log; `make log` streams them.
+            #if DEBUG
+            // For `make log`. Release builds leave what's under the cursor (text, URLs, paths) out of
+            // the log; the inspector shows it to the user instead.
             log.info("\(info.summary, privacy: .public)")
+            #endif
             if settings.showsInspector { hud.show(info.summary) }
         case .failure(.ownWindow):
             break
@@ -79,10 +94,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
-    /// With an activation key set, pressing or releasing it shows or hides the preview without
+    /// With an activation key in use, pressing or releasing it shows or hides the preview without
     /// waiting for the mouse to move.
     private func modifiersChanged(_ flags: NSEvent.ModifierFlags) {
-        guard settings.activation != .always else { return }
+        guard settings.usesActivationKey else { return }
         if settings.previewsAllowed(holding: flags) {
             monitor.inspectNow()
         } else {

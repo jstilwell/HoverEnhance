@@ -25,6 +25,22 @@ struct AppSettingsTests {
         #expect(settings.filter == PreviewFilter())
     }
 
+    @Test func otherAppsStartOffWithTheSafeChoices() {
+        let defaults = freshDefaults()
+        let settings = AppSettings(defaults: defaults)
+        #expect(settings.otherApps == OtherAppsPolicy())
+        #expect(!settings.usesActivationKey)
+
+        settings.previewsInOtherApps = true
+        settings.otherAppsSkipEmail = false
+        settings.otherAppsKnownSitesOnly = false
+        settings.otherAppsNeedKey = true
+        let reloaded = AppSettings(defaults: defaults)
+        #expect(reloaded.otherApps == OtherAppsPolicy(enabled: true, skipsEmail: false, knownSitesOnly: false, needsKey: true))
+        // Holding the key matters now, though previews otherwise always appear.
+        #expect(reloaded.activation == .always && reloaded.usesActivationKey)
+    }
+
     @Test func finderDefaultsShowEverything() {
         let settings = AppSettings(defaults: freshDefaults())
         #expect(settings.finderCards)

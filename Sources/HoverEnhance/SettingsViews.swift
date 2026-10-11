@@ -22,6 +22,7 @@ private struct Footnote: View {
 
 struct GeneralSettingsView: View {
     @Bindable var settings: AppSettings
+    @State private var confirmsOtherApps = false
 
     var body: some View {
         Form {
@@ -36,7 +37,7 @@ struct GeneralSettingsView: View {
                 Picker("Key", selection: $settings.activationKey) {
                     ForEach(ModifierKey.allCases) { Text($0.label).tag($0) }
                 }
-                .disabled(settings.activation == .always)
+                .disabled(!settings.usesActivationKey)
                 LabeledContent("Hover delay") {
                     HStack {
                         Slider(value: $settings.hoverDelay, in: 0...600, step: 25)
@@ -49,6 +50,24 @@ struct GeneralSettingsView: View {
                 Footnote("How long the cursor rests on something before its preview starts. Shorter feels quicker; longer avoids previews while you sweep across a page.")
             }
             Section {
+                Toggle(isOn: Binding(
+                    get: { settings.previewsInOtherApps },
+                    // Turning it on goes through the safety options first.
+                    set: { on in if on { confirmsOtherApps = true } else { settings.previewsInOtherApps = false } }
+                )) {
+                    Text("Preview links in other apps")
+                    Text("Apps that aren't browsers, such as Messages, Slack, or Notes")
+                }
+                if settings.previewsInOtherApps {
+                    OtherAppsOptions(skipsEmail: $settings.otherAppsSkipEmail, knownSitesOnly: $settings.otherAppsKnownSitesOnly,
+                                     needsKey: $settings.otherAppsNeedKey, settings: settings)
+                }
+            } header: {
+                Text("Other apps")
+            } footer: {
+                Footnote(OtherAppsOptions.explanation + " Finder's file cards don't use the network and always appear.")
+            }
+            Section {
                 ExcludedAppsEditor(apps: $settings.excludedApps)
             } header: {
                 Text("Excluded apps")
@@ -58,6 +77,92 @@ struct GeneralSettingsView: View {
         }
         .formStyle(.grouped)
         .frame(width: settingsWidth, height: 540)
+        .sheet(isPresented: $confirmsOtherApps) {
+            OtherAppsSheet(settings: settings)
+        }
+    }
+}
+
+/// The safety options for previews outside browsers, in Settings and in the sheet that turns them on.
+private struct OtherAppsOptions: View {
+    @Binding var skipsEmail: Bool
+    @Binding var knownSitesOnly: Bool
+    @Binding var needsKey: Bool
+    let settings: AppSettings
+
+    static let explanation = "In a browser, a preview loads only what the page could load itself. In other apps it can give something away: an email can carry a link that tells its sender you read the message, and where you are."
+
+    var body: some View {
+        Toggle(isOn: $skipsEmail) {
+            Text("Skip email apps")
+            Text("Mail, Outlook, and other apps that handle email links")
+        }
+        Toggle(isOn: $knownSitesOnly) {
+            Text("Only links to known sites")
+            Text("Reddit, X, YouTube, and the others under Sites, but not images from anywhere, which is how tracking pixels work")
+        }
+        Toggle(isOn: $needsKey) {
+            Text("Only while holding \(settings.activationKey.label)")
+            Text(settings.activation == .unlessHoldingKey
+                 ? "Not available while previews appear except while holding a key"
+                 : "Nothing loads until you ask for it. The key is set under Activation.")
+        }
+        .disabled(settings.activation == .unlessHoldingKey)
+    }
+}
+
+/// Asks how careful to be before previews start loading links outside browsers.
+private struct OtherAppsSheet: View {
+    let settings: AppSettings
+    @Environment(\.dismiss) private var dismiss
+    @State private var skipsEmail: Bool
+    @State private var knownSitesOnly: Bool
+    @State private var needsKey: Bool
+
+    init(settings: AppSettings) {
+        self.settings = settings
+        _skipsEmail = State(initialValue: settings.otherAppsSkipEmail)
+        _knownSitesOnly = State(initialValue: settings.otherAppsKnownSitesOnly)
+        _needsKey = State(initialValue: settings.otherAppsNeedKey)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .top, spacing: 14) {
+                Image(systemName: "hand.raised.fill")
+                    .font(.system(size: 28))
+                    .foregroundStyle(.orange)
+                    .frame(width: 36)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Preview links in other apps?").font(.headline)
+                    Text("A preview means HoverEnhance loads what the link points to, from your Mac. " + OtherAppsOptions.explanation)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .padding([.horizontal, .top], 20)
+            Form {
+                OtherAppsOptions(skipsEmail: $skipsEmail, knownSitesOnly: $knownSitesOnly, needsKey: $needsKey, settings: settings)
+            }
+            .formStyle(.grouped)
+            .scrollDisabled(true)
+            HStack {
+                Spacer()
+                Button("Cancel", role: .cancel) { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+                Button("Turn On") {
+                    settings.otherAppsSkipEmail = skipsEmail
+                    settings.otherAppsKnownSitesOnly = knownSitesOnly
+                    settings.otherAppsNeedKey = needsKey
+                    settings.previewsInOtherApps = true
+                    dismiss()
+                }
+                .keyboardShortcut(.defaultAction)
+            }
+            .padding([.horizontal, .bottom], 20)
+        }
+        .frame(width: 460)
+        .fixedSize(horizontal: false, vertical: true)
     }
 }
 
