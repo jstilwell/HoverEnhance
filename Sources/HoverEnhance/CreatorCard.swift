@@ -63,6 +63,8 @@ private struct SubscribeButton: View {
             Button("Sign In to Subscribe…") {
                 NotificationCenter.default.post(name: .showSettingsTab, object: "Accounts")
             }
+        case .apiOff(let fix):
+            Button("Turn On YouTube API…") { NSWorkspace.shared.open(fix) }
         case .checking, .changing:
             Button {} label: {
                 HStack(spacing: 6) {

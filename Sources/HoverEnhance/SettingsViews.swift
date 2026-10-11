@@ -355,6 +355,7 @@ struct AdvancedSettingsView: View {
 
 struct AccountsSettingsView: View {
     @Bindable var account: YouTubeAccount
+    @State private var showsSteps = false
 
     var body: some View {
         Form {
@@ -366,6 +367,7 @@ struct AccountsSettingsView: View {
                             Button("Sign Out") { Task { await account.signOut() } }
                         }
                     }
+                    accessRow
                 } else {
                     TextField("Client ID", text: $account.clientID, prompt: Text("…apps.googleusercontent.com"))
                     SecureField("Client secret", text: $account.clientSecret, prompt: Text("GOCSPX-…"))
@@ -385,21 +387,59 @@ struct AccountsSettingsView: View {
             } footer: {
                 Footnote("Lets creator cards show whether you're subscribed, and subscribe or unsubscribe. Sign-in goes through your own Google Cloud OAuth client; its secret and your sign-in are kept in the Keychain.")
             }
-            if account.status != .signedIn {
-                Section("Getting a client ID") {
+            Section {
+                DisclosureGroup("Setting up a Google Cloud client", isExpanded: Binding(
+                    get: { showsSteps || account.status != .signedIn }, set: { showsSteps = $0 }
+                )) {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("1. In Google Cloud Console, create a project and enable the **YouTube Data API v3**.")
+                        Text("1. In Google Cloud Console, create a project. In that same project, open APIs & Services → Library, find **YouTube Data API v3**, and click **Enable**.")
                         Text("2. Under **Google Auth Platform**, fill in Branding (an app name and your email). In Audience, choose External and **Publish app**, so sign-in doesn't expire every week.")
                         Text("3. Under **Clients**, create a client of type **Desktop app**, then copy its ID and secret here.")
                         Text("4. Sign in. Google warns that the app isn't verified, since it's your own: choose Advanced, then Go to the app.")
                     }
                     .font(.callout)
                     .fixedSize(horizontal: false, vertical: true)
-                    Link("Open Google Cloud Console", destination: URL(string: "https://console.cloud.google.com/apis/library/youtube.googleapis.com")!)
+                    .padding(.top, 4)
+                    Link("Open Google Cloud Console", destination: YouTubeAPI.consoleURL)
                 }
             }
         }
         .formStyle(.grouped)
-        .frame(width: settingsWidth, height: 520)
+        .frame(width: settingsWidth, height: 560)
+        .task { await account.checkAccess() }
+    }
+
+    /// Whether signed-in calls work, with the fix when they don't.
+    @ViewBuilder
+    private var accessRow: some View {
+        switch account.access {
+        case .unknown, .checking:
+            LabeledContent("YouTube access") {
+                HStack(spacing: 6) {
+                    ProgressView().controlSize(.small)
+                    Text("Checking…").foregroundStyle(.secondary)
+                }
+            }
+        case .working:
+            LabeledContent("YouTube access") {
+                Label("Working", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
+            }
+        case .failing(let message, let fix):
+            VStack(alignment: .leading, spacing: 8) {
+                Label(message, systemImage: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+                HStack {
+                    if let fix {
+                        Button("Turn On YouTube API…") { NSWorkspace.shared.open(fix) }
+                    }
+                    Button("Check Again") { Task { await account.checkAccess() } }
+                }
+                if fix != nil {
+                    Text("After turning it on, it can take a few minutes before YouTube answers.")
+                        .font(.callout).foregroundStyle(.secondary)
+                }
+            }
+        }
     }
 }

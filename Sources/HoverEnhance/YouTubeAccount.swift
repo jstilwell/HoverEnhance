@@ -11,6 +11,13 @@ final class YouTubeAccount {
         case signedOut, signingIn, signedIn
     }
 
+    /// Whether signed-in calls to YouTube actually work, as last checked.
+    enum Access: Equatable {
+        case unknown, checking, working
+        /// `fix` opens the page that solves it, such as turning the API on for the project.
+        case failing(message: String, fix: URL?)
+    }
+
     private enum Key {
         static let clientID = "youtubeClientID"
         static let accountName = "youtubeAccountName"
@@ -24,6 +31,7 @@ final class YouTubeAccount {
     private(set) var status: Status
     private(set) var accountName: String?
     private(set) var lastError: String?
+    private(set) var access: Access = .unknown
 
     @ObservationIgnored private var tokens: GoogleOAuth.Tokens?
 
@@ -67,14 +75,28 @@ final class YouTubeAccount {
             Keychain.set(refreshToken, for: Key.refreshToken)
             self.tokens = tokens
             status = .signedIn
-            accountName = try? await YouTubeAPI.myChannelTitle(token: tokens.accessToken)
-            UserDefaults.standard.set(accountName, forKey: Key.accountName)
+            await checkAccess()
         } catch {
             status = .signedOut
             lastError = error.localizedDescription
         }
         // Come back from the browser to Settings.
         NSApp.activate()
+    }
+
+    /// Makes a small API call to confirm YouTube access works, and learns the account's name.
+    func checkAccess() async {
+        guard status == .signedIn, access != .checking else { return }
+        access = .checking
+        do {
+            accountName = try await YouTubeAPI.myChannelTitle(token: accessToken())
+            UserDefaults.standard.set(accountName, forKey: Key.accountName)
+            access = .working
+        } catch {
+            let failure = error as? YouTubeAPI.Failure
+            let fix = failure?.isAPIDisabled == true ? (failure?.activationURL ?? YouTubeAPI.consoleURL) : nil
+            access = .failing(message: error.localizedDescription, fix: fix)
+        }
     }
 
     func signOut() async {
@@ -105,6 +127,7 @@ final class YouTubeAccount {
         Keychain.set(nil, for: Key.refreshToken)
         tokens = nil
         status = .signedOut
+        access = .unknown
         accountName = nil
         UserDefaults.standard.removeObject(forKey: Key.accountName)
     }
