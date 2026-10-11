@@ -11,30 +11,13 @@ final class YouTubeAccount {
         case signedOut, signingIn, signedIn
     }
 
-    /// How creator cards subscribe: the official API (dependable, needs an OAuth client), or the
-    /// user's signed-in browser (no setup beyond a browser setting, but relies on YouTube internals).
-    enum Method: String, CaseIterable, Identifiable {
-        case api, browser
-
-        var id: Self { self }
-
-        var label: String {
-            switch self {
-            case .api: "Google API (recommended)"
-            case .browser: "Your browser"
-            }
-        }
-    }
-
     private enum Key {
-        static let method = "youtubeSignInMethod"
         static let clientID = "youtubeClientID"
         static let accountName = "youtubeAccountName"
         static let clientSecret = "youtube.clientSecret"
         static let refreshToken = "youtube.refreshToken"
     }
 
-    var method: Method { didSet { UserDefaults.standard.set(method.rawValue, forKey: Key.method) } }
     var clientID: String { didSet { UserDefaults.standard.set(clientID, forKey: Key.clientID) } }
     /// Saved to the Keychain when sign-in succeeds.
     var clientSecret: String
@@ -45,7 +28,6 @@ final class YouTubeAccount {
     @ObservationIgnored private var tokens: GoogleOAuth.Tokens?
 
     init() {
-        method = UserDefaults.standard.string(forKey: Key.method).flatMap(Method.init(rawValue:)) ?? .api
         clientID = UserDefaults.standard.string(forKey: Key.clientID) ?? ""
         clientSecret = Keychain.string(for: Key.clientSecret) ?? ""
         status = Keychain.string(for: Key.refreshToken) == nil ? .signedOut : .signedIn
