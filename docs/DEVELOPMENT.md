@@ -33,7 +33,9 @@ after every build (the welcome window explains how to remove and re-add the app)
 - `MediaResolver` turns the hovered image or link into a `MediaSource` (`ImageRules` for
   full-size image URLs, `SiteLinks` for posts and videos), following `file:` URLs only from local
   pages. `MediaFetcher` does any lookup the site needs (`SiteAPIs`, `RedditGallery`), giving `Media`:
-  one item or an album, with web addresses only. `AppKind` tells browsers and email apps apart from
+  one item or an album, with web addresses only. Nothing is previewed over a video the page shows
+  (WebKit gives videos their URL; Chromium shows them as plain groups, found through its search for
+  graphics), or over an image it already shows about as large as a preview could be. `AppKind` tells browsers and email apps apart from
   what they declare they open, and `OtherAppsPolicy` decides what may load outside browsers.
 - `PreviewController` shows items in `PreviewPanel`: images via `ImageLoader` (downloaded through
   `LimitedDownloader`, which stops at the size limit, and downsampled off the main thread), videos
