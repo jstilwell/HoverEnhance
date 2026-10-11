@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.2.0 - Unreleased
+
+### Added
+
+- Scroll on the notch under the cursor to change a video's volume, shown on a rocker beside it; scroll on the video to move through it.
+- In Finder, images, videos, and audio show large, with their details beside or below.
+- Songs in Finder show their artwork and play at a click, or right away if you turn that on.
+- Songs and videos in Finder show what their own tags say: title, artist, album, album artist, composer, genre, year, track, and disc, and when and with what a video was recorded.
+- Finder cards show a video's frame rate and HDR, and the sample rate and channels of its sound.
+
+### Changed
+
+- The menu starts with the app's version.
+
+### Fixed
+
+- Clearing the image cache in Settings shows the new size right away.
+
 ## 0.1.1 - 10-11-2026
 
 ### Fixed

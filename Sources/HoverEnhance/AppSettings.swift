@@ -148,6 +148,8 @@ final class AppSettings {
         static let finderClosesOnKeyPress = "finderClosesOnKeyPress"
         static let finderCopiesDetails = "finderCopiesDetails"
         static let finderOffersQuit = "finderOffersQuit"
+        static let finderMediaPreviews = "finderMediaPreviews"
+        static let finderAutoplayAudio = "finderAutoplayAudio"
     }
 
     @ObservationIgnored private let defaults: UserDefaults
@@ -213,6 +215,10 @@ final class AppSettings {
     var finderClosesOnKeyPress: Bool { didSet { defaults.set(finderClosesOnKeyPress, forKey: Key.finderClosesOnKeyPress) } }
     var finderCopiesDetails: Bool { didSet { defaults.set(finderCopiesDetails, forKey: Key.finderCopiesDetails) } }
     var finderOffersQuit: Bool { didSet { defaults.set(finderOffersQuit, forKey: Key.finderOffersQuit) } }
+    /// Images, videos, and audio show large, with their details beside or below.
+    var finderMediaPreviews: Bool { didSet { defaults.set(finderMediaPreviews, forKey: Key.finderMediaPreviews) } }
+    /// Audio in a large preview plays at once, rather than on its play button.
+    var finderAutoplayAudio: Bool { didSet { defaults.set(finderAutoplayAudio, forKey: Key.finderAutoplayAudio) } }
 
     // Advanced
     var showsInspector: Bool { didSet { defaults.set(showsInspector, forKey: Key.showsInspector) } }
@@ -253,6 +259,8 @@ final class AppSettings {
             Key.finderClosesOnKeyPress: true,
             Key.finderCopiesDetails: true,
             Key.finderOffersQuit: true,
+            Key.finderMediaPreviews: true,
+            Key.finderAutoplayAudio: false,
         ])
         self.defaults = defaults
         previewsEnabled = defaults.bool(forKey: Key.previewsEnabled)
@@ -292,6 +300,8 @@ final class AppSettings {
         finderClosesOnKeyPress = defaults.bool(forKey: Key.finderClosesOnKeyPress)
         finderCopiesDetails = defaults.bool(forKey: Key.finderCopiesDetails)
         finderOffersQuit = defaults.bool(forKey: Key.finderOffersQuit)
+        finderMediaPreviews = defaults.bool(forKey: Key.finderMediaPreviews)
+        finderAutoplayAudio = defaults.bool(forKey: Key.finderAutoplayAudio)
     }
 
     var filter: PreviewFilter {
@@ -326,6 +336,8 @@ final class AppSettings {
         finderClosesOnKeyPress = true
         finderCopiesDetails = true
         finderOffersQuit = true
+        finderMediaPreviews = true
+        finderAutoplayAudio = false
     }
 
     func previewsAllowed(holding flags: NSEvent.ModifierFlags) -> Bool {

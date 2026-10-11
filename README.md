@@ -1,7 +1,8 @@
 # HoverEnhance
 
 Rest your cursor on an image, video, or file and see it right there: full-size images and videos
-in your browser, file details in Finder. A macOS menu bar app, no browser extension needed.
+in your browser, large previews and file details in Finder. A macOS menu bar app, no browser
+extension needed.
 
 ## What it does
 
@@ -9,10 +10,12 @@ in your browser, file details in Finder. A macOS menu bar app, no browser extens
 - **Albums**: Reddit galleries and multi-photo posts on X, Bluesky, and Instagram. Scroll to step
   through. Immune to smooth-scrolling glitches.
 - **Videos**: Reddit, X, Bluesky, Instagram, Streamable, and Imgur clips play in the preview;
-  YouTube, Vimeo, TikTok, and Twitch play in their own players.
+  YouTube, Vimeo, TikTok, and Twitch play in their own players. Scroll on the notch under the cursor
+  for the volume, shown beside it, and on the video to move through it.
 - **YouTube creators**: on YouTube, rest on a video title or channel name to see who made it.
 - **Finder**: rest on a file or folder for its path, size, dates, where it came from, and which apps
-  are using it. Click any detail to copy it.
+  are using it. Images, videos, and audio show large beside their details, including what songs' and
+  videos' own tags say. Click any detail to copy it.
 
 Move away, click, or switch apps, and the preview is gone.
 
