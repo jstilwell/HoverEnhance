@@ -21,13 +21,13 @@ final class PreviewController {
     /// The album position being shown, or being loaded after a scroll.
     private var index = 0
     private var task: Task<Void, Never>?
-    /// While a video is showing, the cursor may move onto the panel to use its controls.
-    private var isShowingVideo = false
 
     private struct Target: Equatable {
         let source: MediaSource
-        /// The hovered element in global top-left-origin coordinates; leaving it hides the preview.
-        let area: CGRect
+        /// Where the cursor rested, in global top-left-origin coordinates. The preview hangs off it.
+        let anchor: CGPoint
+        /// The notch under the cursor. Leaving it any way but onto the preview ends the hover.
+        let notch: CGRect
         let page: URL?
     }
 
@@ -41,8 +41,10 @@ final class PreviewController {
     }
 
     func hovered(_ info: HoverInfo) {
-        guard isEnabled else { return }
-        guard let source = MediaResolver.source(for: info), let cursor = CGEvent(source: nil)?.location else {
+        guard isEnabled, let cursor = CGEvent(source: nil)?.location else { return }
+        // Resting on the preview or its notch: what's underneath doesn't count.
+        if target != nil, panel.covers(cursor) { return }
+        guard let source = MediaResolver.source(for: info) else {
             reset(because: "nothing to preview")
             return
         }
@@ -51,11 +53,7 @@ final class PreviewController {
 
         reset(because: "new target")
         let elementFrame = info.imageFrame ?? info.frame
-        let newTarget = Target(
-            source: source,
-            area: elementFrame?.insetBy(dx: -4, dy: -4) ?? CGRect(origin: cursor, size: .zero).insetBy(dx: -24, dy: -24),
-            page: info.pageURL
-        )
+        let newTarget = Target(source: source, anchor: cursor, notch: panel.notchFrame(at: cursor), page: info.pageURL)
         target = newTarget
         task = Task {
             guard let media = await fetcher.media(for: source), !Task.isCancelled, target == newTarget else { return }
@@ -65,12 +63,10 @@ final class PreviewController {
         }
     }
 
+    /// Ends the hover the moment the cursor leaves the notch, unless it moves onto the preview.
     func mouseMoved(to point: CGPoint) {
-        guard let target else { return }
-        var area = target.area
-        // The bounding box of element and video covers the gap between them, so the cursor can cross over.
-        if isShowingVideo, let panelFrame = panel.globalFrame { area = area.union(panelFrame) }
-        if !area.contains(point) { reset(because: "cursor left") }
+        guard let target, !target.notch.contains(point), !panel.covers(point) else { return }
+        reset(because: "left the notch")
     }
 
     /// Content moved under the cursor. While an album is up, the scroll tap has the wheel instead.
@@ -96,11 +92,11 @@ final class PreviewController {
     }
 
     private func hidePanel() {
+        // Take the windows down first; stopping playback can take a moment.
+        panel.hide()
+        scrollTap.isEnabled = false
         playback.stop()
         embeds.suspend()
-        isShowingVideo = false
-        scrollTap.isEnabled = false
-        panel.hide()
     }
 
     private func step(by delta: Int) {
@@ -124,8 +120,7 @@ final class PreviewController {
             guard let image, !Task.isCancelled, self.target == requested else { return }
             if let shown, image.pixelSize.width <= shown.width * 1.2, image.pixelSize.height <= shown.height * 1.2 { return }
             playback.stop()
-            isShowingVideo = false
-            panel.show(image, counter: counter)
+            panel.show(image, counter: counter, anchor: requested.anchor)
             log.info("preview \(position + 1)/\(media.items.count): \(image.url.absoluteString, privacy: .public)")
 
         case .video(let url, let reportedSize):
@@ -133,15 +128,13 @@ final class PreviewController {
             let key = "\(requested.source)#\(position)"
             guard let size = await playback.start(url, key: key), !Task.isCancelled, self.target == requested,
                   let player = playback.player else { return }
-            isShowingVideo = true
-            panel.show(player, videoSize: reportedSize ?? size, counter: counter)
+            panel.show(player, videoSize: reportedSize ?? size, counter: counter, anchor: requested.anchor)
             log.info("preview \(position + 1)/\(media.items.count): video \(url.absoluteString, privacy: .public)")
 
         case .embed(let embed):
             guard let view = embeds.view(for: embed) else { return }
             playback.stop()
-            isShowingVideo = true
-            panel.show(view, size: embed.size, counter: counter)
+            panel.show(view, size: embed.size, counter: counter, anchor: requested.anchor)
             log.info("preview \(position + 1)/\(media.items.count): embed \(String(describing: embed), privacy: .public)")
             logPlaybackState(of: view, after: .seconds(5))
         }

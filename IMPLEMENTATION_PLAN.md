@@ -30,6 +30,7 @@ for posts whose owners turned embedding off.)
 
 ## Stage 4: Polish
 **Goal**: Rough edges found along the way.
-**Success Criteria**: Loading indicator, hold-a-modifier mode, settings window if the menu outgrows itself.
-**Tests**: Manual.
-**Status**: Not Started
+**Success Criteria**: Notch under the cursor that ends the hover when left (done); loading indicator,
+hold-a-modifier mode, settings window if the menu outgrows itself.
+**Tests**: Geometry unit tests; manual cursor runs (notch hide latency, walking onto a video).
+**Status**: In Progress
