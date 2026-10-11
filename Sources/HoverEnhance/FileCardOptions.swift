@@ -114,7 +114,7 @@ enum FileCardField: String, CaseIterable, Identifiable, Sendable {
         case .minimumSystem: "The oldest macOS it runs on"
         case .signature: "Apple, the Mac App Store, a developer, or no one"
         case .gitBranch: "Of folders at the top of a repository; the remote opens in the browser"
-        case .gitChanges: "How many files differ from the last commit; this runs Git, which takes a moment in big repositories"
+        case .gitChanges: "How many files differ from the last commit, from Git. Repositories whose settings would have Git run their own commands aren't checked."
         case .users: "Apps with it open in a window, and processes holding it open or working in the folder"
         case .created, .modified: nil
         }
