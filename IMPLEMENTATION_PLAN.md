@@ -43,4 +43,4 @@ settings; visual checks rendered offscreen.
 **Success Criteria**: README and the 0.2.0 changelog entry say what users notice; docs/DEVELOPMENT.md
 covers the new pieces.
 **Tests**: Full suite; a release build with no warnings.
-**Status**: Not Started
+**Status**: Complete
