@@ -30,7 +30,17 @@ for posts whose owners turned embedding off.)
 
 ## Stage 4: Polish
 **Goal**: Rough edges found along the way.
-**Success Criteria**: Notch under the cursor that ends the hover when left (done); loading indicator,
-hold-a-modifier mode, settings window if the menu outgrows itself.
+**Success Criteria**: Notch under the cursor that ends the hover when left (done); loading indicator.
+Hold-a-modifier mode and a settings window moved to Stage 5.
 **Tests**: Geometry unit tests; manual cursor runs (notch hide latency, walking onto a video).
 **Status**: In Progress
+
+## Stage 5: Settings
+**Goal**: A Settings window (menu bar → Settings…, ⌘,) with toolbar tabs, applied live.
+**Success Criteria**: General (enable, open at login, activation key mode, hover delay, excluded apps),
+Previews (media kinds, largest size, enlargement threshold, notch), Video (start sound, volume, loop,
+resume), Sites (per-site switches), Advanced (accessibility status, cache and website data, inspector,
+version). Settings persist and take effect without relaunching.
+**Tests**: Settings defaults and persistence; filter by site and kind; activation modes; geometry with
+a size limit; manual pass over every tab; live checks of delay, site switch, notch, size, and ⌥ mode.
+**Status**: Complete

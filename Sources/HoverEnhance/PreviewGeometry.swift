@@ -17,12 +17,14 @@ enum PreviewGeometry {
     }
 
     /// The preview at one pixel per point (like a browser at 100% zoom), scaled down to fit beside
-    /// the cursor and centered on it vertically as far as the screen allows.
-    static func panelFrame(anchor: CGPoint, naturalSize: CGSize, visible: CGRect) -> CGRect? {
+    /// the cursor and centered on it vertically as far as the screen allows. `maxFraction` limits it
+    /// to that share of the room.
+    static func panelFrame(anchor: CGPoint, naturalSize: CGSize, visible: CGRect, maxFraction: CGFloat = 1) -> CGRect? {
         guard naturalSize.width > 0, naturalSize.height > 0 else { return nil }
         let placeRight = placesRight(anchor: anchor, visible: visible)
-        let roomWidth = (placeRight ? visible.maxX - (anchor.x + gap) : (anchor.x - gap) - visible.minX) - 2 * padding
-        let scale = min(1, roomWidth / naturalSize.width, (visible.height - 2 * padding) / naturalSize.height)
+        let sideRoom = placeRight ? visible.maxX - (anchor.x + gap) : (anchor.x - gap) - visible.minX
+        let room = CGSize(width: sideRoom * maxFraction - 2 * padding, height: visible.height * maxFraction - 2 * padding)
+        let scale = min(1, room.width / naturalSize.width, room.height / naturalSize.height)
         guard scale > 0 else { return nil }
 
         let size = CGSize(

@@ -12,7 +12,7 @@ final class EmbedPlayer {
             return current.view
         }
         discard()
-        guard let url = embed.playerURL(muted: UserDefaults.standard.bool(forKey: "videoMuted")) else { return nil }
+        guard let url = embed.playerURL(muted: AppSettings.shared.videosStartMuted) else { return nil }
 
         let configuration = WKWebViewConfiguration()
         configuration.mediaTypesRequiringUserActionForPlayback = []

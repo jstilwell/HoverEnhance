@@ -14,7 +14,10 @@ other apps' UI through the Accessibility API, so it works in browsers without an
 - **Embedded players**: YouTube, Vimeo, TikTok, and Twitch clip links play through each
   site's own player (skipped on the site itself, which has its own hover previews). The last one
   stays paused in the background, so hovering it again resumes.
-- **Inspector** (menu → Show Inspector): a HUD showing the hovered element's role, labels, and URLs.
+- **Settings** (menu bar icon → Settings…, or open the app again): when previews appear (always, or
+  only/except while holding a modifier key), hover delay, excluded apps, which kinds of media and
+  which sites to preview, preview size, video sound/loop/resume, cache and website data, and an
+  inspector that lists what's under the cursor.
 
 ## Build and run
 
@@ -48,6 +51,8 @@ the grant survives rebuilds. With ad-hoc signing you'd have to re-grant after ev
   swallows scroll events while an album is up.
 - `EmbedPlayer` hosts players in a web view loaded under an HTTPS origin (YouTube needs a
   Referer), with AirPlay and WebRTC off so nothing asks for local network access.
+- `AppSettings` keeps settings in UserDefaults; code reads it where it's used, so changes apply at
+  once. `SettingsWindowController` shows the SwiftUI tabs in `SettingsViews`.
 - Reddit answers scripted requests with a JavaScript check; `WebPageLoader` passes it in an
   offscreen WebKit view and shares the cookie with URLSession.
 - Chromium browsers and Electron apps only expose web content to accessibility on request, so the

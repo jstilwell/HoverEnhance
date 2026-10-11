@@ -11,10 +11,6 @@ final class VideoPlayback {
     private var loopObserver: NSObjectProtocol?
     private var settingObservations: [NSKeyValueObservation] = []
 
-    init() {
-        UserDefaults.standard.register(defaults: ["videoMuted": true, "videoVolume": 1.0])
-    }
-
     /// Starts `url` and waits until it has a frame to show. Returns the video's size, or nil if it
     /// failed, timed out, or was replaced. `key` identifies the video for resuming.
     func start(_ url: URL, key: String) async -> CGSize? {
@@ -23,28 +19,39 @@ final class VideoPlayback {
         let player = AVPlayer(playerItem: item)
         // AirPlay device discovery would make macOS ask for local network access.
         player.allowsExternalPlayback = false
-        player.isMuted = UserDefaults.standard.bool(forKey: "videoMuted")
-        player.volume = UserDefaults.standard.float(forKey: "videoVolume")
+        let settings = AppSettings.shared
+        player.isMuted = settings.videosStartMuted
+        player.volume = Float(settings.videoVolume)
         self.player = player
         self.key = key
 
         // Remember mute and volume changes made with the player's controls.
         settingObservations = [
-            player.observe(\.isMuted) { player, _ in UserDefaults.standard.set(player.isMuted, forKey: "videoMuted") },
-            player.observe(\.volume) { player, _ in UserDefaults.standard.set(player.volume, forKey: "videoVolume") },
+            player.observe(\.isMuted) { player, _ in
+                let muted = player.isMuted
+                Task { @MainActor in
+                    if AppSettings.shared.videoSound == .remember { AppSettings.shared.videoMuted = muted }
+                }
+            },
+            player.observe(\.volume) { player, _ in
+                let volume = Double(player.volume)
+                Task { @MainActor in AppSettings.shared.videoVolume = volume }
+            },
         ]
-        loopObserver = NotificationCenter.default.addObserver(
-            forName: AVPlayerItem.didPlayToEndTimeNotification, object: item, queue: .main
-        ) { [weak player] _ in
-            player?.seek(to: .zero)
-            player?.play()
+        if settings.loopVideos {
+            loopObserver = NotificationCenter.default.addObserver(
+                forName: AVPlayerItem.didPlayToEndTimeNotification, object: item, queue: .main
+            ) { [weak player] _ in
+                player?.seek(to: .zero)
+                player?.play()
+            }
         }
 
         let deadline = ContinuousClock.now + .seconds(10)
         while ContinuousClock.now < deadline, item.status != .failed {
             guard !Task.isCancelled, self.player === player else { return nil }
             if item.status == .readyToPlay, item.presentationSize != .zero {
-                if let seconds = positions[key] {
+                if settings.resumeVideos, let seconds = positions[key] {
                     log.info("resuming \(key, privacy: .public) at \(seconds, format: .fixed(precision: 1))s")
                     await player.seek(to: CMTime(seconds: seconds, preferredTimescale: 600))
                 }
@@ -64,7 +71,7 @@ final class VideoPlayback {
         let time = player.currentTime().seconds
         let duration = player.currentItem?.duration.seconds ?? .nan
         // Remember partway positions; a video watched to the end starts over next time.
-        let partway = time.isFinite && time > 1 && !(duration.isFinite && time > duration - 1)
+        let partway = AppSettings.shared.resumeVideos && time.isFinite && time > 1 && !(duration.isFinite && time > duration - 1)
         positions[key] = partway ? time : nil
 
         player.pause()

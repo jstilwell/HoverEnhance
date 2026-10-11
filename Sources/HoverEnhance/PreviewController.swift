@@ -4,10 +4,6 @@ import WebKit
 /// Decides when to show a preview for what the cursor is resting on, and when to hide it.
 @MainActor
 final class PreviewController {
-    var isEnabled = true {
-        didSet { if !isEnabled { reset() } }
-    }
-
     private let fetcher = MediaFetcher()
     private let loader = ImageLoader()
     private let playback = VideoPlayback()
@@ -41,10 +37,16 @@ final class PreviewController {
     }
 
     func hovered(_ info: HoverInfo) {
-        guard isEnabled, let cursor = CGEvent(source: nil)?.location else { return }
+        guard let cursor = CGEvent(source: nil)?.location else { return }
         // Resting on the preview or its notch: what's underneath doesn't count.
         if target != nil, panel.covers(cursor) { return }
-        guard let source = MediaResolver.source(for: info) else {
+        let settings = AppSettings.shared
+        guard settings.previewsEnabled, settings.previewsAllowed(holding: NSEvent.modifierFlags),
+              !settings.isExcluded(info.bundleID) else {
+            reset(because: "previews are off here")
+            return
+        }
+        guard let source = MediaResolver.source(for: info), settings.filter.allows(source) else {
             reset(because: "nothing to preview")
             return
         }
@@ -56,7 +58,8 @@ final class PreviewController {
         let newTarget = Target(source: source, anchor: cursor, notch: panel.notchFrame(at: cursor), page: info.pageURL)
         target = newTarget
         task = Task {
-            guard let media = await fetcher.media(for: source), !Task.isCancelled, target == newTarget else { return }
+            guard let fetched = await fetcher.media(for: source), let media = AppSettings.shared.filter.apply(to: fetched),
+                  !Task.isCancelled, target == newTarget else { return }
             self.media = media
             // A lone image isn't worth showing unless it's meaningfully bigger than it already appears.
             await display(0, unlessSmallerThan: media.items.count == 1 ? elementFrame?.size : nil)
@@ -118,7 +121,8 @@ final class PreviewController {
         case .image(let candidates):
             let image = await loader.load(candidates, page: target.page, maxPixelSize: Self.maxPixelSize())
             guard let image, !Task.isCancelled, self.target == requested else { return }
-            if let shown, image.pixelSize.width <= shown.width * 1.2, image.pixelSize.height <= shown.height * 1.2 { return }
+            let enlargement = AppSettings.shared.minimumEnlargement
+            if let shown, image.pixelSize.width <= shown.width * enlargement, image.pixelSize.height <= shown.height * enlargement { return }
             playback.stop()
             panel.show(image, counter: counter, anchor: requested.anchor)
             log.info("preview \(position + 1)/\(media.items.count): \(image.url.absoluteString, privacy: .public)")

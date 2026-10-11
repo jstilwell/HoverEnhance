@@ -4,7 +4,7 @@ import AppKit
 @MainActor
 final class HoverMonitor {
     /// How long the cursor must stay still before we inspect. Keeps AX traffic to one query per stop.
-    var dwell: TimeInterval = 0.15
+    var dwell: TimeInterval { AppSettings.shared.hoverDelay / 1000 }
     var isPaused = false {
         didSet { if isPaused { dwellTimer?.invalidate() } }
     }
@@ -14,6 +14,8 @@ final class HoverMonitor {
     /// Content moved under the cursor.
     var onScroll: (() -> Void)?
     var onClick: (() -> Void)?
+    /// A modifier key went down or up (for the activation key setting).
+    var onModifiersChanged: ((NSEvent.ModifierFlags) -> Void)?
 
     private let inspector = HoverInspector()
     private var eventMonitors: [Any] = []
@@ -24,7 +26,7 @@ final class HoverMonitor {
 
     func start() {
         // Global monitors don't see events while our own app is active, so add a local one too.
-        let events: NSEvent.EventTypeMask = [.mouseMoved, .scrollWheel, .leftMouseDown, .rightMouseDown, .otherMouseDown]
+        let events: NSEvent.EventTypeMask = [.mouseMoved, .scrollWheel, .leftMouseDown, .rightMouseDown, .otherMouseDown, .flagsChanged]
         eventMonitors = [
             NSEvent.addGlobalMonitorForEvents(matching: events) { [weak self] event in
                 self?.handle(event)
@@ -59,9 +61,18 @@ final class HoverMonitor {
             // Scrolling changes what's under the cursor, so it counts as movement for the dwell.
             onScroll?()
             restartDwell()
+        case .flagsChanged:
+            onModifiersChanged?(event.modifierFlags)
         default:
             onClick?()
         }
+    }
+
+    /// Inspects what's under the cursor now, without waiting for it to rest.
+    func inspectNow() {
+        generation += 1
+        guard !isPaused else { return }
+        mouseSettled()
     }
 
     private func restartDwell() {

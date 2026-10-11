@@ -32,6 +32,12 @@ final class WebPageLoader {
         return nil
     }
 
+    /// Cookies and storage the offscreen view and the embedded players have collected.
+    static func clearWebsiteData() async {
+        let store = WKWebsiteDataStore.default()
+        await store.removeData(ofTypes: WKWebsiteDataStore.allWebsiteDataTypes(), modifiedSince: .distantPast)
+    }
+
     private func shareCookies(for url: URL) async {
         guard let host = url.host() else { return }
         let domain = host.split(separator: ".").suffix(2).joined(separator: ".")
