@@ -76,6 +76,27 @@ struct YouTubeAPITests {
         #expect(body["snippet"]?["resourceId"]?["channelId"] == "UC1")
     }
 
+    @Test func disabledAPILinksToTheProjectsEnablePage() throws {
+        let body = #"""
+        {"error": {"code": 403,
+          "message": "YouTube Data API v3 has not been used in project 123456789012 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/youtube.googleapis.com/overview?project=123456789012 then retry. If you enabled this API recently, wait a few minutes for the action to propagate to our systems and retry.",
+          "errors": [{"message": "…", "domain": "usageLimits", "reason": "accessNotConfigured", "extendedHelp": "https://console.developers.google.com"}],
+          "status": "PERMISSION_DENIED",
+          "details": [{"@type": "type.googleapis.com/google.rpc.ErrorInfo", "reason": "SERVICE_DISABLED", "domain": "googleapis.com",
+            "metadata": {"consumer": "projects/123456789012", "service": "youtube.googleapis.com",
+              "activationUrl": "https://console.developers.google.com/apis/api/youtube.googleapis.com/overview?project=123456789012"}}]}}
+        """#
+        let failure = YouTubeAPI.failure(status: 403, data: Data(body.utf8))
+        #expect(failure.isAPIDisabled)
+        #expect(failure.activationURL?.absoluteString == "https://console.developers.google.com/apis/api/youtube.googleapis.com/overview?project=123456789012")
+        #expect(failure.errorDescription == "The YouTube Data API v3 isn't turned on for your Google Cloud project.")
+
+        // Without the metadata, the link still comes from the message.
+        let terse = #"{"error": {"code": 403, "message": "Enable it by visiting https://console.developers.google.com/apis/api/youtube.googleapis.com/overview?project=42 then retry.", "errors": [{"reason": "accessNotConfigured"}]}}"#
+        #expect(YouTubeAPI.failure(status: 403, data: Data(terse.utf8)).activationURL?.absoluteString
+            == "https://console.developers.google.com/apis/api/youtube.googleapis.com/overview?project=42")
+    }
+
     @Test func errorsReadPlainly() {
         let quota = #"{"error":{"code":403,"message":"The request cannot be completed because you have exceeded your quota.","errors":[{"reason":"quotaExceeded","domain":"youtube.quota"}]}}"#
         let failure = YouTubeAPI.failure(status: 403, data: Data(quota.utf8))

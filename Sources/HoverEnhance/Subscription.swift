@@ -11,6 +11,8 @@ extension Notification.Name {
 final class Subscription {
     enum Status: Equatable {
         case signedOut, checking, subscribed(id: String), notSubscribed, changing
+        /// The client's Google Cloud project doesn't have the YouTube Data API on; `fix` turns it on.
+        case apiOff(fix: URL)
     }
 
     let channelID: String
@@ -77,6 +79,10 @@ final class Subscription {
 
     private func fail(_ failure: Error, fallback: Status) {
         error = failure.localizedDescription
-        status = fallback
+        if let failure = failure as? YouTubeAPI.Failure, failure.isAPIDisabled {
+            status = .apiOff(fix: failure.activationURL ?? YouTubeAPI.consoleURL)
+        } else {
+            status = fallback
+        }
     }
 }

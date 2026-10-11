@@ -4,18 +4,27 @@ import Foundation
 /// Quota: a subscription check costs 1 unit, subscribing or unsubscribing 50, of 10,000 a day.
 enum YouTubeAPI {
     private static let base = URL(string: "https://www.googleapis.com/youtube/v3/")!
+    /// The API's page in Google Cloud Console, for when Google doesn't name the project.
+    static let consoleURL = URL(string: "https://console.cloud.google.com/apis/library/youtube.googleapis.com")!
 
     struct Failure: LocalizedError, Equatable {
         let status: Int
         let reason: String?
         let message: String?
+        /// Google's link to turn the API on for the client's own project, when that's the problem.
+        var activationURL: URL? = nil
+
+        /// The client's Google Cloud project doesn't have the YouTube Data API turned on.
+        var isAPIDisabled: Bool {
+            reason == "accessNotConfigured" || reason == "SERVICE_DISABLED"
+        }
 
         var errorDescription: String? {
-            switch reason {
+            if isAPIDisabled { return "The YouTube Data API v3 isn't turned on for your Google Cloud project." }
+            return switch reason {
             case "quotaExceeded": "YouTube's daily limit for your client is used up. It resets at midnight Pacific time."
             case "subscriptionDuplicate": "You're already subscribed."
             case "subscriptionForbidden": "YouTube doesn't allow subscribing to this channel."
-            case "accessNotConfigured", "SERVICE_DISABLED": "Enable the YouTube Data API v3 for your Google Cloud project."
             default: message ?? "YouTube returned an error (\(status))."
             }
         }
@@ -66,12 +75,17 @@ enum YouTubeAPI {
         return data
     }
 
-    /// Google's error body: {"error": {"code": 403, "message": "…", "errors": [{"reason": "quotaExceeded"}]}}.
+    /// Google's error body: {"error": {"code": 403, "message": "…", "errors": [{"reason": "quotaExceeded"}],
+    /// "details": [{"reason": "SERVICE_DISABLED", "metadata": {"activationUrl": "…"}}]}}.
     static func failure(status: Int, data: Data) -> Failure {
         let error = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["error"] as? [String: Any]
-        let reason = (error?["errors"] as? [[String: Any]])?.first?["reason"] as? String
-            ?? ((error?["details"] as? [[String: Any]])?.first?["reason"] as? String)
-        return Failure(status: status, reason: reason, message: error?["message"] as? String)
+        let details = error?["details"] as? [[String: Any]] ?? []
+        let reason = (error?["errors"] as? [[String: Any]])?.first?["reason"] as? String ?? details.first?["reason"] as? String
+        let message = error?["message"] as? String
+        // The link to turn the API on is in the error's metadata, and also in its message.
+        let activation = details.lazy.compactMap { ($0["metadata"] as? [String: Any])?["activationUrl"] as? String }.first
+            ?? message?.firstMatch(of: /https:\/\/console\.developers\.google\.com\/apis\/api\/youtube\.googleapis\.com\/\S*project=\d+/).map { String($0.output) }
+        return Failure(status: status, reason: reason, message: message, activationURL: activation.flatMap(URL.init(string:)))
     }
 
     private static func items(in data: Data) -> [[String: Any]] {
