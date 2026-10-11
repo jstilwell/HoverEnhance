@@ -55,10 +55,10 @@ final class YouTubeAccount {
         status = .signingIn
         lastError = nil
         do {
-            let redirect = try await LoopbackRedirect.start()
+            let state = UUID().uuidString
+            let redirect = try await LoopbackRedirect.start(expecting: state)
             defer { redirect.stop() }
             let verifier = GoogleOAuth.codeVerifier()
-            let state = UUID().uuidString
             NSWorkspace.shared.open(GoogleOAuth.authorizationURL(
                 clientID: trimmedID, redirectURI: redirect.redirectURI,
                 challenge: GoogleOAuth.codeChallenge(for: verifier), state: state
@@ -71,8 +71,14 @@ final class YouTubeAccount {
             )
             guard let refreshToken = tokens.refreshToken else { throw GoogleOAuth.Failure.noRefreshToken }
 
-            Keychain.set(trimmedSecret, for: Key.clientSecret)
-            Keychain.set(refreshToken, for: Key.refreshToken)
+            do {
+                try Keychain.set(trimmedSecret, for: Key.clientSecret)
+                try Keychain.set(refreshToken, for: Key.refreshToken)
+            } catch {
+                // Unsaved, the sign-in wouldn't outlast this session; give Google's grant back.
+                await GoogleOAuth.revoke(refreshToken)
+                throw error
+            }
             self.tokens = tokens
             status = .signedIn
             await checkAccess()
@@ -124,7 +130,9 @@ final class YouTubeAccount {
     }
 
     private func forget() {
-        Keychain.set(nil, for: Key.refreshToken)
+        // The token is being revoked, or Google already refused it, so one the Keychain fails to
+        // delete is no use to anyone.
+        try? Keychain.set(nil, for: Key.refreshToken)
         tokens = nil
         status = .signedOut
         access = .unknown

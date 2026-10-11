@@ -19,6 +19,9 @@ struct EmbedTests {
     @Test func otherSites() {
         #expect(embed("https://vimeo.com/76979871") == Embed(site: .vimeo, id: "76979871"))
         #expect(embed("https://vimeo.com/76979871/abc123def") == Embed(site: .vimeo, id: "76979871", hash: "abc123def"))
+        // Hashes are checked like ids, so a link can't add its own parameters to the player's address.
+        #expect(embed("https://vimeo.com/76979871/abc%26autoplay=0") == Embed(site: .vimeo, id: "76979871"))
+        #expect(embed("https://player.vimeo.com/video/76979871?h=abc%22x") == Embed(site: .vimeo, id: "76979871"))
         #expect(embed("https://vimeo.com/channels/staffpicks/76979871") == Embed(site: .vimeo, id: "76979871"))
         #expect(embed("https://www.tiktok.com/@scout2015/video/6718335390845095173") == Embed(site: .tiktok, id: "6718335390845095173", isPortrait: true))
         #expect(embed("https://clips.twitch.tv/FunnyClipSlug-AbC123") == Embed(site: .twitch, id: "FunnyClipSlug-AbC123"))
