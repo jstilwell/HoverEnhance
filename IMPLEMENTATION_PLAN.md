@@ -84,7 +84,7 @@ for Git repositories, branch, remote, and uncommitted changes.
 taking Git's locks; repos without a remote or on a detached HEAD read sensibly.
 **Tests**: Info of a system app; signatures of a system app, an ad-hoc signed and an unsigned binary;
 HEAD and config parsing (branch, detached, worktree `.git` file, remotes); changes in a temp repo.
-**Status**: In Progress
+**Status**: Complete
 
 # YouTube creator card
 

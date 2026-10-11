@@ -39,6 +39,16 @@ struct FileDetails: Sendable, Equatable {
     var artist: String?
     var album: String?
     var archive: ZipSummary?
+    var app: AppBundleInfo?
+    var git: GitRepository?
+
+    /// A detail looked up after the card appears.
+    enum Lookup<Value: Sendable & Equatable>: Sendable, Equatable {
+        case loading
+        case found(Value)
+        /// It couldn't be found out; the row is left out.
+        case failed
+    }
 
     struct Exposure: Sendable, Equatable {
         var fNumber: Double?
@@ -58,7 +68,8 @@ struct FileDetails: Sendable, Equatable {
     static func load(_ url: URL, options: FileCardOptions) -> FileDetails {
         var details = FileDetails()
         let values = try? url.resourceValues(forKeys: [
-            .localizedTypeDescriptionKey, .contentTypeKey, .isDirectoryKey, .fileSizeKey, .creationDateKey, .contentModificationDateKey,
+            .localizedTypeDescriptionKey, .contentTypeKey, .isDirectoryKey, .isPackageKey, .fileSizeKey, .creationDateKey,
+            .contentModificationDateKey,
         ])
         if options.shows(.kind) { details.kind = values?.localizedTypeDescription }
         if options.shows(.size), values?.isDirectory != true { details.size = values?.fileSize.map(Int64.init) }
@@ -70,6 +81,18 @@ struct FileDetails: Sendable, Equatable {
         if options.shows(.cloud) { details.cloud = cloudStatus(of: url) }
 
         if options.shows(.archive), url.pathExtension.lowercased() == "zip" { details.archive = ZipSummary.read(url) }
+        if values?.isPackage == true, [.appVersion, .bundleID, .architectures, .minimumSystem, .signature].contains(where: options.shows),
+           var app = AppBundleInfo.read(url) {
+            if !options.shows(.appVersion) { app.version = nil }
+            if !options.shows(.bundleID) { app.bundleID = nil }
+            if !options.shows(.architectures) { app.architectures = [] }
+            if !options.shows(.minimumSystem) { app.minimumSystem = nil }
+            details.app = app
+        }
+        if values?.isDirectory == true, values?.isPackage != true, options.shows(.gitBranch) || options.shows(.gitChanges) {
+            details.git = GitRepository.read(url)
+            if !options.shows(.gitBranch) { details.git?.head = nil; details.git?.remote = nil }
+        }
 
         let spotlightFields: [FileCardField] = [.opened, .dimensions, .duration, .pages, .whereFrom, .camera, .exposure, .codecs, .music]
         guard spotlightFields.contains(where: options.shows) else { return details }
@@ -123,8 +146,8 @@ struct FileDetails: Sendable, Equatable {
     }
 
     /// The card's lines for these details, in the order of `FileCardField`. Kind, size, and path are
-    /// shown elsewhere on the card.
-    func rows(pathStyle: PathStyle) -> [DetailRow] {
+    /// shown elsewhere on the card; `signature` and `changes` are looked up after it appears.
+    func rows(pathStyle: PathStyle, signature: Lookup<String>? = nil, changes: Lookup<Int>? = nil) -> [DetailRow] {
         var rows: [DetailRow] = []
         func add(_ field: FileCardField, _ label: String, _ text: String?, copy: String? = nil) {
             guard let text else { return }
@@ -156,6 +179,35 @@ struct FileDetails: Sendable, Equatable {
         add(.music, "Artist", artist)
         add(.music, "Album", album)
         add(.archive, "Contents", archive?.label)
+        func addLookup<Value>(_ field: FileCardField, _ label: String, _ lookup: Lookup<Value>?, _ text: (Value) -> String) {
+            switch lookup {
+            case .loading?: rows.append(DetailRow(field: field, label: label, value: .loading, copyText: nil))
+            case .found(let value)?: add(field, label, text(value))
+            case .failed?, nil: break
+            }
+        }
+        if let app {
+            add(.appVersion, "Version", app.version)
+            add(.bundleID, "Bundle ID", app.bundleID)
+            add(.architectures, "Built for", app.architectures.isEmpty ? nil : app.architectures.joined(separator: " and "))
+            add(.minimumSystem, "Requires", app.minimumSystem)
+        }
+        addLookup(.signature, "Signed by", signature) { $0 }
+        if let git {
+            switch git.head {
+            case .branch(let name)?: add(.gitBranch, "Branch", name)
+            case .detached(let commit)?: add(.gitBranch, "Branch", "Detached at \(commit)", copy: commit)
+            case nil: break
+            }
+            if let remote = git.remote {
+                let shown = GitRepository.displayRemote(remote)
+                let value: DetailRow.Value = GitRepository.webPage(of: remote).map { .link(shown, $0) } ?? .text(shown)
+                rows.append(DetailRow(field: .gitBranch, label: "Remote", value: value, copyText: remote))
+            }
+        }
+        addLookup(.gitChanges, "Changes", changes) { count in
+            count == 0 ? "None" : "\(count) uncommitted change\(count == 1 ? "" : "s")"
+        }
         return rows
     }
 

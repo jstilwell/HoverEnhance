@@ -1,0 +1,70 @@
+import Foundation
+import Security
+
+/// About an app or other bundle: its version, identity, the Macs it runs on, and who signed it.
+struct AppBundleInfo: Sendable, Equatable {
+    /// "26.0 (21622.1.22)".
+    var version: String?
+    var bundleID: String?
+    /// "Apple silicon", "Intel".
+    var architectures: [String] = []
+    /// "macOS 14.0".
+    var minimumSystem: String?
+
+    /// Nil unless `url` is a bundle with an identifier. Reads Info.plist and the executable's header
+    /// directly; `Bundle` would cache them for as long as HoverEnhance runs, so an updated app would
+    /// keep showing its old version.
+    static func read(_ url: URL) -> AppBundleInfo? {
+        guard let info = CFBundleCopyInfoDictionaryInDirectory(url as CFURL) as? [String: Any],
+              let bundleID = info[kCFBundleIdentifierKey as String] as? String else { return nil }
+        let short = info["CFBundleShortVersionString"] as? String
+        let build = info[kCFBundleVersionKey as String] as? String
+        let version = switch (short, build) {
+        case let (short?, build?) where short != build: "\(short) (\(build))"
+        case let (short?, _): short
+        case let (nil, build): build
+        }
+        let architectures = (CFBundleCopyExecutableArchitecturesForURL(url as CFURL) as? [NSNumber] ?? []).compactMap { number -> String? in
+            switch number.intValue {
+            case kCFBundleExecutableArchitectureARM64: "Apple silicon"
+            case kCFBundleExecutableArchitectureX86_64, kCFBundleExecutableArchitectureI386: "Intel"
+            case kCFBundleExecutableArchitecturePPC, kCFBundleExecutableArchitecturePPC64: "PowerPC"
+            default: nil
+            }
+        }
+        return AppBundleInfo(version: version, bundleID: bundleID, architectures: architectures.uniqued(),
+                             minimumSystem: (info["LSMinimumSystemVersion"] as? String).map { "macOS " + $0 })
+    }
+
+    /// Who signed the code at `url`: "Apple", "Mac App Store", a Developer ID ("Developer ID
+    /// Application: Jane Doe (ABCDE12345)"), "Ad hoc, no developer", or "Not signed". The signature's
+    /// own structure is checked but not every file it covers, which would take seconds for a big app.
+    static func signature(of url: URL) -> String? {
+        var code: SecStaticCode?
+        guard SecStaticCodeCreateWithPath(url as CFURL, [], &code) == errSecSuccess, let code else { return nil }
+        let quick = SecCSFlags(rawValue: kSecCSDoNotValidateExecutable | kSecCSDoNotValidateResources)
+        let validity = SecStaticCodeCheckValidity(code, quick, nil)
+        if validity == errSecCSUnsigned { return "Not signed" }
+
+        func satisfies(_ requirement: String) -> Bool {
+            var compiled: SecRequirement?
+            guard SecRequirementCreateWithString(requirement as CFString, [], &compiled) == errSecSuccess else { return false }
+            return SecStaticCodeCheckValidity(code, quick, compiled) == errSecSuccess
+        }
+        var information: CFDictionary?
+        SecCodeCopySigningInformation(code, SecCSFlags(rawValue: kSecCSSigningInformation), &information)
+        let certificates = (information as? [String: Any])?[kSecCodeInfoCertificates as String] as? [SecCertificate]
+
+        let signer: String
+        if certificates?.isEmpty != false {
+            signer = "Ad hoc, no developer"
+        } else if satisfies("anchor apple") {
+            signer = "Apple"
+        } else if satisfies("anchor apple generic and certificate leaf[field.1.2.840.113635.100.6.1.9] exists") {
+            signer = "Mac App Store"
+        } else {
+            signer = certificates.flatMap { $0.first }.flatMap { SecCertificateCopySubjectSummary($0) as String? } ?? "Unknown developer"
+        }
+        return validity == errSecSuccess ? signer : signer + " · signature is broken"
+    }
+}
