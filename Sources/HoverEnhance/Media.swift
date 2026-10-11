@@ -5,14 +5,23 @@ import Foundation
 enum MediaSource: Sendable, Hashable {
     /// Image URLs, best first.
     case images([URL])
+    /// A file or HLS stream AVFoundation can play.
+    case video(URL)
     /// A Reddit gallery post; its page lists the images.
     case redditGallery(id: String)
+    case streamable(id: String)
+    /// A post on X (Twitter): photos, a video, or a GIF.
+    case tweet(id: String)
+    /// A Bluesky post; `actor` is a handle or DID.
+    case blueskyPost(actor: String, rkey: String)
 }
 
 /// One thing a preview can show.
 enum MediaItem: Sendable, Equatable {
     /// Image URLs, best first; the first that loads wins.
     case image([URL])
+    /// A file or HLS stream AVFoundation can play, with its size when the site reports it.
+    case video(URL, size: CGSize?)
 }
 
 /// Resolved media: a single item, or an album.
@@ -23,9 +32,9 @@ struct Media: Sendable, Equatable {
 /// Works out what to preview for a hover result.
 enum MediaResolver {
     static func source(for info: HoverInfo) -> MediaSource? {
-        // A link to a post outranks the thumbnail inside it: the post may hold more than one image.
-        if let link = info.linkURL, let id = RedditGallery.id(fromLink: link) {
-            return .redditGallery(id: id)
+        // A link to a post or video outranks the thumbnail inside it.
+        if let link = info.linkURL, let source = SiteLinks.source(forLink: link) {
+            return source
         }
         let images = imageCandidates(for: info)
         return images.isEmpty ? nil : .images(images)

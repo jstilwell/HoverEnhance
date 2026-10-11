@@ -16,14 +16,15 @@ manual check on r/pics "Mountain lake!" (gallery case on `Tests/Manual/preview-t
 **Success Criteria**: Streamable, v.redd.it (HLS), Imgur gifv/mp4, direct .mp4/.m3u8 links, X/Twitter
 and Bluesky posts play; moving onto the preview keeps it open and shows playback/volume controls;
 reopening a video resumes where it stopped; mute/volume choice is remembered.
-**Tests**: Per-site resolution unit tests; live API smoke tests; manual hover/controls/resume checks.
-**Status**: In Progress
+**Tests**: Per-site resolution unit tests; live API smoke tests; manual hover/controls/resume checks
+(video cases on `Tests/Manual/preview-test.html`). Imgur gifv is rule-only (no live sample).
+**Status**: Complete
 
 ## Stage 3: Embedded players
 **Goal**: Sites without a playable stream play through their own embed player in a web view.
 **Success Criteria**: YouTube, Vimeo, TikTok, Instagram, and Twitch clip links play in the preview.
 **Tests**: URL → embed unit tests; manual check per site.
-**Status**: Not Started
+**Status**: In Progress
 
 ## Stage 4: Polish
 **Goal**: Rough edges found along the way.
