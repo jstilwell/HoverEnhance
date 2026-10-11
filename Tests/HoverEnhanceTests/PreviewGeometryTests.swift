@@ -44,3 +44,42 @@ struct PreviewGeometryTests {
         #expect(abs((panel.width - 8) / (panel.height - 8) - 4.0 / 3.0) < 0.01)
     }
 }
+
+struct RockerGeometryTests {
+    private let visible = CGRect(x: 0, y: 0, width: 1920, height: 1080)
+
+    @Test func sitsAboveTheNotchAgainstThePreview() {
+        let anchor = CGPoint(x: 500, y: 500)
+        let rocker = PreviewGeometry.rockerFrame(anchor: anchor, placeRight: true, visible: visible)
+        let notch = PreviewGeometry.notchFrame(anchor: anchor, placeRight: true)
+        #expect(rocker.maxY == notch.minY - PreviewGeometry.rockerSpacing)
+        // Against the preview, which starts `gap` past the cursor; over the cursor's column.
+        #expect(rocker.maxX == anchor.x + PreviewGeometry.gap - PreviewGeometry.rockerSpacing)
+        #expect(rocker.minX < anchor.x + 1)
+    }
+
+    @Test func mirrorsWhenThePreviewIsOnTheLeft() {
+        let anchor = CGPoint(x: 1500, y: 500)
+        let rocker = PreviewGeometry.rockerFrame(anchor: anchor, placeRight: false, visible: visible)
+        #expect(rocker.minX == anchor.x - PreviewGeometry.gap + PreviewGeometry.rockerSpacing)
+        #expect(rocker.maxX > anchor.x - 1)
+    }
+
+    @Test func goesBelowTheNotchNearTheTopOfTheScreen() {
+        let anchor = CGPoint(x: 500, y: 40)
+        let rocker = PreviewGeometry.rockerFrame(anchor: anchor, placeRight: true, visible: visible)
+        let notch = PreviewGeometry.notchFrame(anchor: anchor, placeRight: true)
+        #expect(rocker.minY == notch.maxY + PreviewGeometry.rockerSpacing)
+    }
+
+    @Test func theCursorCanCrossFromTheNotchToTheRocker() {
+        let anchor = CGPoint(x: 500, y: 500)
+        let notch = PreviewGeometry.notchFrame(anchor: anchor, placeRight: true)
+        let rocker = PreviewGeometry.rockerFrame(anchor: anchor, placeRight: true, visible: visible)
+        let reach = PreviewGeometry.rockerReach(rocker: rocker, notch: notch)
+        // Every point straight up from the notch to the rocker, in the rocker's column.
+        for y in stride(from: notch.minY, through: rocker.minY, by: -1) {
+            #expect(reach.contains(CGPoint(x: rocker.midX, y: y)) || notch.contains(CGPoint(x: rocker.midX, y: y)))
+        }
+    }
+}
