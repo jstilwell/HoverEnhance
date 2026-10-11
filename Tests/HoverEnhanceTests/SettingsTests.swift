@@ -39,11 +39,13 @@ struct AppSettingsTests {
         settings.finderDelay = 900
         settings.finderShowsPath = false
         settings.finderPathStyle = .quoted
+        settings.finderShowsDates = false
+        settings.finderShowsWhereFrom = false
 
         let reloaded = AppSettings(defaults: defaults)
         #expect(!reloaded.filter.files)
         #expect(reloaded.finderDelay == 900)
-        #expect(reloaded.fileCard == FileCardOptions(path: false, pathStyle: .quoted))
+        #expect(reloaded.fileCard == FileCardOptions(path: false, pathStyle: .quoted, dates: false, whereFrom: false))
     }
 
     @Test func changesPersist() {

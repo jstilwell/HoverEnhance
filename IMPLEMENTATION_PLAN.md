@@ -32,7 +32,7 @@ quotes); Finder settings defaults and persistence; resolver and filter for file 
 are left out rather than shown empty.
 **Tests**: Details of temp files (size, dates, kind), a generated PNG's dimensions, and a where-from
 attribute written to a temp file; parsing where-from lists (prefers the page over the file URL).
-**Status**: In Progress
+**Status**: Complete
 
 ## Stage 4: Apps using it, and quitting them
 **Goal**: The card lists apps with it open in a window, processes holding it open or working in the
@@ -42,7 +42,7 @@ for a second click, quits politely, and offers Force Quit if the process is stil
 setting hides the quit buttons.
 **Tests**: The scan finds a file held open and a working folder (this test process); quitting a child
 process ends it; manual check in Finder on a file held open by `sleep`.
-**Status**: Not Started
+**Status**: In Progress
 
 # YouTube creator card
 

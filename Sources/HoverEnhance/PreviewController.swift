@@ -214,7 +214,10 @@ final class PreviewController {
             let extraWait = settings.finderDelay - settings.hoverDelay
             if extraWait > 0 { try? await Task.sleep(for: .milliseconds(extraWait)) }
             guard !Task.isCancelled, self.target == requested else { return }
-            let view = NSHostingView(rootView: FileCardView(card: FileCard(url: url, options: settings.fileCard)))
+            let options = settings.fileCard
+            let details = await Task.detached { FileDetails.load(url, options: options) }.value
+            guard !Task.isCancelled, self.target == requested else { return }
+            let view = NSHostingView(rootView: FileCardView(card: FileCard(url: url, details: details, options: options)))
             view.appearance = NSAppearance(named: .darkAqua)
             playback.stop()
             panel.show(view, counter: counter, anchor: requested.anchor)
