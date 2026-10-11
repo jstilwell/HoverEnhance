@@ -49,6 +49,8 @@ final class HoverMonitor {
     }
 
     private func handle(_ event: NSEvent) {
+        // Clicks and scrolls in our own windows (an interactive preview) are for that window.
+        if event.window != nil, event.type != .mouseMoved { return }
         switch event.type {
         case .mouseMoved:
             if let point = CGEvent(source: nil)?.location { onMouseMoved?(point) }
