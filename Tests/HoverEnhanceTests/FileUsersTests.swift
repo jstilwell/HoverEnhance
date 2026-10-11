@@ -33,6 +33,25 @@ struct FileUsersTests {
         #expect(!users.contains { $0.pid == getpid() })
     }
 
+    @Test func commandsGoByTheNameTheyWereStartedUnder() throws {
+        // `exec -a` starts sleep under another name, as Claude Code's versioned executable runs as "claude".
+        for (argument0, expected) in [("fancyname", "fancyname"), ("-zsh", "zsh"), ("-/bin/zsh", "zsh"), ("/opt/tools/bin/thing", "thing")] {
+            let process = Process()
+            process.executableURL = URL(filePath: "/bin/bash")
+            process.arguments = ["-c", "exec -a '\(argument0)' /bin/sleep 10"]
+            try process.run()
+            defer { process.terminate() }
+            var name: String?
+            for _ in 0..<50 {
+                name = FileUsers.commandName(of: process.processIdentifier)
+                if name == expected { break }
+                Thread.sleep(forTimeInterval: 0.02)
+            }
+            #expect(name == expected)
+            #expect(FileUsers.name(of: process.processIdentifier) == expected)
+        }
+    }
+
     @Test func findsAWorkingFolder() async {
         let here = URL(filePath: FileManager.default.currentDirectoryPath, directoryHint: .isDirectory)
         let users = await FileUsers.find(here, excluding: 0)
