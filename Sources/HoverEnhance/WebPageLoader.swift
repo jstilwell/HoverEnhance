@@ -7,7 +7,10 @@ import WebKit
 final class WebPageLoader {
     static let shared = WebPageLoader()
 
-    private let webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 1280, height: 900))
+    /// Made when a load needs it and let go a minute after the last one: a web view keeps a web
+    /// content process running. Its cookies outlive it, in the shared website data store.
+    private var webView: WKWebView?
+    private var release: Task<Void, Never>?
     /// Bumped per load; an older load still polling gives up when it sees a newer one.
     private var generation = 0
 
@@ -16,8 +19,16 @@ final class WebPageLoader {
     func html(at url: URL, selector: String, timeout: Duration = .seconds(10)) async -> String? {
         generation += 1
         let mine = generation
+        release?.cancel()
+        let webView = self.webView ?? WKWebView(frame: CGRect(x: 0, y: 0, width: 1280, height: 900))
+        self.webView = webView
         webView.load(URLRequest(url: url))
-        defer { if generation == mine { webView.stopLoading() } }
+        defer {
+            if generation == mine {
+                webView.stopLoading()
+                releaseSoon()
+            }
+        }
 
         let script = "document.querySelector(\(Self.javaScriptString(selector)))?.outerHTML ?? null"
         let deadline = ContinuousClock.now + timeout
@@ -25,11 +36,19 @@ final class WebPageLoader {
             try? await Task.sleep(for: .milliseconds(200))
             guard !Task.isCancelled, generation == mine else { return nil }
             if let html = try? await webView.evaluateJavaScript(script) as? String {
-                await shareCookies(for: url)
+                await shareCookies(for: url, from: webView)
                 return html
             }
         }
         return nil
+    }
+
+    private func releaseSoon() {
+        release = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(60))
+            guard !Task.isCancelled else { return }
+            self?.webView = nil
+        }
     }
 
     /// Cookies and storage the offscreen view and the embedded players have collected.
@@ -38,7 +57,7 @@ final class WebPageLoader {
         await store.removeData(ofTypes: WKWebsiteDataStore.allWebsiteDataTypes(), modifiedSince: .distantPast)
     }
 
-    private func shareCookies(for url: URL) async {
+    private func shareCookies(for url: URL, from webView: WKWebView) async {
         guard let host = url.host() else { return }
         let domain = host.split(separator: ".").suffix(2).joined(separator: ".")
         for cookie in await webView.configuration.websiteDataStore.httpCookieStore.allCookies()
