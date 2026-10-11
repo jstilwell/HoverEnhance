@@ -349,7 +349,10 @@ struct VideoSettingsView: View {
                 Footnote("“As last set” keeps whatever you last chose with a video's mute button. Embedded players have their own volume.")
             }
             Section {
-                Picker("Scroll wheel", selection: $settings.videoScroll) {
+                Picker("Scrolling on the video", selection: $settings.videoScroll) {
+                    ForEach(VideoScroll.allCases) { Text($0.label).tag($0) }
+                }
+                Picker("Scrolling on the notch", selection: $settings.notchVideoScroll) {
                     ForEach(VideoScroll.allCases) { Text($0.label).tag($0) }
                 }
                 Toggle("Loop videos", isOn: $settings.loopVideos)
@@ -360,7 +363,7 @@ struct VideoSettingsView: View {
             } header: {
                 Text("Playback")
             } footer: {
-                Footnote("The scroll wheel works with the cursor on the notch or the video. Embedded players handle scrolling themselves.")
+                Footnote("The notch is the tab under the cursor that joins it to the preview; during a video, the volume shows beside it, and scrolling there counts as the notch. Embedded players handle scrolling themselves.")
             }
         }
         .formStyle(.grouped)

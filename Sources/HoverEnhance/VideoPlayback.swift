@@ -13,6 +13,13 @@ final class VideoPlayback {
     /// position that hasn't caught up yet.
     private var scrubTarget: Double?
     private var settingObservations: [NSKeyValueObservation] = []
+    /// Called on the main thread when the player's volume or mute changes, by scrolling or its controls.
+    var onVolumeChange: (@MainActor (_ level: Float, _ muted: Bool) -> Void)?
+
+    /// The player's volume and mute, while there's a player.
+    var volume: (level: Float, muted: Bool)? {
+        player.map { ($0.volume, $0.isMuted) }
+    }
 
     /// Starts `url` and waits until it has a frame to show. Returns the video's size, or nil if it
     /// failed, timed out, or was replaced. `key` identifies the video for resuming.
@@ -30,15 +37,19 @@ final class VideoPlayback {
 
         // Remember mute and volume changes made with the player's controls.
         settingObservations = [
-            player.observe(\.isMuted) { player, _ in
-                let muted = player.isMuted
+            player.observe(\.isMuted) { [weak self] player, _ in
+                let (muted, level) = (player.isMuted, player.volume)
                 Task { @MainActor in
                     if AppSettings.shared.videoSound == .remember { AppSettings.shared.videoMuted = muted }
+                    self?.onVolumeChange?(level, muted)
                 }
             },
-            player.observe(\.volume) { player, _ in
-                let volume = Double(player.volume)
-                Task { @MainActor in AppSettings.shared.videoVolume = volume }
+            player.observe(\.volume) { [weak self] player, _ in
+                let (muted, level) = (player.isMuted, player.volume)
+                Task { @MainActor in
+                    AppSettings.shared.videoVolume = Double(level)
+                    self?.onVolumeChange?(level, muted)
+                }
             },
         ]
         if settings.loopVideos {
@@ -86,17 +97,15 @@ final class VideoPlayback {
     }
 
     /// Changes the volume by `amount` (of 1). Scrolling up from muted unmutes, starting quiet.
-    /// Returns the new volume for display.
-    func changeVolume(by amount: Double) -> String? {
-        guard let player else { return nil }
+    func changeVolume(by amount: Double) {
+        guard let player else { return }
         if player.isMuted {
-            guard amount > 0 else { return "Muted" }
+            guard amount > 0 else { return }
             player.volume = Float(amount)
             player.isMuted = false
         } else {
             player.volume = Float(min(max(Double(player.volume) + amount, 0), 1))
         }
-        return "Volume \(Int((player.volume * 100).rounded()))%"
     }
 
     private static func clock(_ seconds: Double) -> String {
