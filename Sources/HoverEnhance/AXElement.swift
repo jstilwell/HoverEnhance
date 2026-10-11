@@ -55,6 +55,18 @@ struct AXElement {
         }
     }
 
+    /// Up to `limit` graphics in a web page under this element, in page order, from the engine's own
+    /// search. WebKit's graphics are images; Chromium's are images and videos.
+    func graphics(limit: Int) -> [AXElement] {
+        let query: [String: Any] = ["AXSearchKey": "AXGraphicSearchKey", "AXDirection": "AXDirectionNext", "AXResultsLimit": limit]
+        var value: CFTypeRef?
+        guard AXUIElementCopyParameterizedAttributeValue(ref, "AXUIElementsForSearchPredicate" as CFString, query as CFDictionary, &value) == .success,
+              let array = value as? [AnyObject] else { return [] }
+        return array.compactMap { item in
+            CFGetTypeID(item) == AXUIElementGetTypeID() ? AXElement(ref: item as! AXUIElement) : nil
+        }
+    }
+
     /// Frame in global display coordinates (top-left origin).
     var frame: CGRect? {
         guard let origin: CGPoint = axValue(kAXPositionAttribute, type: .cgPoint),

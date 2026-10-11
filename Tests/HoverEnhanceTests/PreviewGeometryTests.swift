@@ -45,6 +45,35 @@ struct PreviewGeometryTests {
     }
 }
 
+/// Whether a preview would be worth it next to what the page already shows.
+struct EnlargementTests {
+    private let room = CGSize(width: 900, height: 700)
+
+    @Test func thumbnailsAreEnlarged() {
+        #expect(PreviewGeometry.couldEnlarge(shown: CGSize(width: 200, height: 150), room: room, by: 1.2))
+        #expect(PreviewGeometry.enlarges(CGSize(width: 2000, height: 1500), shown: CGSize(width: 200, height: 150), room: room, by: 1.2))
+    }
+
+    @Test func imagesShownAboutAsLargeAsThePreviewAreLeftAlone() {
+        // 640×600 on the page; a preview of the same shape can't pass 700 tall.
+        #expect(!PreviewGeometry.couldEnlarge(shown: CGSize(width: 640, height: 600), room: room, by: 1.2))
+    }
+
+    @Test func largeFilesCountAtTheSizeThePreviewShows() {
+        // Shown at 600×450; the 4000×3000 file would show at 900×675, only 1.5× as large.
+        let shown = CGSize(width: 600, height: 450)
+        #expect(PreviewGeometry.enlarges(CGSize(width: 4000, height: 3000), shown: shown, room: room, by: 1.2))
+        #expect(!PreviewGeometry.enlarges(CGSize(width: 4000, height: 3000), shown: shown, room: room, by: 1.6))
+        // Never enlarged past its own pixels.
+        #expect(!PreviewGeometry.enlarges(CGSize(width: 640, height: 480), shown: shown, room: room, by: 1.2))
+    }
+
+    @Test func aCroppedThumbnailOfATallerImageIsEnlarged() {
+        // A square crop of a portrait: the preview is much taller, if not wider.
+        #expect(PreviewGeometry.enlarges(CGSize(width: 1080, height: 1920), shown: CGSize(width: 300, height: 300), room: room, by: 1.2))
+    }
+}
+
 struct RockerGeometryTests {
     private let visible = CGRect(x: 0, y: 0, width: 1920, height: 1080)
 
