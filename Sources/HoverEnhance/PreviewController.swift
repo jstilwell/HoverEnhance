@@ -154,6 +154,9 @@ final class PreviewController {
         case .embed, .channel:
             // On the player or card, scrolling belongs to it; on the notch, it mustn't move the page away.
             return !panel.isOnPreview(input.location)
+        case .file:
+            // Finder scrolls as usual, which closes the card.
+            return false
         }
         return true
     }
@@ -204,6 +207,18 @@ final class PreviewController {
             playback.stop()
             panel.show(card, counter: counter, anchor: requested.anchor)
             log.info("preview: creator card for \(channel.title, privacy: .public)")
+
+        case .file(let url):
+            // Cards wait longer than other previews, so sweeping across a folder doesn't flash them.
+            let settings = AppSettings.shared
+            let extraWait = settings.finderDelay - settings.hoverDelay
+            if extraWait > 0 { try? await Task.sleep(for: .milliseconds(extraWait)) }
+            guard !Task.isCancelled, self.target == requested else { return }
+            let view = NSHostingView(rootView: FileCardView(card: FileCard(url: url, options: settings.fileCard)))
+            view.appearance = NSAppearance(named: .darkAqua)
+            playback.stop()
+            panel.show(view, counter: counter, anchor: requested.anchor)
+            log.info("preview: file card for \(url.path(percentEncoded: false), privacy: .public)")
         }
         index = position
         showing = media.items[position]

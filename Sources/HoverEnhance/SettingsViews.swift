@@ -283,6 +283,54 @@ struct SitesSettingsView: View {
     }
 }
 
+// MARK: - Finder
+
+struct FinderSettingsView: View {
+    @Bindable var settings: AppSettings
+
+    var body: some View {
+        Form {
+            Section {
+                Toggle(isOn: $settings.finderCards) {
+                    Text("Show file cards")
+                    Text("Resting on a file or folder in Finder or on the desktop shows a card about it")
+                }
+                LabeledContent("Show after") {
+                    HStack {
+                        // Never sooner than the hover delay, which the cursor has already waited out.
+                        Slider(value: $settings.finderDelay, in: settings.hoverDelay...max(settings.hoverDelay, 2000), step: 50)
+                        Text("\(Int(max(settings.finderDelay, settings.hoverDelay))) ms").monospacedDigit().frame(width: 64, alignment: .trailing)
+                    }
+                }
+                .disabled(!settings.finderCards)
+            } footer: {
+                Footnote("Cards wait longer than other previews, so sweeping across a folder doesn't flash them. Clicking a file or moving off it closes its card.")
+            }
+            Section {
+                Toggle(isOn: $settings.finderShowsPath) {
+                    Text("Path")
+                    Text("Click it to copy it")
+                }
+                Picker("Copy path as", selection: $settings.finderPathStyle) {
+                    ForEach(PathStyle.allCases) { Text($0.label).tag($0) }
+                }
+                .disabled(!settings.finderShowsPath)
+                LabeledContent("Example") {
+                    Text(settings.finderPathStyle.format(NSHomeDirectory() + "/Downloads/Project Notes (v2).txt"))
+                        .font(.system(.callout, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                }
+            } header: {
+                Text("Show")
+            }
+            .disabled(!settings.finderCards)
+        }
+        .formStyle(.grouped)
+        .frame(width: settingsWidth, height: 420)
+    }
+}
+
 // MARK: - Advanced
 
 struct AdvancedSettingsView: View {
