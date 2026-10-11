@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>HoverEnhance preview test</title>
+<style>
+  body { font: 14px -apple-system, sans-serif; margin: 24px; background: #f4f4f4; color: #222; }
+  .grid { display: grid; grid-template-columns: repeat(4, 200px); gap: 20px; }
+  figure { margin: 0; }
+  figcaption { font-size: 12px; color: #666; margin-top: 4px; }
+  img, .bg { width: 200px; height: 150px; object-fit: cover; display: block; }
+  .overlay { position: relative; }
+  .overlay a { position: absolute; inset: 0; }
+  .bg { background: url("https://upload.wikimedia.org/wikipedia/commons/thumb/3/3f/Fronalpstock_big.jpg/330px-Fronalpstock_big.jpg") center / cover; }
+  .poster { width: 100px; height: 150px; }
+</style>
+</head>
+<body>
+<p>Hover each item. Captions say what HoverEnhance should do.</p>
+<div class="grid">
+  <figure data-case="plain-thumb">
+    <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/3/3f/Fronalpstock_big.jpg/330px-Fronalpstock_big.jpg" alt="Fronalpstock">
+    <figcaption>Plain thumbnail → 1280px rendering</figcaption>
+  </figure>
+  <figure data-case="linked-thumb">
+    <a href="https://upload.wikimedia.org/wikipedia/commons/thumb/3/3f/Fronalpstock_big.jpg/1280px-Fronalpstock_big.jpg">
+      <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/3/3f/Fronalpstock_big.jpg/250px-Fronalpstock_big.jpg" alt="Fronalpstock, linked">
+    </a>
+    <figcaption>Thumbnail linking to an image → link target</figcaption>
+  </figure>
+  <figure data-case="overlay">
+    <div class="overlay">
+      <img src="https://cdn.bsky.app/img/feed_thumbnail/plain/did:plc:z72i7hdynmk6r22z27h6tvur/bafkreih3mb3cwnbc5kv5b2qyy24q6banms25i5ut3cbty4ej2x7vjvd6y4@jpeg" alt="Bluesky photo">
+      <a href="#" aria-label="Open post"></a>
+    </div>
+    <figcaption>Image under a transparent link → Bluesky full size</figcaption>
+  </figure>
+  <figure data-case="decorative">
+    <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/3/3f/Fronalpstock_big.jpg/250px-Fronalpstock_big.jpg" alt="">
+    <figcaption>Decorative (alt="") → hidden from accessibility, so probably nothing</figcaption>
+  </figure>
+  <figure data-case="youtube">
+    <a href="https://www.youtube.com/watch?v=dQw4w9WgXcQ">
+      <img src="https://i.ytimg.com/vi/dQw4w9WgXcQ/mqdefault.jpg" alt="Video thumbnail">
+    </a>
+    <figcaption>YouTube thumbnail → maxresdefault</figcaption>
+  </figure>
+  <figure data-case="letterboxd">
+    <img class="poster" src="https://a.ltrbxd.com/resized/film-poster/8/7/7/3/5/7/877357-all-eyes-0-230-0-345-crop.jpg" alt="Film poster">
+    <figcaption>Letterboxd poster → 1000×1500</figcaption>
+  </figure>
+  <figure data-case="background">
+    <div class="bg" role="img" aria-label="Background image"></div>
+    <figcaption>CSS background → not visible to accessibility, nothing</figcaption>
+  </figure>
+  <figure data-case="text-link">
+    <p><a href="https://upload.wikimedia.org/wikipedia/commons/thumb/3/3f/Fronalpstock_big.jpg/1280px-Fronalpstock_big.jpg">A text link to an image</a> → link target</p>
+  </figure>
+</div>
+</body>
+</html>

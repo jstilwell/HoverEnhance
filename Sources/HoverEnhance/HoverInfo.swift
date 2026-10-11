@@ -18,6 +18,9 @@ struct HoverInfo: Sendable, Equatable {
     var linkURL: URL?
     /// `AXURL` of the enclosing `AXWebArea`, i.e. the page being viewed.
     var pageURL: URL?
+    /// The image under the cursor: the element itself, or one beneath an overlay covering it.
+    var imageURL: URL?
+    var imageFrame: CGRect?
     /// Frame in global display coordinates (top-left origin).
     var frame: CGRect?
     /// Roles from the element up to its web area or window, innermost first.
@@ -34,6 +37,7 @@ struct HoverInfo: Sendable, Equatable {
         add("label", label)
         add("value", value)
         add("url", url?.absoluteString)
+        add("image", imageURL == url ? nil : imageURL?.absoluteString)
         add("link", linkURL?.absoluteString)
         add("page", pageURL?.absoluteString)
         add("frame", frame.map { "\(Int($0.minX)),\(Int($0.minY))  \(Int($0.width))×\(Int($0.height))" })
