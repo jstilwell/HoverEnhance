@@ -212,22 +212,28 @@ enum WebEngine {
 }
 
 /// Whether one of this app's windows is in front at a point: the preview, its notch, a card, the HUD,
-/// Settings, About, the welcome window, or the menu bar menu. Click-through windows count, since
-/// accessibility hit-tests find them too.
+/// Settings, About, the welcome window, or a menu.
 enum OwnWindows {
     static func areInFront(at point: CGPoint) -> Bool {
         let windows = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]] ?? []
-        return areInFront(at: point, windows: windows, ownPID: ProcessInfo.processInfo.processIdentifier)
+        let screenTop = NSScreen.screens.first?.frame.maxY ?? 0
+        let clicked = NSWindow.windowNumber(at: NSPoint(x: point.x, y: screenTop - point.y), belowWindowWithWindowNumber: 0)
+        return areInFront(at: point, windows: windows, clickedWindow: clicked == 0 ? nil : clicked,
+                          ownPID: ProcessInfo.processInfo.processIdentifier)
     }
 
-    /// `windows` is a window list front to back, as `CGWindowListCopyWindowInfo` gives it.
-    static func areInFront(at point: CGPoint, windows: [[String: Any]], ownPID: pid_t) -> Bool {
+    /// `windows` is a window list front to back, as `CGWindowListCopyWindowInfo` gives it, and
+    /// `clickedWindow` the window a click at the point would reach. A window of this app counts if it's
+    /// that window or in front of it: accessibility finds click-through windows (the notch, the HUD)
+    /// too. Other apps' windows in front of the clicked one let clicks and accessibility through, like
+    /// the Dock's invisible window over the whole screen. Without a clicked window, any window of this
+    /// app at the point counts.
+    static func areInFront(at point: CGPoint, windows: [[String: Any]], clickedWindow: Int?, ownPID: pid_t) -> Bool {
         for window in windows {
             guard let bounds = (window[kCGWindowBounds as String] as? NSDictionary).flatMap({ CGRect(dictionaryRepresentation: $0 as CFDictionary) }),
                   bounds.contains(point) else { continue }
             if (window[kCGWindowOwnerPID as String] as? Int).map(pid_t.init) == ownPID { return true }
-            // Another app's window that can be seen ends the search; a fully transparent one doesn't.
-            if (window[kCGWindowAlpha as String] as? Double ?? 1) > 0 { return false }
+            if let clickedWindow, window[kCGWindowNumber as String] as? Int == clickedWindow { return false }
         }
         return false
     }
