@@ -1,8 +1,15 @@
 import SwiftUI
 
-/// What the preview shows for a YouTube creator: who they are, and a way to their channel.
+/// What the preview shows for a YouTube creator: who they are, a way to their channel, and
+/// subscribing when signed in.
 struct CreatorCardView: View {
     let channel: YouTubeChannel
+    @State private var subscription: Subscription
+
+    init(channel: YouTubeChannel) {
+        self.channel = channel
+        _subscription = State(initialValue: Subscription(channelID: channel.id))
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -29,15 +36,48 @@ struct CreatorCardView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             HStack {
+                SubscribeButton(subscription: subscription)
                 Button("Open Channel") { NSWorkspace.shared.open(channel.url) }
                 Spacer()
+            }
+            if let error = subscription.error {
+                Text(error).font(.caption).foregroundStyle(.red).lineLimit(1).help(error)
             }
         }
         .padding(16)
         .frame(width: 420, alignment: .leading)
+        .task { await subscription.load() }
     }
 
     private var details: String {
         [channel.handle.map { "@\($0)" }, channel.subscribers, channel.videos].compactMap { $0 }.joined(separator: " · ")
+    }
+}
+
+private struct SubscribeButton: View {
+    let subscription: Subscription
+
+    var body: some View {
+        switch subscription.status {
+        case .signedOut:
+            Button("Sign In to Subscribe…") {
+                NotificationCenter.default.post(name: .showSettingsTab, object: "Accounts")
+            }
+        case .checking, .changing:
+            Button {} label: {
+                HStack(spacing: 6) {
+                    ProgressView().controlSize(.small)
+                    Text(subscription.status == .checking ? "Subscribe" : "Updating…")
+                }
+            }
+            .disabled(true)
+        case .notSubscribed:
+            Button("Subscribe") { Task { await subscription.toggle() } }
+                .buttonStyle(.borderedProminent)
+                .tint(.red)
+        case .subscribed:
+            Label("Subscribed", systemImage: "checkmark").foregroundStyle(.secondary)
+            Button("Unsubscribe") { Task { await subscription.toggle() } }
+        }
     }
 }
