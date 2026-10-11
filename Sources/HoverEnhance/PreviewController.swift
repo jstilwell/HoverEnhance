@@ -48,23 +48,28 @@ final class PreviewController {
         }
     }
 
-    func hovered(_ info: HoverInfo) {
+    /// `again` is a second look at the spot the cursor stopped on, after the page had a moment to fill
+    /// in: it can start a preview, or switch to a better one still loading, but never ends one.
+    func hovered(_ info: HoverInfo, again: Bool = false) {
         guard let cursor = CGEvent(source: nil)?.location else { return }
         // Resting on the preview or its notch: what's underneath doesn't count.
         if target != nil, panel.covers(cursor) { return }
+        func noPreview(because reason: String) {
+            if !again { reset(because: reason) }
+        }
         let settings = AppSettings.shared
         guard settings.previewsEnabled, settings.previewsAllowed(holding: NSEvent.modifierFlags),
               !settings.isExcluded(info.bundleID) else {
-            reset(because: "previews are off here")
+            noPreview(because: "previews are off here")
             return
         }
         guard let source = MediaResolver.source(for: info), settings.filter.allows(source) else {
-            reset(because: "nothing to preview")
+            noPreview(because: "nothing to preview")
             return
         }
         let keyHeld = NSEvent.modifierFlags.contains(settings.activationKey.flag)
         guard settings.otherApps.allows(source, in: info.appKind, keyHeld: keyHeld) else {
-            reset(because: "not previewed outside browsers")
+            noPreview(because: "not previewed outside browsers")
             return
         }
         // An image the page already shows about as large as a preview could be has nothing to add,
@@ -73,11 +78,13 @@ final class PreviewController {
             !PreviewGeometry.couldEnlarge(shown: $0.size, room: panel.room(at: cursor), by: settings.minimumEnlargement)
         } ?? false
         if shownLarge, !source.isPost {
-            reset(because: "already shown large")
+            noPreview(because: "already shown large")
             return
         }
         // Still on the same thing: it's loading, showing, or was dismissed by a click.
         if target?.source == source { return }
+        // A second look doesn't replace what's already on screen.
+        if again, showing != nil { return }
 
         reset(because: "new target")
         let elementFrame = info.imageFrame ?? info.frame
