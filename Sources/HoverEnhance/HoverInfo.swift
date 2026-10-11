@@ -21,6 +21,8 @@ struct HoverInfo: Sendable, Equatable {
     /// The image under the cursor: the element itself, or one beneath an overlay covering it.
     var imageURL: URL?
     var imageFrame: CGRect?
+    /// The cursor is on a link's text, as opposed to its image or video.
+    var isOnText = false
     /// Frame in global display coordinates (top-left origin).
     var frame: CGRect?
     /// Roles from the element up to its web area or window, innermost first.
@@ -40,6 +42,7 @@ struct HoverInfo: Sendable, Equatable {
         add("image", imageURL == url ? nil : imageURL?.absoluteString)
         add("link", linkURL?.absoluteString)
         add("page", pageURL?.absoluteString)
+        add("text", isOnText ? "yes" : nil)
         add("frame", frame.map { "\(Int($0.minX)),\(Int($0.minY))  \(Int($0.width))×\(Int($0.height))" })
         add("path", Self.collapsingRepeats(ancestry).joined(separator: " › "))
         return lines.joined(separator: "\n")

@@ -1,4 +1,5 @@
 import AppKit
+import SwiftUI
 import WebKit
 
 /// Decides when to show a preview for what the cursor is resting on, and when to hide it.
@@ -150,8 +151,8 @@ final class PreviewController {
                 input.up == 0 ? nil : playback.changeVolume(by: input.isPrecise ? input.up * 0.005 : (input.up > 0 ? 0.05 : -0.05))
             }
             if let readout { panel.flash(readout) }
-        case .embed:
-            // On the player, scrolling belongs to it; on the notch, it mustn't move the page away.
+        case .embed, .channel:
+            // On the player or card, scrolling belongs to it; on the notch, it mustn't move the page away.
             return !panel.isOnPreview(input.location)
         }
         return true
@@ -196,6 +197,13 @@ final class PreviewController {
             panel.show(view, size: embed.size, counter: counter, anchor: requested.anchor)
             log.info("preview \(position + 1)/\(media.items.count): embed \(String(describing: embed), privacy: .public)")
             logPlaybackState(of: view, after: .seconds(5))
+
+        case .channel(let channel):
+            let card = NSHostingView(rootView: CreatorCardView(channel: channel))
+            card.appearance = NSAppearance(named: .darkAqua)
+            playback.stop()
+            panel.show(card, counter: counter, anchor: requested.anchor)
+            log.info("preview: creator card for \(channel.title, privacy: .public)")
         }
         index = position
         showing = media.items[position]

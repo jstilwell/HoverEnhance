@@ -171,6 +171,13 @@ final class PreviewPanel {
         present(webView, naturalSize: size, counter: counter, interactive: true, anchor: anchor)
     }
 
+    /// Any interactive view, at its own fitting size; used for creator cards.
+    func show(_ view: NSView, counter: String?, anchor: CGPoint) {
+        imageView.image = nil
+        playerView.player = nil
+        present(view, naturalSize: view.fittingSize, counter: counter, interactive: true, anchor: anchor)
+    }
+
     func hide() {
         panel.orderOut(nil)
         notch.orderOut(nil)

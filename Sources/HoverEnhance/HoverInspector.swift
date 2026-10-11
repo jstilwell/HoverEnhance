@@ -116,7 +116,26 @@ final class HoverInspector: @unchecked Sendable {
             info.imageURL = image.url
             info.imageFrame = image.frame
         }
+        if info.pageURL != nil, info.linkURL != nil, info.imageURL == nil {
+            info.isOnText = isText(at: point, element: element)
+        }
         return info
+    }
+
+    /// Whether the point is on text. Chromium hit-tests to the text itself; WebKit stops at the link
+    /// around it, so look for the text run under the point among a few descendants.
+    private func isText(at point: CGPoint, element: AXElement) -> Bool {
+        if element.role == "AXStaticText" { return true }
+        var budget = 24
+        var queue = element.children
+        while !queue.isEmpty, budget > 0 {
+            let node = queue.removeFirst()
+            budget -= 1
+            guard let frame = node.frame, frame.contains(point) else { continue }
+            if node.role == "AXStaticText" { return true }
+            queue.append(contentsOf: node.children)
+        }
+        return false
     }
 
     /// Sites often cover images with transparent links or buttons, so the hit element isn't the image.

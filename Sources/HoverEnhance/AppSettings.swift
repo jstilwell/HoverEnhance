@@ -105,6 +105,7 @@ final class AppSettings {
         static let showAlbums = "showAlbums"
         static let showVideos = "showVideos"
         static let showEmbeds = "showEmbeds"
+        static let showCards = "showCards"
         static let disabledSites = "disabledSites"
         static let minimumEnlargement = "minimumEnlargement"
         static let maximumSize = "maximumSize"
@@ -136,6 +137,7 @@ final class AppSettings {
     var showAlbums: Bool { didSet { defaults.set(showAlbums, forKey: Key.showAlbums) } }
     var showVideos: Bool { didSet { defaults.set(showVideos, forKey: Key.showVideos) } }
     var showEmbeds: Bool { didSet { defaults.set(showEmbeds, forKey: Key.showEmbeds) } }
+    var showCards: Bool { didSet { defaults.set(showCards, forKey: Key.showCards) } }
     var disabledSites: Set<MediaSite> {
         didSet { defaults.set(disabledSites.map(\.rawValue).sorted(), forKey: Key.disabledSites) }
     }
@@ -168,6 +170,7 @@ final class AppSettings {
             Key.showAlbums: true,
             Key.showVideos: true,
             Key.showEmbeds: true,
+            Key.showCards: true,
             Key.minimumEnlargement: 1.2,
             Key.maximumSize: 1.0,
             Key.showsNotch: true,
@@ -190,6 +193,7 @@ final class AppSettings {
         showAlbums = defaults.bool(forKey: Key.showAlbums)
         showVideos = defaults.bool(forKey: Key.showVideos)
         showEmbeds = defaults.bool(forKey: Key.showEmbeds)
+        showCards = defaults.bool(forKey: Key.showCards)
         disabledSites = Set((defaults.stringArray(forKey: Key.disabledSites) ?? []).compactMap(MediaSite.init(rawValue:)))
         minimumEnlargement = defaults.double(forKey: Key.minimumEnlargement)
         maximumSize = defaults.double(forKey: Key.maximumSize)
@@ -205,7 +209,8 @@ final class AppSettings {
     }
 
     var filter: PreviewFilter {
-        PreviewFilter(images: showImages, albums: showAlbums, videos: showVideos, embeds: showEmbeds, disabledSites: disabledSites)
+        PreviewFilter(images: showImages, albums: showAlbums, videos: showVideos, embeds: showEmbeds, cards: showCards,
+                      disabledSites: disabledSites)
     }
 
     func previewsAllowed(holding flags: NSEvent.ModifierFlags) -> Bool {
