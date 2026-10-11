@@ -6,7 +6,8 @@ in your browser, file details in Finder. A macOS menu bar app, no browser extens
 ## What it does
 
 - **Images**: rest on a thumbnail or an image link and the full-size image appears. Scroll to zoom.
-- **Albums**: Reddit galleries and multi-photo posts on X, Bluesky, and Instagram. Scroll to step through.
+- **Albums**: Reddit galleries and multi-photo posts on X, Bluesky, and Instagram. Scroll to step
+  through. Immune to smooth-scrolling glitches.
 - **Videos**: Reddit, X, Bluesky, Instagram, Streamable, and Imgur clips play in the preview;
   YouTube, Vimeo, TikTok, and Twitch play in their own players.
 - **YouTube creators**: on YouTube, rest on a video title or channel name to see who made it.
