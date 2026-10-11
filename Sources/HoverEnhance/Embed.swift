@@ -70,7 +70,7 @@ struct Embed: Sendable, Hashable {
             // vimeo.com/<id>[/<hash>], vimeo.com/channels/<name>/<id>, player.vimeo.com/video/<id>
             guard let index = parts.firstIndex(where: { !$0.isEmpty && $0.allSatisfy(\.isNumber) }) else { return nil }
             let hash = parts.indices.contains(index + 1) ? parts[index + 1] : query.first { $0.name == "h" }?.value
-            return Embed(site: .vimeo, id: parts[index], start: start, hash: hash)
+            return Embed(site: .vimeo, id: parts[index], start: start, hash: hash.flatMap(slug))
         case "tiktok.com", "www.tiktok.com", "m.tiktok.com":
             // @<user>/video/<id>
             guard parts.count >= 3, parts[1] == "video", parts[2].allSatisfy(\.isNumber) else { return nil }

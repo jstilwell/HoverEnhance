@@ -58,6 +58,11 @@ final class PreviewController {
             reset(because: "nothing to preview")
             return
         }
+        let keyHeld = NSEvent.modifierFlags.contains(settings.activationKey.flag)
+        guard settings.otherApps.allows(source, in: info.appKind, keyHeld: keyHeld) else {
+            reset(because: "not previewed outside browsers")
+            return
+        }
         // Still on the same thing: it's loading, showing, or was dismissed by a click.
         if target?.source == source { return }
 
@@ -65,13 +70,31 @@ final class PreviewController {
         let elementFrame = info.imageFrame ?? info.frame
         let newTarget = Target(source: source, anchor: cursor, notch: panel.notchFrame(at: cursor), element: elementFrame, page: info.pageURL)
         target = newTarget
+        // File cards wait longer on purpose; the spinner counts only time past that.
+        var spinnerDelay = Duration.milliseconds(300)
+        if case .file = source { spinnerDelay += .milliseconds(max(settings.finderDelay - settings.hoverDelay, 0)) }
         task = Task {
-            guard let fetched = await fetcher.media(for: source), let media = AppSettings.shared.filter.apply(to: fetched),
-                  !Task.isCancelled, target == newTarget else { return }
-            self.media = media
-            // A lone image isn't worth showing unless it's meaningfully bigger than it already appears.
-            await display(0, unlessSmallerThan: media.items.count == 1 ? elementFrame?.size : nil)
+            let shown = await withLoadingIndicator(after: spinnerDelay, for: newTarget) {
+                guard let fetched = await fetcher.media(for: source), let media = AppSettings.shared.filter.apply(to: fetched),
+                      !Task.isCancelled, target == newTarget else { return false }
+                self.media = media
+                // A lone image isn't worth showing unless it's meaningfully bigger than it already appears.
+                return await display(0, unlessSmallerThan: media.items.count == 1 ? elementFrame?.size : nil)
+            }
+            // Nothing to show after all: take the spinner down.
+            if !shown, target == newTarget { panel.hide() }
         }
+    }
+
+    /// Runs `load`, with a spinner in place of the preview if nothing has appeared after `delay`.
+    private func withLoadingIndicator(after delay: Duration, for target: Target, _ load: () async -> Bool) async -> Bool {
+        let indicator = Task { [weak self] in
+            try? await Task.sleep(for: delay)
+            guard !Task.isCancelled, let self, self.target == target, showing == nil else { return }
+            panel.showLoading(anchor: target.anchor)
+        }
+        defer { indicator.cancel() }
+        return await load()
     }
 
     /// Ends the hover the moment the cursor leaves the notch, unless it moves onto the preview.
@@ -178,54 +201,70 @@ final class PreviewController {
         task = Task { await display(next) }
     }
 
-    private func display(_ position: Int, unlessSmallerThan shown: CGSize? = nil) async {
-        guard let media, media.items.indices.contains(position), let target else { return }
+    /// Shows the item at `position`, once it has loaded. Returns whether it did. `allowingLarge` loads an
+    /// image of any size, after the user asked for one over the limit.
+    @discardableResult
+    private func display(_ position: Int, unlessSmallerThan shown: CGSize? = nil, allowingLarge: Bool = false) async -> Bool {
+        guard let media, media.items.indices.contains(position), let target else { return false }
         let requested = target
         let counter = media.items.count > 1 ? "\(position + 1)/\(media.items.count)" : nil
+        let settings = AppSettings.shared
 
         switch media.items[position] {
         case .image(let candidates):
-            let image = await loader.load(candidates, page: target.page, maxPixelSize: Self.maxPixelSize())
-            guard let image, !Task.isCancelled, self.target == requested else { return }
-            let enlargement = AppSettings.shared.minimumEnlargement
-            if let shown, image.pixelSize.width <= shown.width * enlargement, image.pixelSize.height <= shown.height * enlargement { return }
-            playback.stop()
-            panel.show(image, counter: counter, anchor: requested.anchor, focus: Self.focus(of: requested.anchor, in: requested.element))
-            log.info("preview \(position + 1)/\(media.items.count): \(image.url.absoluteString, privacy: .public)")
+            let outcome = await loader.load(candidates, page: target.page, maxPixelSize: Self.maxPixelSize(),
+                                            byteLimit: allowingLarge ? nil : settings.largestImageBytes)
+            guard !Task.isCancelled, self.target == requested else { return false }
+            switch outcome {
+            case .loaded(let image):
+                let enlargement = settings.minimumEnlargement
+                if let shown, image.pixelSize.width <= shown.width * enlargement, image.pixelSize.height <= shown.height * enlargement {
+                    return false
+                }
+                playback.stop()
+                panel.show(image, counter: counter, anchor: requested.anchor, focus: Self.focus(of: requested.anchor, in: requested.element))
+                log.infoPrivateInRelease("preview \(position + 1)/\(media.items.count): \(image.url.absoluteString)")
+            case .tooLarge(let url, let bytes):
+                let card = NSHostingView(rootView: TooLargeCardView(url: url, bytes: bytes, limit: settings.largestImageBytes) { [weak self] in
+                    await self?.loadAnyway(position) ?? false
+                })
+                playback.stop()
+                panel.show(card, counter: counter, anchor: requested.anchor)
+                log.infoPrivateInRelease("preview \(position + 1)/\(media.items.count): over the size limit, \(url.absoluteString)")
+            case .failed:
+                return false
+            }
 
         case .video(let url, let reportedSize):
             // Keyed by source and position, so the same video resumes however it was reached.
             let key = "\(requested.source)#\(position)"
             guard let size = await playback.start(url, key: key), !Task.isCancelled, self.target == requested,
-                  let player = playback.player else { return }
+                  let player = playback.player else { return false }
             panel.show(player, videoSize: reportedSize ?? size, counter: counter, anchor: requested.anchor)
-            log.info("preview \(position + 1)/\(media.items.count): video \(url.absoluteString, privacy: .public)")
+            log.infoPrivateInRelease("preview \(position + 1)/\(media.items.count): video \(url.absoluteString)")
 
         case .embed(let embed):
-            guard let view = embeds.view(for: embed) else { return }
+            guard let view = embeds.view(for: embed) else { return false }
             playback.stop()
             panel.show(view, size: embed.size, counter: counter, anchor: requested.anchor)
-            log.info("preview \(position + 1)/\(media.items.count): embed \(String(describing: embed), privacy: .public)")
+            log.infoPrivateInRelease("preview \(position + 1)/\(media.items.count): embed \(String(describing: embed))")
             logPlaybackState(of: view, after: .seconds(5))
 
         case .channel(let channel):
             let card = NSHostingView(rootView: CreatorCardView(channel: channel))
-            card.appearance = NSAppearance(named: .darkAqua)
             playback.stop()
             panel.show(card, counter: counter, anchor: requested.anchor)
-            log.info("preview: creator card for \(channel.title, privacy: .public)")
+            log.infoPrivateInRelease("preview: creator card for \(channel.title)")
 
         case .file(let url):
             // Cards wait longer than other previews, so sweeping across a folder doesn't flash them.
-            let settings = AppSettings.shared
             let extraWait = settings.finderDelay - settings.hoverDelay
             if extraWait > 0 { try? await Task.sleep(for: .milliseconds(extraWait)) }
-            guard !Task.isCancelled, self.target == requested else { return }
+            guard !Task.isCancelled, self.target == requested else { return false }
             let options = settings.fileCard
             let details = await Task.detached { FileDetails.load(url, options: options) }.value
-            guard !Task.isCancelled, self.target == requested else { return }
+            guard !Task.isCancelled, self.target == requested else { return false }
             let view = CardHostingView(rootView: FileCardView(card: FileCard(url: url, details: details, options: options)))
-            view.appearance = NSAppearance(named: .darkAqua)
             // The list of apps using the file fills in after the card appears.
             view.onSizeChange = { [weak self, weak view] in
                 // SwiftUI is in the middle of layout here; refit once it's done.
@@ -233,12 +272,22 @@ final class PreviewController {
             }
             playback.stop()
             panel.show(view, counter: counter, anchor: requested.anchor)
-            log.info("preview: file card for \(url.path(percentEncoded: false), privacy: .public)")
+            log.infoPrivateInRelease("preview: file card for \(url.path(percentEncoded: false))")
         }
         index = position
         showing = media.items[position]
         scrollTap.isEnabled = true
         prefetch(position + 1)
+        return true
+    }
+
+    /// The too-large card's Load Anyway: loads the image at `position` whatever its size.
+    private func loadAnyway(_ position: Int) async -> Bool {
+        task?.cancel()
+        // Kept as the current task, so moving on cancels it like any other load.
+        return await withCheckedContinuation { continuation in
+            task = Task { continuation.resume(returning: await display(position, allowingLarge: true)) }
+        }
     }
 
     /// Where the cursor rests on the thumbnail, as fractions from its top left: the part of the
@@ -268,7 +317,8 @@ final class PreviewController {
     private func prefetch(_ position: Int) {
         guard let media, media.items.indices.contains(position), case .image(let candidates) = media.items[position] else { return }
         let page = target?.page
-        Task { [loader] in _ = await loader.load(candidates, page: page, maxPixelSize: Self.maxPixelSize()) }
+        let limit = AppSettings.shared.largestImageBytes
+        Task { [loader] in _ = await loader.load(candidates, page: page, maxPixelSize: Self.maxPixelSize(), byteLimit: limit) }
     }
 
     /// Longest screen edge in pixels; larger images are downsampled to this when decoded.

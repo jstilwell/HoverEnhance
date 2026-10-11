@@ -97,8 +97,9 @@ private struct DetailValue: View {
         .overlay(alignment: .trailing) {
             if card.copied == row.id {
                 Image(systemName: "checkmark").foregroundStyle(.green)
-                    .padding(.leading, 6)
-                    .background(Color(white: 0.12))
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 1)
+                    .background(.regularMaterial, in: Capsule())
             }
         }
     }

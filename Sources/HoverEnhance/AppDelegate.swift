@@ -3,28 +3,57 @@ import OSLog
 
 let log = Logger(subsystem: Bundle.main.bundleIdentifier ?? "HoverEnhance", category: "hover")
 
+extension Logger {
+    /// For messages holding URLs, paths, or text from other apps: readable in debug builds, where
+    /// `make log` shows them, and redacted in release builds, where the log is no place for what the
+    /// user looks at.
+    func infoPrivateInRelease(_ message: String) {
+        #if DEBUG
+        info("\(message, privacy: .public)")
+        #else
+        info("\(message, privacy: .private)")
+        #endif
+    }
+}
+
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let settings = AppSettings.shared
     private let monitor = HoverMonitor()
     private let preview = PreviewController()
     private let hud = HUD()
+    private let access = AccessibilityWatcher()
     private var statusItem: NSStatusItem?
     private var settingsWindow: SettingsWindowController?
+    private var welcome: WelcomeWindowController?
+    /// Whether the app proper is up: the menu bar item and the hover monitor. It waits for access.
+    private var isRunning = false
     private var lastInfo: HoverInfo?
 
     private var permissionItem: NSMenuItem!
     private var grantItem: NSMenuItem!
     private var previewsItem: NSMenuItem!
-    private var pauseItem: NSMenuItem!
     private var copyItem: NSMenuItem!
+    private var updateItem: NSMenuItem!
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        installMainMenu()
+        // Updates don't depend on Accessibility, so a release that needs fixing can still be replaced.
+        Updates.shared.start()
+        access.onChange = { [weak self] granted in self?.accessChanged(granted) }
+        access.start()
+        if access.isGranted { start() } else { showWelcome() }
+    }
+
+    /// Everything but the welcome window. Without Accessibility access none of it could work, so it
+    /// starts only once access is on.
+    private func start() {
+        guard !isRunning else { return }
+        isRunning = true
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-        item.button?.image = NSImage(systemSymbolName: "cursorarrow.rays", accessibilityDescription: "HoverEnhance")
+        item.button?.image = MenuBarIcon.image()
         item.menu = makeMenu()
         statusItem = item
-        installMainMenu()
 
         monitor.onResult = { [weak self] result in self?.handle(result) }
         monitor.onMouseMoved = { [weak self] point in self?.preview.mouseMoved(to: point) }
@@ -35,7 +64,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         monitor.start()
 
         NotificationCenter.default.addObserver(forName: .showSettingsTab, object: nil, queue: .main) { [weak self] note in
-            let tab = note.object as? String
+            let tab = note.object as? SettingsTab
             MainActor.assumeIsolated {
                 self?.preview.reset(because: "opening settings")
                 self?.openSettings(tab: tab)
@@ -43,20 +72,56 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         whenChanged({ AppSettings.shared.previewsEnabled }) { [weak self] enabled in
             if !enabled { self?.preview.reset(because: "previews turned off") }
+            self?.updateActivity()
         }
         whenChanged({ AppSettings.shared.showsInspector }) { [weak self] shows in
             guard let self else { return }
             if shows, let lastInfo { hud.show(lastInfo.summary) } else { hud.hide() }
+            updateActivity()
         }
-
-        if !AccessibilityPermission.isGranted {
-            AccessibilityPermission.request()
+        updateActivity()
+        whenChanged({ Updates.shared.waitingVersion }) { [weak self] version in
+            self?.statusItem?.button?.image = MenuBarIcon.image(badged: version != nil)
+        }
+        NotificationCenter.default.addObserver(forName: .showAccessibilityGuide, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.showWelcome() }
         }
     }
 
-    /// Opening the app again (from Finder, Spotlight, or `open`) while it runs shows Settings.
+    /// Inspects only while something uses what's found, and dims the menu bar icon while previews are off.
+    private func updateActivity() {
+        monitor.isPaused = !settings.previewsEnabled && !settings.showsInspector
+        statusItem?.button?.appearsDisabled = !settings.previewsEnabled
+    }
+
+    private func accessChanged(_ granted: Bool) {
+        if granted {
+            if isRunning { monitor.restart() } else { start() }
+        } else {
+            preview.reset(because: "accessibility access lost")
+            hud.hide()
+            showWelcome()
+        }
+    }
+
+    private func showWelcome() {
+        if welcome == nil {
+            let controller = WelcomeWindowController(access: access, isReturning: isRunning) { [weak self] in self?.showSettings() }
+            controller.onClose = { [weak self] in
+                guard let self else { return }
+                welcome = nil
+                // Closed before access was on: there's nothing to run.
+                if !isRunning { NSApp.terminate(nil) }
+            }
+            welcome = controller
+        }
+        welcome?.show()
+    }
+
+    /// Opening the app again (from Finder, Spotlight, or `open`) shows Settings, or the welcome window
+    /// while it waits for access.
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        showSettings()
+        if isRunning { showSettings() } else { showWelcome() }
         return false
     }
 
@@ -66,12 +131,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             preview.hovered(info)
             guard info != lastInfo else { return }
             lastInfo = info
-            print(info.summary + "\n")
-            // Info-level messages stay in memory rather than the persisted log; `make log` streams them.
+            #if DEBUG
+            // For `make log`. Release builds leave what's under the cursor (text, URLs, paths) out of
+            // the log; the inspector shows it to the user instead.
             log.info("\(info.summary, privacy: .public)")
+            #endif
             if settings.showsInspector { hud.show(info.summary) }
         case .failure(.ownWindow):
             break
+        case .failure(.notTrusted):
+            // Access was turned off while running.
+            access.check()
         case .failure(let error):
             preview.reset(because: "inspection failed: \(error)")
             lastInfo = nil
@@ -79,10 +149,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
-    /// With an activation key set, pressing or releasing it shows or hides the preview without
+    /// With an activation key in use, pressing or releasing it shows or hides the preview without
     /// waiting for the mouse to move.
     private func modifiersChanged(_ flags: NSEvent.ModifierFlags) {
-        guard settings.activation != .always else { return }
+        guard settings.usesActivationKey else { return }
         if settings.previewsAllowed(holding: flags) {
             monitor.inspectNow()
         } else {
@@ -108,11 +178,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func makeMenu() -> NSMenu {
         permissionItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
         grantItem = NSMenuItem(title: "Grant Accessibility Access…", action: #selector(grantAccess), keyEquivalent: "")
-        previewsItem = NSMenuItem(title: "Enable Previews", action: #selector(togglePreviews), keyEquivalent: "e")
-        pauseItem = NSMenuItem(title: "Pause", action: #selector(togglePause), keyEquivalent: "p")
+        previewsItem = NSMenuItem(title: "Show Previews", action: #selector(togglePreviews), keyEquivalent: "e")
         copyItem = NSMenuItem(title: "Copy Inspector Result", action: #selector(copyLastResult), keyEquivalent: "c")
+        updateItem = NSMenuItem(title: "Check for Updates…", action: #selector(checkForUpdates), keyEquivalent: "")
         let settingsItem = NSMenuItem(title: "Settings…", action: #selector(showSettings), keyEquivalent: ",")
-        for item in [grantItem, previewsItem, pauseItem, copyItem, settingsItem] {
+        for item in [grantItem, previewsItem, copyItem, updateItem, settingsItem] {
             item?.target = self
         }
 
@@ -121,8 +191,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.autoenablesItems = false
         menu.items = [
             permissionItem, grantItem, .separator(),
-            previewsItem, pauseItem, copyItem, .separator(),
-            settingsItem, .separator(),
+            previewsItem, copyItem, .separator(),
+            updateItem, settingsItem, .separator(),
             NSMenuItem(title: "Quit HoverEnhance", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"),
         ]
         return menu
@@ -150,40 +220,37 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     func menuNeedsUpdate(_ menu: NSMenu) {
-        let granted = AccessibilityPermission.isGranted
+        let granted = access.isGranted
         permissionItem.title = granted ? "Accessibility access: on" : "Accessibility access: off"
         permissionItem.isEnabled = false
         grantItem.isHidden = granted
         previewsItem.state = settings.previewsEnabled ? .on : .off
-        pauseItem.state = monitor.isPaused ? .on : .off
         copyItem.isHidden = !settings.showsInspector
         copyItem.isEnabled = lastInfo != nil
+        let updates = Updates.shared
+        updateItem.isHidden = !updates.isAvailable
+        updateItem.title = updates.waitingVersion.map { "Update to \($0)…" } ?? "Check for Updates…"
+    }
+
+    @objc private func checkForUpdates() {
+        Updates.shared.checkForUpdates()
     }
 
     @objc private func showSettings() {
         openSettings(tab: nil)
     }
 
-    private func openSettings(tab: String?) {
-        if settingsWindow == nil { settingsWindow = SettingsWindowController(settings: settings) }
+    private func openSettings(tab: SettingsTab?) {
+        if settingsWindow == nil { settingsWindow = SettingsWindowController(settings: settings, access: access) }
         settingsWindow?.show(tab: tab)
     }
 
     @objc private func grantAccess() {
-        AccessibilityPermission.request()
-        AccessibilityPermission.openSettings()
+        showWelcome()
     }
 
     @objc private func togglePreviews() {
         settings.previewsEnabled.toggle()
-    }
-
-    @objc private func togglePause() {
-        monitor.isPaused.toggle()
-        if monitor.isPaused {
-            preview.reset(because: "paused")
-            hud.hide()
-        }
     }
 
     @objc private func copyLastResult() {

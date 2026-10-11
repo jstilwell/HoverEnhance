@@ -23,6 +23,23 @@ struct AppSettingsTests {
         #expect(settings.videosStartMuted)
         #expect(settings.loopVideos && settings.resumeVideos)
         #expect(settings.filter == PreviewFilter())
+        #expect(settings.largestImageBytes == 25_000_000)
+    }
+
+    @Test func otherAppsStartOffWithTheSafeChoices() {
+        let defaults = freshDefaults()
+        let settings = AppSettings(defaults: defaults)
+        #expect(settings.otherApps == OtherAppsPolicy())
+        #expect(!settings.usesActivationKey)
+
+        settings.previewsInOtherApps = true
+        settings.otherAppsSkipEmail = false
+        settings.otherAppsKnownSitesOnly = false
+        settings.otherAppsNeedKey = true
+        let reloaded = AppSettings(defaults: defaults)
+        #expect(reloaded.otherApps == OtherAppsPolicy(enabled: true, skipsEmail: false, knownSitesOnly: false, needsKey: true))
+        // Holding the key matters now, though previews otherwise always appear.
+        #expect(reloaded.activation == .always && reloaded.usesActivationKey)
     }
 
     @Test func finderDefaultsShowEverything() {
@@ -158,5 +175,11 @@ struct PreviewSizeLimitTests {
         #expect(half.height <= visible.height * 0.5)
         #expect(half.height < full.height)
         #expect(half.minX == full.minX)
+    }
+}
+
+struct SettingsTabTests {
+    @Test func tabsKeepTheirOrderAndTitles() {
+        #expect(SettingsTab.allCases.map(\.title) == ["General", "Previews", "Video", "Sites", "Finder", "Accounts", "Advanced"])
     }
 }
