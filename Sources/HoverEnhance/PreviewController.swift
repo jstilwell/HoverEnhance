@@ -37,6 +37,7 @@ final class PreviewController {
 
     init() {
         scrollTap.handler = { [weak self] input in self?.scroll(input) ?? false }
+        playback.onVolumeChange = { [weak self] level, muted in self?.panel.updateVolume(level: level, muted: muted) }
         activationObserver = NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main
         ) { [weak self] _ in
@@ -173,14 +174,17 @@ final class PreviewController {
             panel.zoom(by: input.isPrecise ? exp(input.up * 0.01) : (input.up > 0 ? 1.25 : 0.8))
         case .video:
             guard !input.isMomentum else { return true }
-            let readout = switch settings.videoScroll {
+            // On the video itself, and on the notch and the volume rocker beside it, as set for each.
+            switch panel.isOnPreview(input.location) ? settings.videoScroll : settings.notchVideoScroll {
             case .scrub:
                 // A wheel notch is 5 seconds; trackpad travel is a tenth of a second per point.
-                input.forward == 0 ? nil : playback.scrub(by: input.isPrecise ? input.forward * 0.1 : (input.forward > 0 ? 5 : -5))
+                if input.forward != 0, let position = playback.scrub(by: input.isPrecise ? input.forward * 0.1 : (input.forward > 0 ? 5 : -5)) {
+                    panel.flash(position)
+                }
             case .volume:
-                input.up == 0 ? nil : playback.changeVolume(by: input.isPrecise ? input.up * 0.005 : (input.up > 0 ? 0.05 : -0.05))
+                // The rocker shows the new level.
+                if input.up != 0 { playback.changeVolume(by: input.isPrecise ? input.up * 0.005 : (input.up > 0 ? 0.05 : -0.05)) }
             }
-            if let readout { panel.flash(readout) }
         case .embed, .channel:
             // On the player or card, scrolling belongs to it; on the notch, it mustn't move the page away.
             return !panel.isOnPreview(input.location)
@@ -241,6 +245,7 @@ final class PreviewController {
             guard let size = await playback.start(url, key: key), !Task.isCancelled, self.target == requested,
                   let player = playback.player else { return false }
             panel.show(player, videoSize: reportedSize ?? size, counter: counter, anchor: requested.anchor)
+            if let volume = playback.volume { panel.showVolume(level: volume.level, muted: volume.muted) }
             log.infoPrivateInRelease("preview \(position + 1)/\(media.items.count): video \(url.absoluteString)")
 
         case .embed(let embed):
