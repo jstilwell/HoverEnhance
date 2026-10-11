@@ -114,11 +114,15 @@ final class PreviewPanel {
     }
 
     private func present(_ view: NSView, naturalSize: CGSize, counter: String?, interactive: Bool, anchor: CGPoint) {
-        guard let frame = PreviewGeometry.panelFrame(anchor: anchor, naturalSize: naturalSize, visible: visibleFrame(at: anchor)) else { return }
+        let maxFraction = CGFloat(AppSettings.shared.maximumSize)
+        guard let frame = PreviewGeometry.panelFrame(anchor: anchor, naturalSize: naturalSize, visible: visibleFrame(at: anchor),
+                                                     maxFraction: maxFraction) else { return }
         panel.setFrame(ScreenSpace.flip(frame), display: false)
 
         let placeRight = frame.minX > anchor.x
         notch.setFrame(ScreenSpace.flip(PreviewGeometry.notchFrame(anchor: anchor, placeRight: placeRight)), display: false)
+        // Hidden or not, the notch still decides when the hover ends.
+        notch.alphaValue = AppSettings.shared.showsNotch ? 1 : 0
         // Round only the end under the cursor; the other end meets the preview.
         notchView.layer?.maskedCorners = placeRight
             ? [.layerMinXMinYCorner, .layerMinXMaxYCorner]

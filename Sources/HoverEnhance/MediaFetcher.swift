@@ -3,11 +3,13 @@ import Foundation
 /// Turns a `MediaSource` into displayable media, doing whatever lookup the site needs.
 actor MediaFetcher {
     private let session = URLSession(configuration: .default)
-    private var looked: [MediaSource: Media] = [:]
+    /// Lookups, kept for a while: some sites' video links stop working after a few hours.
+    private var looked: [MediaSource: (media: Media, time: Date)] = [:]
+    private let lookupLifetime: TimeInterval = 30 * 60
     private var blueskyDIDs: [String: String] = [:]
 
     func media(for source: MediaSource) async -> Media? {
-        if let cached = looked[source] { return cached }
+        if let cached = looked[source], Date().timeIntervalSince(cached.time) < lookupLifetime { return cached.media }
         let media: Media?
         switch source {
         case .images(let urls):
@@ -27,7 +29,7 @@ actor MediaFetcher {
         case .instagram(let code):
             media = await instagram(code: code)
         }
-        if let media { looked[source] = media }
+        looked[source] = media.map { ($0, Date()) }
         return media
     }
 

@@ -11,14 +11,18 @@ struct LoadedImage: Sendable {
 
 /// Fetches preview candidates in order and decodes the first one that works.
 actor ImageLoader {
+    /// Downloaded images, on disk. Settings shows its size and can clear it.
+    static let diskCache = URLCache(
+        memoryCapacity: 32 << 20, diskCapacity: 512 << 20,
+        directory: FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0].appending(path: "HoverEnhance/Images")
+    )
+
     private let session: URLSession
     private let decoded = NSCache<NSURL, CacheEntry>()
 
     init() {
         let configuration = URLSessionConfiguration.default
-        let directory = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
-            .appending(path: "HoverEnhance/Images")
-        configuration.urlCache = URLCache(memoryCapacity: 32 << 20, diskCapacity: 512 << 20, directory: directory)
+        configuration.urlCache = Self.diskCache
         configuration.timeoutIntervalForRequest = 15
         configuration.httpAdditionalHeaders = ["Accept": "image/avif,image/webp,image/apng,image/*;q=0.9,*/*;q=0.5"]
         session = URLSession(configuration: configuration)

@@ -5,47 +5,51 @@ let log = Logger(subsystem: Bundle.main.bundleIdentifier ?? "HoverEnhance", cate
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
+    private let settings = AppSettings.shared
     private let monitor = HoverMonitor()
     private let preview = PreviewController()
     private let hud = HUD()
-    private let defaults = UserDefaults.standard
     private var statusItem: NSStatusItem?
+    private var settingsWindow: SettingsWindowController?
     private var lastInfo: HoverInfo?
-
-    private var previewsEnabled: Bool {
-        get { defaults.bool(forKey: "previewsEnabled") }
-        set { defaults.set(newValue, forKey: "previewsEnabled") }
-    }
-    private var showsInspector: Bool {
-        get { defaults.bool(forKey: "showsInspector") }
-        set { defaults.set(newValue, forKey: "showsInspector") }
-    }
 
     private var permissionItem: NSMenuItem!
     private var grantItem: NSMenuItem!
     private var previewsItem: NSMenuItem!
-    private var inspectorItem: NSMenuItem!
     private var pauseItem: NSMenuItem!
     private var copyItem: NSMenuItem!
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        defaults.register(defaults: ["previewsEnabled": true, "showsInspector": false])
-        preview.isEnabled = previewsEnabled
-
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         item.button?.image = NSImage(systemSymbolName: "cursorarrow.rays", accessibilityDescription: "HoverEnhance")
         item.menu = makeMenu()
         statusItem = item
+        installMainMenu()
 
         monitor.onResult = { [weak self] result in self?.handle(result) }
         monitor.onMouseMoved = { [weak self] point in self?.preview.mouseMoved(to: point) }
         monitor.onScroll = { [weak self] in self?.preview.scrolled() }
         monitor.onClick = { [weak self] in self?.preview.dismiss() }
+        monitor.onModifiersChanged = { [weak self] flags in self?.modifiersChanged(flags) }
         monitor.start()
+
+        whenChanged({ AppSettings.shared.previewsEnabled }) { [weak self] enabled in
+            if !enabled { self?.preview.reset(because: "previews turned off") }
+        }
+        whenChanged({ AppSettings.shared.showsInspector }) { [weak self] shows in
+            guard let self else { return }
+            if shows, let lastInfo { hud.show(lastInfo.summary) } else { hud.hide() }
+        }
 
         if !AccessibilityPermission.isGranted {
             AccessibilityPermission.request()
         }
+    }
+
+    /// Opening the app again (from Finder, Spotlight, or `open`) while it runs shows Settings.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        showSettings()
+        return false
     }
 
     private func handle(_ result: Result<HoverInfo, InspectionError>) {
@@ -57,26 +61,50 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             print(info.summary + "\n")
             // Info-level messages stay in memory rather than the persisted log; `make log` streams them.
             log.info("\(info.summary, privacy: .public)")
-            if showsInspector { hud.show(info.summary) }
+            if settings.showsInspector { hud.show(info.summary) }
         case .failure(.ownWindow):
             break
         case .failure(let error):
             preview.reset(because: "inspection failed: \(error)")
             lastInfo = nil
-            if showsInspector { hud.show(error.message) }
+            if settings.showsInspector { hud.show(error.message) }
         }
     }
 
-    // MARK: - Menu
+    /// With an activation key set, pressing or releasing it shows or hides the preview without
+    /// waiting for the mouse to move.
+    private func modifiersChanged(_ flags: NSEvent.ModifierFlags) {
+        guard settings.activation != .always else { return }
+        if settings.previewsAllowed(holding: flags) {
+            monitor.inspectNow()
+        } else {
+            preview.reset(because: "activation key")
+        }
+    }
+
+    /// Calls `perform` with the new value whenever `read`'s settings change.
+    private func whenChanged<Value: Sendable>(
+        _ read: @escaping @MainActor @Sendable () -> Value,
+        perform: @escaping @MainActor @Sendable (Value) -> Void
+    ) {
+        withObservationTracking { _ = read() } onChange: {
+            Task { @MainActor in
+                perform(read())
+                self.whenChanged(read, perform: perform)
+            }
+        }
+    }
+
+    // MARK: - Menus
 
     private func makeMenu() -> NSMenu {
         permissionItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
         grantItem = NSMenuItem(title: "Grant Accessibility Access…", action: #selector(grantAccess), keyEquivalent: "")
-        previewsItem = NSMenuItem(title: "Image Previews", action: #selector(togglePreviews), keyEquivalent: "i")
-        inspectorItem = NSMenuItem(title: "Show Inspector", action: #selector(toggleInspector), keyEquivalent: "h")
+        previewsItem = NSMenuItem(title: "Enable Previews", action: #selector(togglePreviews), keyEquivalent: "e")
         pauseItem = NSMenuItem(title: "Pause", action: #selector(togglePause), keyEquivalent: "p")
-        copyItem = NSMenuItem(title: "Copy Last Result", action: #selector(copyLastResult), keyEquivalent: "c")
-        for item in [grantItem, previewsItem, inspectorItem, pauseItem, copyItem] {
+        copyItem = NSMenuItem(title: "Copy Inspector Result", action: #selector(copyLastResult), keyEquivalent: "c")
+        let settingsItem = NSMenuItem(title: "Settings…", action: #selector(showSettings), keyEquivalent: ",")
+        for item in [grantItem, previewsItem, pauseItem, copyItem, settingsItem] {
             item?.target = self
         }
 
@@ -85,11 +113,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.autoenablesItems = false
         menu.items = [
             permissionItem, grantItem, .separator(),
-            previewsItem, inspectorItem, pauseItem, .separator(),
-            copyItem, .separator(),
+            previewsItem, pauseItem, copyItem, .separator(),
+            settingsItem, .separator(),
             NSMenuItem(title: "Quit HoverEnhance", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"),
         ]
         return menu
+    }
+
+    /// Never shown for a menu bar app, but it gives the Settings window ⌘, ⌘W, and ⌘Q.
+    private func installMainMenu() {
+        let appMenu = NSMenu()
+        let settingsItem = NSMenuItem(title: "Settings…", action: #selector(showSettings), keyEquivalent: ",")
+        settingsItem.target = self
+        appMenu.items = [
+            settingsItem, .separator(),
+            NSMenuItem(title: "Quit HoverEnhance", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"),
+        ]
+        let windowMenu = NSMenu(title: "Window")
+        windowMenu.items = [NSMenuItem(title: "Close", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")]
+
+        let main = NSMenu()
+        for submenu in [appMenu, windowMenu] {
+            let item = NSMenuItem()
+            item.submenu = submenu
+            main.addItem(item)
+        }
+        NSApp.mainMenu = main
     }
 
     func menuNeedsUpdate(_ menu: NSMenu) {
@@ -97,10 +146,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         permissionItem.title = granted ? "Accessibility access: on" : "Accessibility access: off"
         permissionItem.isEnabled = false
         grantItem.isHidden = granted
-        previewsItem.state = previewsEnabled ? .on : .off
-        inspectorItem.state = showsInspector ? .on : .off
+        previewsItem.state = settings.previewsEnabled ? .on : .off
         pauseItem.state = monitor.isPaused ? .on : .off
+        copyItem.isHidden = !settings.showsInspector
         copyItem.isEnabled = lastInfo != nil
+    }
+
+    @objc private func showSettings() {
+        if settingsWindow == nil { settingsWindow = SettingsWindowController(settings: settings) }
+        settingsWindow?.show()
     }
 
     @objc private func grantAccess() {
@@ -109,17 +163,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     @objc private func togglePreviews() {
-        previewsEnabled.toggle()
-        preview.isEnabled = previewsEnabled
-    }
-
-    @objc private func toggleInspector() {
-        showsInspector.toggle()
-        if showsInspector, let lastInfo {
-            hud.show(lastInfo.summary)
-        } else {
-            hud.hide()
-        }
+        settings.previewsEnabled.toggle()
     }
 
     @objc private func togglePause() {
