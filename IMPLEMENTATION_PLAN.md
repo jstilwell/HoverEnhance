@@ -53,4 +53,5 @@ website data update live; About shows version, build, and the repository; tabs a
 an app icon; Info.plist has copyright and category; `make release` signs with the hardened runtime and
 notarizes; README matches.
 **Tests**: Settings tests; `make app` and the release signing step run; `codesign --verify`.
-**Status**: Not Started
+**Status**: In Progress. Everything but the app icon (and a menu bar glyph to match) is done; the
+user is choosing between icon concepts.
