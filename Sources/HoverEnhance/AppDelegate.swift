@@ -22,8 +22,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let monitor = HoverMonitor()
     private let preview = PreviewController()
     private let hud = HUD()
+    private let access = AccessibilityWatcher()
     private var statusItem: NSStatusItem?
     private var settingsWindow: SettingsWindowController?
+    private var welcome: WelcomeWindowController?
+    /// Whether the app proper is up: the menu bar item and the hover monitor. It waits for access.
+    private var isRunning = false
     private var lastInfo: HoverInfo?
 
     private var permissionItem: NSMenuItem!
@@ -33,11 +37,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var copyItem: NSMenuItem!
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        installMainMenu()
+        access.onChange = { [weak self] granted in self?.accessChanged(granted) }
+        access.start()
+        if access.isGranted { start() } else { showWelcome() }
+    }
+
+    /// Everything but the welcome window. Without Accessibility access none of it could work, so it
+    /// starts only once access is on.
+    private func start() {
+        guard !isRunning else { return }
+        isRunning = true
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-        item.button?.image = NSImage(systemSymbolName: "cursorarrow.rays", accessibilityDescription: "HoverEnhance")
+        item.button?.image = MenuBarIcon.image()
         item.menu = makeMenu()
         statusItem = item
-        installMainMenu()
 
         monitor.onResult = { [weak self] result in self?.handle(result) }
         monitor.onMouseMoved = { [weak self] point in self?.preview.mouseMoved(to: point) }
@@ -61,15 +75,39 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             guard let self else { return }
             if shows, let lastInfo { hud.show(lastInfo.summary) } else { hud.hide() }
         }
-
-        if !AccessibilityPermission.isGranted {
-            AccessibilityPermission.request()
+        NotificationCenter.default.addObserver(forName: .showAccessibilityGuide, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.showWelcome() }
         }
     }
 
-    /// Opening the app again (from Finder, Spotlight, or `open`) while it runs shows Settings.
+    private func accessChanged(_ granted: Bool) {
+        if granted {
+            if isRunning { monitor.restart() } else { start() }
+        } else {
+            preview.reset(because: "accessibility access lost")
+            hud.hide()
+            showWelcome()
+        }
+    }
+
+    private func showWelcome() {
+        if welcome == nil {
+            let controller = WelcomeWindowController(access: access, isReturning: isRunning) { [weak self] in self?.showSettings() }
+            controller.onClose = { [weak self] in
+                guard let self else { return }
+                welcome = nil
+                // Closed before access was on: there's nothing to run.
+                if !isRunning { NSApp.terminate(nil) }
+            }
+            welcome = controller
+        }
+        welcome?.show()
+    }
+
+    /// Opening the app again (from Finder, Spotlight, or `open`) shows Settings, or the welcome window
+    /// while it waits for access.
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        showSettings()
+        if isRunning { showSettings() } else { showWelcome() }
         return false
     }
 
@@ -87,6 +125,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             if settings.showsInspector { hud.show(info.summary) }
         case .failure(.ownWindow):
             break
+        case .failure(.notTrusted):
+            // Access was turned off while running.
+            access.check()
         case .failure(let error):
             preview.reset(because: "inspection failed: \(error)")
             lastInfo = nil
@@ -165,7 +206,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     func menuNeedsUpdate(_ menu: NSMenu) {
-        let granted = AccessibilityPermission.isGranted
+        let granted = access.isGranted
         permissionItem.title = granted ? "Accessibility access: on" : "Accessibility access: off"
         permissionItem.isEnabled = false
         grantItem.isHidden = granted
@@ -180,13 +221,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func openSettings(tab: String?) {
-        if settingsWindow == nil { settingsWindow = SettingsWindowController(settings: settings) }
+        if settingsWindow == nil { settingsWindow = SettingsWindowController(settings: settings, access: access) }
         settingsWindow?.show(tab: tab)
     }
 
     @objc private func grantAccess() {
-        AccessibilityPermission.request()
-        AccessibilityPermission.openSettings()
+        showWelcome()
     }
 
     @objc private func togglePreviews() {

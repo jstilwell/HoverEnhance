@@ -35,7 +35,7 @@ re-add the app when it's listed but not working. Granting starts the app and say
 Closing the window before then quits. Losing access while running brings the window back.
 **Tests**: The window's state follows trust (checked through an injected trust check); manual check
 of the drag into System Settings and of granting and revoking.
-**Status**: Not Started
+**Status**: Complete
 
 ## Stage 4: Preview polish
 **Goal**: Previews feel finished.

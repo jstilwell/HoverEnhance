@@ -4,7 +4,7 @@ import SwiftUI
 /// The Settings window: a toolbar of tabs, each a SwiftUI form bound to `AppSettings`.
 @MainActor
 final class SettingsWindowController: NSWindowController {
-    init(settings: AppSettings) {
+    init(settings: AppSettings, access: AccessibilityWatcher) {
         let tabs = NSTabViewController()
         tabs.tabStyle = .toolbar
         func add<Content: View>(_ title: String, _ symbol: String, _ view: Content) {
@@ -22,7 +22,7 @@ final class SettingsWindowController: NSWindowController {
         add("Sites", "globe", SitesSettingsView(settings: settings))
         add("Finder", "folder", FinderSettingsView(settings: settings))
         add("Accounts", "person.crop.circle", AccountsSettingsView(account: YouTubeAccount.shared))
-        add("Advanced", "wrench.and.screwdriver", AdvancedSettingsView(settings: settings))
+        add("Advanced", "wrench.and.screwdriver", AdvancedSettingsView(settings: settings, access: access))
 
         let window = NSWindow(contentViewController: tabs)
         window.styleMask = [.titled, .closable]

@@ -112,7 +112,7 @@ private struct OtherAppsOptions: View {
 }
 
 /// Asks how careful to be before previews start loading links outside browsers.
-private struct OtherAppsSheet: View {
+struct OtherAppsSheet: View {
     let settings: AppSettings
     @Environment(\.dismiss) private var dismiss
     @State private var skipsEmail: Bool
@@ -135,7 +135,7 @@ private struct OtherAppsSheet: View {
                     .frame(width: 36)
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Preview links in other apps?").font(.headline)
-                    Text("A preview means HoverEnhance loads what the link points to, from your Mac. " + OtherAppsOptions.explanation)
+                    Text("To preview a link, HoverEnhance loads what it points to, from your Mac. " + OtherAppsOptions.explanation)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -517,7 +517,7 @@ struct FinderSettingsView: View {
 
 struct AdvancedSettingsView: View {
     @Bindable var settings: AppSettings
-    @State private var accessibilityGranted = AccessibilityPermission.isGranted
+    let access: AccessibilityWatcher
     @State private var cacheBytes = Maintenance.imageCacheBytes
     @State private var websiteDataCleared = false
 
@@ -526,13 +526,12 @@ struct AdvancedSettingsView: View {
             Section("Permissions") {
                 LabeledContent("Accessibility") {
                     HStack {
-                        Label(accessibilityGranted ? "Allowed" : "Not allowed",
-                              systemImage: accessibilityGranted ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
-                            .foregroundStyle(accessibilityGranted ? .green : .orange)
-                        if !accessibilityGranted {
-                            Button("Open System Settings…") {
-                                AccessibilityPermission.request()
-                                AccessibilityPermission.openSettings()
+                        Label(access.isGranted ? "Allowed" : "Not allowed",
+                              systemImage: access.isGranted ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                            .foregroundStyle(access.isGranted ? .green : .orange)
+                        if !access.isGranted {
+                            Button("Show Setup Guide…") {
+                                NotificationCenter.default.post(name: .showAccessibilityGuide, object: nil)
                             }
                         }
                     }
@@ -553,6 +552,9 @@ struct AdvancedSettingsView: View {
                         Task {
                             await Maintenance.clearWebsiteData()
                             websiteDataCleared = true
+                            // Sites set cookies again as they're used, so it can be cleared again.
+                            try? await Task.sleep(for: .seconds(2))
+                            websiteDataCleared = false
                         }
                     }
                     .disabled(websiteDataCleared)
@@ -575,7 +577,6 @@ struct AdvancedSettingsView: View {
         .formStyle(.grouped)
         .frame(width: settingsWidth, height: 470)
         .onAppear {
-            accessibilityGranted = AccessibilityPermission.isGranted
             cacheBytes = Maintenance.imageCacheBytes
         }
     }
