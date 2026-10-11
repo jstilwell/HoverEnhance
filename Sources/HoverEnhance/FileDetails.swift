@@ -39,6 +39,9 @@ struct FileDetails: Sendable, Equatable {
     var artist: String?
     var album: String?
     var archive: ZipSummary?
+    /// What an audio or video file's own tags and tracks say; see `addMedia(from:options:)`.
+    var media: MediaMetadata?
+    var contentType: UTType?
     var app: AppBundleInfo?
     var git: GitRepository?
 
@@ -71,6 +74,7 @@ struct FileDetails: Sendable, Equatable {
             .localizedTypeDescriptionKey, .contentTypeKey, .isDirectoryKey, .isPackageKey, .fileSizeKey, .creationDateKey,
             .contentModificationDateKey,
         ])
+        details.contentType = values?.contentType
         if options.shows(.kind) { details.kind = values?.localizedTypeDescription }
         if options.shows(.size), values?.isDirectory != true { details.size = values?.fileSize.map(Int64.init) }
         if options.shows(.created) { details.created = values?.creationDate }
@@ -145,6 +149,28 @@ struct FileDetails: Sendable, Equatable {
         return details
     }
 
+    /// Adds what an audio or video file's own tags and tracks say, for the details that are on. Reads
+    /// the file, so call it after `load`, off the main thread.
+    mutating func addMedia(from url: URL, options: FileCardOptions) async {
+        let fields: [FileCardField] = [.music, .recording, .mediaFormat, .dimensions, .duration, .thumbnail]
+        guard contentType?.conforms(to: .audiovisualContent) == true, fields.contains(where: options.shows),
+              var media = await MediaMetadata.read(url) else { return }
+        if !options.shows(.music) {
+            if !media.hasVideo { media.title = nil }
+            (media.artist, media.album, media.albumArtist, media.composer, media.genre, media.year, media.track, media.disc) =
+                (nil, nil, nil, nil, nil, nil, nil, nil)
+        }
+        if !options.shows(.recording) {
+            if media.hasVideo { media.title = nil }
+            (media.recorded, media.device) = (nil, nil)
+        }
+        if !options.shows(.mediaFormat) { (media.frameRate, media.isHDR, media.audio) = (nil, false, nil) }
+        if !options.shows(.thumbnail) { media.artwork = nil }
+        if !options.shows(.dimensions) { media.pixelSize = nil }
+        if !options.shows(.duration) { media.duration = nil }
+        self.media = media
+    }
+
     /// The card's lines for these details, in the order of `FileCardField`. Kind, size, and path are
     /// shown elsewhere on the card; `signature` and `changes` are looked up after it appears.
     func rows(pathStyle: PathStyle, signature: Lookup<String>? = nil, changes: Lookup<Int>? = nil) -> [DetailRow] {
@@ -168,16 +194,33 @@ struct FileDetails: Sendable, Equatable {
             rows.append(DetailRow(field: .tags, label: "Tags", value: .tags(tags), copyText: tags.map(\.name).joined(separator: ", ")))
         }
         add(.cloud, "iCloud", cloud?.label)
-        add(.dimensions, "Dimensions", dimensions.map { "\($0.width) × \($0.height)" })
-        add(.duration, "Length", duration.map(Self.formatDuration))
+        let isVideo = media?.hasVideo == true
+        add(.recording, "Title", isVideo ? media?.title : nil)
+        add(.recording, "Recorded", media?.recorded.map(Self.formatDate), copy: media?.recorded.map(Self.formatFullDate))
+        add(.recording, "Recorded with", media?.device)
+        // Spotlight's dimensions and length when it has them, the file's own otherwise.
+        let size = dimensions ?? media?.pixelSize.map { Dimensions(width: Int($0.width), height: Int($0.height)) }
+        add(.dimensions, "Dimensions", size.map { "\($0.width) × \($0.height)" })
+        add(.duration, "Length", (duration ?? media?.duration).map(Self.formatDuration))
         add(.pages, "Pages", pages.map(String.init))
         add(.camera, "Camera", camera)
         add(.camera, "Lens", lens)
         add(.exposure, "Exposure", exposure.map(Self.formatExposure))
         let encoding = [codecs.isEmpty ? nil : codecs.joined(separator: ", "), bitRate.map(Self.formatBitRate)].compactMap { $0 }
         add(.codecs, "Codecs", encoding.isEmpty ? nil : encoding.joined(separator: " · "))
-        add(.music, "Artist", artist)
-        add(.music, "Album", album)
+        let frameRate = media?.frameRate.map { Self.formatFrameRate($0) + (media?.isHDR == true ? " · HDR" : "") }
+        add(.mediaFormat, "Frame rate", frameRate)
+        add(.mediaFormat, "Audio", media?.audio)
+        // The file's own tags first; Spotlight's artist and album when the file has none.
+        add(.music, "Title", isVideo ? nil : media?.title)
+        add(.music, "Artist", media?.artist ?? artist)
+        add(.music, "Album", media?.album ?? album)
+        add(.music, "Album artist", media?.albumArtist)
+        add(.music, "Composer", media?.composer)
+        add(.music, "Genre", media?.genre)
+        add(.music, "Year", media?.year)
+        add(.music, "Track", media?.track)
+        add(.music, "Disc", media?.disc)
         add(.archive, "Contents", archive?.label)
         func addLookup<Value>(_ field: FileCardField, _ label: String, _ lookup: Lookup<Value>?, _ text: (Value) -> String) {
             switch lookup {
@@ -289,6 +332,11 @@ struct FileDetails: Sendable, Equatable {
         let shutter = exposure.seconds.map { $0 < 1 ? "1/\(Int((1 / $0).rounded())) s" : "\(number($0)) s" }
         return [exposure.fNumber.map { "ƒ/" + number($0) }, shutter, exposure.iso.map { "ISO \($0)" },
                 exposure.focalLength.map { "\(Int($0.rounded())) mm" }].compactMap { $0 }.joined(separator: " · ")
+    }
+
+    /// "24 fps", "29.97 fps".
+    static func formatFrameRate(_ rate: Double) -> String {
+        (rate.rounded() == rate ? String(Int(rate)) : String(format: "%.2f", rate)) + " fps"
     }
 
     /// "658 kbps", "4.2 Mbps".
