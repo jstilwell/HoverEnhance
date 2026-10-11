@@ -510,7 +510,7 @@ struct FinderSettingsView: View {
     private func footnote(for group: FileCardField.Group) -> String? {
         switch group {
         case .card:
-            "Details come from Spotlight and Finder's own records where they can. Thumbnails, and files Spotlight hasn't indexed, are read directly, so macOS may ask once before HoverEnhance reads files in Desktop, Documents, or Downloads."
+            "Details come from Spotlight and Finder's own records where they can. Thumbnails, the tags in audio and video files, and files Spotlight hasn't indexed are read directly, so macOS may ask once before HoverEnhance reads files in Desktop, Documents, or Downloads."
         case .inUse:
             "Quitting an app is like pressing ⌘Q in it, so it can still ask to save; other processes get the polite signal the kill command sends. Only your own processes are listed."
         default:

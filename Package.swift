@@ -14,6 +14,6 @@ let package = Package(
             // Sparkle.framework goes in the app's Contents/Frameworks.
             linkerSettings: [.unsafeFlags(["-Xlinker", "-rpath", "-Xlinker", "@executable_path/../Frameworks"])]
         ),
-        .testTarget(name: "HoverEnhanceTests", dependencies: ["HoverEnhance"]),
+        .testTarget(name: "HoverEnhanceTests", dependencies: ["HoverEnhance"], resources: [.copy("Fixtures")]),
     ]
 )

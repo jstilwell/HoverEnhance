@@ -267,7 +267,9 @@ final class PreviewController {
             if extraWait > 0 { try? await Task.sleep(for: .milliseconds(extraWait)) }
             guard !Task.isCancelled, self.target == requested else { return false }
             let options = settings.fileCard
-            let details = await Task.detached { FileDetails.load(url, options: options) }.value
+            var details = await Task.detached { FileDetails.load(url, options: options) }.value
+            // What audio and video files say in their own tags, which Spotlight may not have indexed.
+            await details.addMedia(from: url, options: options)
             guard !Task.isCancelled, self.target == requested else { return false }
             let view = CardHostingView(rootView: FileCardView(card: FileCard(url: url, details: details, options: options)))
             // The list of apps using the file fills in after the card appears.

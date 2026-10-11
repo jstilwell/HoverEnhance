@@ -26,7 +26,7 @@ disc, and artwork, from ID3 and iTunes tags. Video: title, recording date and de
 HDR, and audio channels. Read with AVFoundation; each detail has a switch in Settings → Finder.
 **Tests**: Committed fixtures with neutral tags (an MP3 with ID3 and artwork, an M4A, a short MP4),
 made once with ffmpeg; reading each field; files without tags give nothing.
-**Status**: Not Started
+**Status**: Complete
 
 ## Stage 3: Large Finder previews
 **Goal**: Images, videos, and audio in Finder preview large, with their details.
