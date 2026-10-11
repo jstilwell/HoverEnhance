@@ -77,16 +77,19 @@ final class HoverInspector: @unchecked Sendable {
               let engine = WebEngine(appAt: bundleURL) else { return false }
 
         let app = AXElement.application(pid: pid)
+        let result: AXError
         switch engine {
         case .electron:
-            app.set("AXManualAccessibility", to: kCFBooleanTrue)
+            result = app.set("AXManualAccessibility", to: kCFBooleanTrue)
         case .chromium:
             // What VoiceOver sets on launch. Chromium enables full web accessibility in response, two
             // seconds after the last change. It's the only switch Chrome listens to: it ignores
             // Electron's AXManualAccessibility. While it's on, AppKit animates window moves made
             // through accessibility, which window managers such as Rectangle work around.
-            app.set("AXEnhancedUserInterface", to: kCFBooleanTrue)
+            result = app.set("AXEnhancedUserInterface", to: kCFBooleanTrue)
         }
+        // Without access nothing was switched on; try again once access is back.
+        if result == .apiDisabled { preparedPIDs.remove(pid) }
         return true
     }
 
