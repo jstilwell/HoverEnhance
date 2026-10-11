@@ -321,13 +321,28 @@ struct FinderSettingsView: View {
                         .foregroundStyle(.secondary)
                         .textSelection(.enabled)
                 }
+                Toggle("Kind and size", isOn: $settings.finderShowsKindAndSize)
+                Toggle(isOn: $settings.finderShowsDates) {
+                    Text("Dates")
+                    Text("Created, modified, and last opened")
+                }
+                Toggle(isOn: $settings.finderShowsMediaInfo) {
+                    Text("Dimensions, length, and pages")
+                    Text("Image and video size, audio and video length, pages of documents")
+                }
+                Toggle(isOn: $settings.finderShowsWhereFrom) {
+                    Text("Where it came from")
+                    Text("The website a download came from; click it to open it")
+                }
             } header: {
                 Text("Show")
+            } footer: {
+                Footnote("Details come from Spotlight where it has them. Files it hasn't indexed are read directly, so macOS may ask once before HoverEnhance reads files in Desktop, Documents, or Downloads.")
             }
             .disabled(!settings.finderCards)
         }
         .formStyle(.grouped)
-        .frame(width: settingsWidth, height: 420)
+        .frame(width: settingsWidth, height: 620)
     }
 }
 

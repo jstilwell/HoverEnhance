@@ -137,6 +137,10 @@ final class AppSettings {
         static let finderDelay = "finderDelay"
         static let finderShowsPath = "finderShowsPath"
         static let finderPathStyle = "finderPathStyle"
+        static let finderShowsKindAndSize = "finderShowsKindAndSize"
+        static let finderShowsDates = "finderShowsDates"
+        static let finderShowsMediaInfo = "finderShowsMediaInfo"
+        static let finderShowsWhereFrom = "finderShowsWhereFrom"
     }
 
     @ObservationIgnored private let defaults: UserDefaults
@@ -182,6 +186,11 @@ final class AppSettings {
     var finderDelay: Double { didSet { defaults.set(finderDelay, forKey: Key.finderDelay) } }
     var finderShowsPath: Bool { didSet { defaults.set(finderShowsPath, forKey: Key.finderShowsPath) } }
     var finderPathStyle: PathStyle { didSet { defaults.set(finderPathStyle.rawValue, forKey: Key.finderPathStyle) } }
+    var finderShowsKindAndSize: Bool { didSet { defaults.set(finderShowsKindAndSize, forKey: Key.finderShowsKindAndSize) } }
+    var finderShowsDates: Bool { didSet { defaults.set(finderShowsDates, forKey: Key.finderShowsDates) } }
+    /// Image and video dimensions, audio and video length, and document pages.
+    var finderShowsMediaInfo: Bool { didSet { defaults.set(finderShowsMediaInfo, forKey: Key.finderShowsMediaInfo) } }
+    var finderShowsWhereFrom: Bool { didSet { defaults.set(finderShowsWhereFrom, forKey: Key.finderShowsWhereFrom) } }
 
     // Advanced
     var showsInspector: Bool { didSet { defaults.set(showsInspector, forKey: Key.showsInspector) } }
@@ -212,6 +221,10 @@ final class AppSettings {
             Key.finderDelay: 600.0,
             Key.finderShowsPath: true,
             Key.finderPathStyle: PathStyle.full.rawValue,
+            Key.finderShowsKindAndSize: true,
+            Key.finderShowsDates: true,
+            Key.finderShowsMediaInfo: true,
+            Key.finderShowsWhereFrom: true,
         ])
         self.defaults = defaults
         previewsEnabled = defaults.bool(forKey: Key.previewsEnabled)
@@ -240,6 +253,10 @@ final class AppSettings {
         finderDelay = defaults.double(forKey: Key.finderDelay)
         finderShowsPath = defaults.bool(forKey: Key.finderShowsPath)
         finderPathStyle = defaults.string(forKey: Key.finderPathStyle).flatMap(PathStyle.init(rawValue:)) ?? .full
+        finderShowsKindAndSize = defaults.bool(forKey: Key.finderShowsKindAndSize)
+        finderShowsDates = defaults.bool(forKey: Key.finderShowsDates)
+        finderShowsMediaInfo = defaults.bool(forKey: Key.finderShowsMediaInfo)
+        finderShowsWhereFrom = defaults.bool(forKey: Key.finderShowsWhereFrom)
     }
 
     var filter: PreviewFilter {
@@ -248,7 +265,8 @@ final class AppSettings {
     }
 
     var fileCard: FileCardOptions {
-        FileCardOptions(path: finderShowsPath, pathStyle: finderPathStyle)
+        FileCardOptions(path: finderShowsPath, pathStyle: finderPathStyle, kindAndSize: finderShowsKindAndSize, dates: finderShowsDates,
+                        mediaInfo: finderShowsMediaInfo, whereFrom: finderShowsWhereFrom)
     }
 
     func previewsAllowed(holding flags: NSEvent.ModifierFlags) -> Bool {
