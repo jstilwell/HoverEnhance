@@ -1,4 +1,4 @@
-import Foundation
+import AppKit
 import Testing
 @testable import HoverEnhance
 
@@ -54,5 +54,28 @@ struct UpdatesTests {
         #expect(info["SURequireSignedFeed"] as? Bool == true)
         #expect(info["SUFeedURL"] as? String == "https://github.com/jstilwell/HoverEnhance/releases/latest/download/appcast.xml")
         #expect(info["CFBundleIconFile"] as? String == "AppIcon")
+    }
+}
+
+struct OwnWindowsTests {
+    private func window(_ pid: pid_t, _ rect: CGRect, alpha: Double = 1) -> [String: Any] {
+        [kCGWindowOwnerPID as String: Int(pid), kCGWindowBounds as String: rect.dictionaryRepresentation, kCGWindowAlpha as String: alpha]
+    }
+
+    @Test func ownWindowsInFrontAreNeverInspected() {
+        let browser = window(500, CGRect(x: 0, y: 0, width: 1000, height: 800))
+        let about = window(42, CGRect(x: 100, y: 100, width: 460, height: 330))
+        #expect(OwnWindows.areInFront(at: CGPoint(x: 200, y: 200), windows: [about, browser], ownPID: 42))
+        // Beside the About window, the browser is what's there.
+        #expect(!OwnWindows.areInFront(at: CGPoint(x: 900, y: 700), windows: [about, browser], ownPID: 42))
+        // Another app's window in front of ours hides it.
+        #expect(!OwnWindows.areInFront(at: CGPoint(x: 200, y: 200), windows: [browser, about], ownPID: 42))
+    }
+
+    @Test func invisibleWindowsOfOtherAppsDontHideOurs() {
+        let overlay = window(700, CGRect(x: 0, y: 0, width: 2000, height: 2000), alpha: 0)
+        let notch = window(42, CGRect(x: 190, y: 186, width: 34, height: 28))
+        #expect(OwnWindows.areInFront(at: CGPoint(x: 200, y: 200), windows: [overlay, notch], ownPID: 42))
+        #expect(!OwnWindows.areInFront(at: CGPoint(x: 600, y: 600), windows: [overlay, notch], ownPID: 42))
     }
 }
