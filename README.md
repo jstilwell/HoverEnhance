@@ -18,12 +18,17 @@ other apps' UI through the Accessibility API, so it works in browsers without an
   creator's avatar, counts, and description, with Subscribe/Unsubscribe once you sign in under
   Settings → Accounts (your own Google Cloud OAuth client). Thumbnails and YouTube's own hover
   previews are left alone.
+- **File cards** (Finder): resting on a file or folder in any Finder view or on the desktop shows its
+  path (click to copy it in full, with ~, or quoted for the shell), kind, size, dates, image and video
+  dimensions, length, pages, and the website a download came from. It also lists the apps using it
+  (open in a window, held open, or working in the folder), each with Quit and, if that doesn't work,
+  Force Quit. Each part can be turned off under Settings → Finder.
 - **Scroll wheel**: with the cursor on the notch or the preview, scrolling acts on the preview, not
   the page. Albums step through their items; images zoom (move onto the preview to pan); videos
   move through the timeline or change the volume, as set in Settings.
 - **Settings** (menu bar icon → Settings…, or open the app again): when previews appear (always, or
   only/except while holding a modifier key), hover delay, excluded apps, which kinds of media and
-  which sites to preview, preview size, video sound/loop/resume, cache and website data, and an
+  which sites to preview, what file cards show, preview size, video sound/loop/resume, cache and website data, and an
   inspector that lists what's under the cursor.
 
 ## Build and run
@@ -58,6 +63,12 @@ the grant survives rebuilds. With ad-hoc signing you'd have to re-grant after ev
   else. `ScrollTap` (an active event tap) hands scroll events over the notch or preview to the
   controller and swallows the ones it uses. `ScrollTap`
   swallows scroll events while an album is up.
+- In Finder, `FinderItem` finds the hovered item: each one is an element with `AXFilename` and a file
+  reference `AXURL`, reached from other cells of a list row or the label under an icon through the row
+  or the item's group. `FileDetails` reads the card's details from Spotlight first, so protected
+  folders aren't opened just to describe a file. `FileUsers` finds apps whose windows show the file
+  (`AXDocument`) and processes that hold it open, map it, or work in it (`proc_listpidspath`), and
+  quits them. The card grows as that list fills in (`CardHostingView`).
 - `EmbedPlayer` hosts players in a web view loaded under an HTTPS origin (YouTube needs a
   Referer), with AirPlay and WebRTC off so nothing asks for local network access.
 - `AppSettings` keeps settings in UserDefaults; code reads it where it's used, so changes apply at
