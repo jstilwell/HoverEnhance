@@ -76,6 +76,23 @@ struct FinderItemTests {
         #expect(url(sidebarText) == nil)
     }
 
+    @Test func quickLookAndRenamingKeepCardsAway() {
+        // What Finder reported on macOS 27: Quick Look's panel is Finder's own window.
+        #expect(FinderItem.isBusy(focusedRole: "AXWindow", focusedSubrole: "Quick Look", windowSubroles: ["AXStandardWindow", "Quick Look"]))
+        #expect(FinderItem.isBusy(focusedRole: "AXOutline", focusedSubrole: nil, windowSubroles: ["AXStandardWindow", "AXQuickLook"]))
+        // Renaming focuses a text field; searching focuses the search field, which doesn't count.
+        #expect(FinderItem.isBusy(focusedRole: "AXTextField", focusedSubrole: nil, windowSubroles: ["AXStandardWindow"]))
+        #expect(!FinderItem.isBusy(focusedRole: "AXTextField", focusedSubrole: "AXSearchField", windowSubroles: ["AXStandardWindow"]))
+        #expect(!FinderItem.isBusy(focusedRole: "AXOutline", focusedSubrole: nil, windowSubroles: ["AXStandardWindow", nil]))
+    }
+
+    @Test func busyFinderGetsNoCard() {
+        var info = HoverInfo(pid: 1, appName: "Finder", bundleID: FinderItem.bundleID)
+        info.fileURL = URL(filePath: "/tmp/a.txt")
+        info.finderIsBusy = true
+        #expect(MediaResolver.source(for: info) == nil)
+    }
+
     @Test func fileReferenceURLsResolveToPaths() throws {
         let file = FileManager.default.temporaryDirectory.appending(path: "HoverEnhance-\(UUID().uuidString).txt")
         try Data("hi".utf8).write(to: file)

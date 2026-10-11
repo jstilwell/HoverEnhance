@@ -59,6 +59,15 @@ enum FinderItem {
         return path as URL
     }
 
+    /// Whether a card would be in Finder's way: its Quick Look panel is open (it's Finder's own window,
+    /// with the subrole "Quick Look"), or a name is being edited (the focused element is a text field
+    /// other than the search field).
+    static func isBusy(focusedRole: String?, focusedSubrole: String?, windowSubroles: [String?]) -> Bool {
+        let renaming = focusedRole == kAXTextFieldRole && focusedSubrole != kAXSearchFieldSubrole
+        let quickLook = windowSubroles.contains { $0?.replacingOccurrences(of: " ", with: "").localizedCaseInsensitiveContains("QuickLook") == true }
+        return renaming || quickLook
+    }
+
     /// Item URLs among the children and grandchildren of `node`.
     private static func itemURLs<Node: FinderNode>(under node: Node) -> [URL] {
         var urls: [URL] = []
