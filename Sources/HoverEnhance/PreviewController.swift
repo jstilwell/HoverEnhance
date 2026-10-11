@@ -32,6 +32,8 @@ final class PreviewController {
         let notch: CGRect
         /// The hovered element, for zooming into the part of an image the cursor is on.
         let element: CGRect?
+        /// The hovered app's bundle ID; creator cards subscribe through it in browser mode.
+        let app: String?
         let page: URL?
     }
 
@@ -63,7 +65,7 @@ final class PreviewController {
 
         reset(because: "new target")
         let elementFrame = info.imageFrame ?? info.frame
-        let newTarget = Target(source: source, anchor: cursor, notch: panel.notchFrame(at: cursor), element: elementFrame, page: info.pageURL)
+        let newTarget = Target(source: source, anchor: cursor, notch: panel.notchFrame(at: cursor), element: elementFrame, app: info.bundleID, page: info.pageURL)
         target = newTarget
         task = Task {
             guard let fetched = await fetcher.media(for: source), let media = AppSettings.shared.filter.apply(to: fetched),
@@ -199,7 +201,7 @@ final class PreviewController {
             logPlaybackState(of: view, after: .seconds(5))
 
         case .channel(let channel):
-            let card = NSHostingView(rootView: CreatorCardView(channel: channel))
+            let card = NSHostingView(rootView: CreatorCardView(channel: channel, browser: requested.app))
             card.appearance = NSAppearance(named: .darkAqua)
             playback.stop()
             panel.show(card, counter: counter, anchor: requested.anchor)
