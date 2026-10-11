@@ -68,11 +68,7 @@ final class SettingsWindowController: NSWindowController {
     }
 
     func show() {
-        guard let window else { return }
-        // A menu bar app isn't frontmost on its own; without this the window opens behind others.
-        NSApp.activate()
-        if !window.isVisible { window.center() }
-        window.makeKeyAndOrderFront(nil)
+        window?.showFromMenuBar()
     }
 }
 
@@ -89,5 +85,19 @@ enum Maintenance {
     static func clearWebsiteData() async {
         HTTPCookieStorage.shared.removeCookies(since: .distantPast)
         await WebPageLoader.clearWebsiteData()
+    }
+}
+
+extension NSWindow {
+    /// Brings the window to the front from the menu bar. Since macOS 14, activating the app is only a
+    /// request, which the system can turn down or grant late while the status menu is still closing;
+    /// the window then opened behind the frontmost app, so the first click seemed to do nothing.
+    /// Ordering it front regardless brings it up either way, and it becomes key once the app
+    /// activates or it's clicked.
+    func showFromMenuBar() {
+        NSApp.activate()
+        if !isVisible { center() }
+        makeKeyAndOrderFront(nil)
+        orderFrontRegardless()
     }
 }

@@ -39,7 +39,7 @@ apps and sites to skip, what file cards show, preview size, and video playback.
 
 ## Building from source
 
-`make run` builds and launches it (requires Xcode). See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)
+`./bin/run.sh` builds and launches it (requires Xcode). See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)
 for tests, releases, and how it works.
 
 ## License

@@ -34,11 +34,7 @@ final class WelcomeWindowController: NSWindowController, NSWindowDelegate {
     required init?(coder: NSCoder) { fatalError("not used") }
 
     func show() {
-        guard let window else { return }
-        // A menu bar app isn't frontmost on its own.
-        NSApp.activate()
-        if !window.isVisible { window.center() }
-        window.makeKeyAndOrderFront(nil)
+        window?.showFromMenuBar()
     }
 
     /// Floats over System Settings while access is off, so the icon can be dragged into its list; comes
@@ -256,7 +252,7 @@ enum MenuBarIcon {
         // MenuBarIcon.png, rendered from design/icons/menubar.svg; outside the app bundle (tests,
         // `swift run`) a system symbol stands in.
         let symbol: NSImage
-        if let icon = NSImage(named: "MenuBarIcon")?.copy() as? NSImage {
+        if let icon = Bundle.main.image(forResource: "MenuBarIcon") {
             icon.size = NSSize(width: 18, height: 18)
             symbol = icon
         } else {

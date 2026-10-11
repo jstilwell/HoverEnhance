@@ -1,4 +1,4 @@
-import Foundation
+import AppKit
 import Testing
 @testable import HoverEnhance
 
@@ -54,5 +54,44 @@ struct UpdatesTests {
         #expect(info["SURequireSignedFeed"] as? Bool == true)
         #expect(info["SUFeedURL"] as? String == "https://github.com/jstilwell/HoverEnhance/releases/latest/download/appcast.xml")
         #expect(info["CFBundleIconFile"] as? String == "AppIcon")
+    }
+}
+
+struct OwnWindowsTests {
+    private func window(_ number: Int, _ pid: pid_t, _ rect: CGRect) -> [String: Any] {
+        [kCGWindowNumber as String: number, kCGWindowOwnerPID as String: Int(pid), kCGWindowBounds as String: rect.dictionaryRepresentation]
+    }
+
+    private let screen = CGRect(x: 0, y: 0, width: 1920, height: 1080)
+    private let point = CGPoint(x: 900, y: 500)
+
+    @Test func theDocksOverlayDoesntHideOurWindows() {
+        // The Dock keeps an invisible window over the whole screen, in front of every app's windows.
+        let dock = window(1, 100, screen)
+        let about = window(2, 42, CGRect(x: 730, y: 360, width: 460, height: 362))
+        let browser = window(3, 500, CGRect(x: 0, y: 30, width: 1920, height: 997))
+        #expect(OwnWindows.areInFront(at: point, windows: [dock, about, browser], clickedWindow: 2, ownPID: 42))
+        // Beside the About window, a click reaches the browser.
+        #expect(!OwnWindows.areInFront(at: CGPoint(x: 100, y: 100), windows: [dock, about, browser], clickedWindow: 3, ownPID: 42))
+    }
+
+    @Test func ourWindowsBehindAnotherAppDontCount() {
+        let browser = window(3, 500, screen)
+        let settings = window(2, 42, CGRect(x: 730, y: 360, width: 540, height: 650))
+        #expect(!OwnWindows.areInFront(at: point, windows: [browser, settings], clickedWindow: 3, ownPID: 42))
+    }
+
+    @Test func clickThroughWindowsOfOursCount() {
+        // A click goes through the notch to the page, but accessibility finds the notch.
+        let notch = window(9, 42, CGRect(x: 886, y: 486, width: 34, height: 28))
+        let browser = window(3, 500, screen)
+        #expect(OwnWindows.areInFront(at: point, windows: [notch, browser], clickedWindow: 3, ownPID: 42))
+    }
+
+    @Test func withoutAClickedWindowAnyOfOursCounts() {
+        let browser = window(3, 500, screen)
+        let about = window(2, 42, CGRect(x: 730, y: 360, width: 460, height: 362))
+        #expect(OwnWindows.areInFront(at: point, windows: [browser, about], clickedWindow: nil, ownPID: 42))
+        #expect(!OwnWindows.areInFront(at: point, windows: [browser], clickedWindow: nil, ownPID: 42))
     }
 }
