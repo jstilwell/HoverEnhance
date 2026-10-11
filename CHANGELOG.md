@@ -11,14 +11,18 @@ All notable changes to this project will be documented in this file.
 - Songs in Finder show their artwork and play at a click, or right away if you turn that on.
 - Songs and videos in Finder show what their own tags say: title, artist, album, album artist, composer, genre, year, track, and disc, and when and with what a video was recorded.
 - Finder cards show a video's frame rate and HDR, and the sample rate and channels of its sound.
+- Multi-photo posts in Instagram's feed open as an album at the photo you're on, to scroll through without the arrows.
 
 ### Changed
 
+- Scrolling on a video moves it 2 seconds a step, wheel or trackpad alike, and Settings → Video can change that.
 - The menu starts with the app's version.
 
 ### Fixed
 
 - No preview pops up over a video the page is already playing, as on Instagram, or over an image it already shows large.
+- Instagram albums no longer show as one photo after the cursor passes over them while they load.
+- Previews come up more reliably when the cursor stops on a page still filling in, as just after scrolling.
 - Clearing the image cache in Settings shows the new size right away.
 
 ## 0.1.1 - 10-11-2026

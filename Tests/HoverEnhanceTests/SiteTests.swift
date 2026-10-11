@@ -60,6 +60,59 @@ struct VideoOnThePageTests {
     }
 }
 
+/// A photo outside any link, as in Instagram's feed, where only the time in the post's header links to it.
+struct FeedPhotoTests {
+    private let photo = URL(string: "https://scontent-xyz1-1.cdninstagram.com/v/t51.2885-15/111111111_2222222222222222_3333333333333333333_n.jpg?stp=dst-jpg_e35_p640x640")!
+
+    private func info(link: String? = nil, post: String?, video: Bool = false) -> HoverInfo {
+        var info = HoverInfo(pid: 1, appKind: .browser)
+        info.pageURL = URL(string: "https://www.instagram.com/")
+        info.linkURL = link.flatMap(URL.init(string:))
+        info.imageURL = photo
+        info.postURL = post.flatMap(URL.init(string:))
+        info.videoFrame = video ? CGRect(x: 0, y: 0, width: 470, height: 585) : nil
+        return info
+    }
+
+    @Test func comesFromItsPost() {
+        #expect(MediaResolver.source(for: info(post: "https://www.instagram.com/p/AbC123/")) == .instagram(code: "AbC123"))
+    }
+
+    @Test func aLinkAroundThePhotoStillWins() {
+        #expect(MediaResolver.source(for: info(link: "https://www.instagram.com/p/XyZ789/", post: "https://www.instagram.com/p/AbC123/"))
+            == .instagram(code: "XyZ789"))
+    }
+
+    @Test func withoutAPostItsTheImage() {
+        #expect(MediaResolver.source(for: info(post: nil)) == .images([photo]))
+    }
+
+    @Test func aVideoPlayingThereStillGetsNoPreview() {
+        #expect(MediaResolver.source(for: info(post: "https://www.instagram.com/p/AbC123/", video: true)) == nil)
+    }
+
+    @Test func postsCanHoldMore() {
+        #expect(MediaSource.instagram(code: "AbC123").isPost)
+        #expect(MediaSource.tweet(id: "1").isPost)
+        #expect(!MediaSource.images([photo]).isPost)
+    }
+
+    @Test func albumsOpenAtThePhotoThePageShows() {
+        // The post's lookup gives each photo at another size and server, under the same name.
+        let album = Media(items: [
+            .image([URL(string: "https://scontent-abc2-2.cdninstagram.com/v/t51.2885-15/444444444_5555555555555555_6666666666666666666_n.jpg?stp=dst-jpg_e15")!]),
+            .image([URL(string: "https://scontent-abc2-2.cdninstagram.com/v/t51.2885-15/111111111_2222222222222222_3333333333333333333_n.jpg?stp=dst-jpg_e15")!]),
+        ])
+        #expect(album.index(showing: photo) == 1)
+        // X serves its thumbnails without the extension its full images have.
+        let tweet = Media(items: [.image([URL(string: "https://pbs.twimg.com/media/AbCdEfGhIj1.jpg")!]), .image([URL(string: "https://pbs.twimg.com/media/KlMnOpQrSt2.jpg")!])])
+        #expect(tweet.index(showing: URL(string: "https://pbs.twimg.com/media/KlMnOpQrSt2?format=jpg&name=small")!) == 1)
+        // Names like "media" say nothing about which photo it is.
+        #expect(Media(items: [.image([URL(string: "https://www.instagram.com/p/AbC123/media/?size=l")!])])
+            .index(showing: URL(string: "https://example.com/media")!) == nil)
+    }
+}
+
 /// Fixtures are trimmed copies of real responses.
 struct SiteAPIsTests {
     @Test func streamablePrefersTheFullQualityMP4() {

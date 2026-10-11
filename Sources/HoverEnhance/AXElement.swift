@@ -55,10 +55,12 @@ struct AXElement {
         }
     }
 
-    /// Up to `limit` graphics in a web page under this element, in page order, from the engine's own
-    /// search. WebKit's graphics are images; Chromium's are images and videos.
-    func graphics(limit: Int) -> [AXElement] {
-        let query: [String: Any] = ["AXSearchKey": "AXGraphicSearchKey", "AXDirection": "AXDirectionNext", "AXResultsLimit": limit]
+    /// Up to `limit` elements of a kind in a web page under this element, in page order, from the
+    /// engine's own search: `AXGraphicSearchKey` (WebKit's graphics are images; Chromium's are images
+    /// and videos), `AXLinkSearchKey`, and so on. From `start`, the ones after it, or before it, nearest first.
+    func search(_ key: String, limit: Int, from start: AXElement? = nil, backward: Bool = false) -> [AXElement] {
+        var query: [String: Any] = ["AXSearchKey": key, "AXDirection": backward ? "AXDirectionPrevious" : "AXDirectionNext", "AXResultsLimit": limit]
+        if let start { query["AXStartElement"] = start.ref }
         var value: CFTypeRef?
         guard AXUIElementCopyParameterizedAttributeValue(ref, "AXUIElementsForSearchPredicate" as CFString, query as CFDictionary, &value) == .success,
               let array = value as? [AnyObject] else { return [] }
