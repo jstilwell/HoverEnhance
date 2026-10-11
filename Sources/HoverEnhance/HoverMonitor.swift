@@ -9,6 +9,11 @@ final class HoverMonitor {
         didSet { if isPaused { dwellTimer?.invalidate() } }
     }
     var onResult: ((Result<HoverInfo, InspectionError>) -> Void)?
+    /// Every mouse move, with the cursor in global top-left-origin coordinates.
+    var onMouseMoved: ((CGPoint) -> Void)?
+    /// Content moved under the cursor.
+    var onScroll: (() -> Void)?
+    var onClick: (() -> Void)?
 
     private let inspector = HoverInspector()
     private var eventMonitors: [Any] = []
@@ -19,12 +24,13 @@ final class HoverMonitor {
 
     func start() {
         // Global monitors don't see events while our own app is active, so add a local one too.
+        let events: NSEvent.EventTypeMask = [.mouseMoved, .scrollWheel, .leftMouseDown, .rightMouseDown, .otherMouseDown]
         eventMonitors = [
-            NSEvent.addGlobalMonitorForEvents(matching: .mouseMoved) { [weak self] _ in
-                self?.mouseMoved()
+            NSEvent.addGlobalMonitorForEvents(matching: events) { [weak self] event in
+                self?.handle(event)
             },
-            NSEvent.addLocalMonitorForEvents(matching: .mouseMoved) { [weak self] event in
-                self?.mouseMoved()
+            NSEvent.addLocalMonitorForEvents(matching: events) { [weak self] event in
+                self?.handle(event)
                 return event
             },
         ].compactMap { $0 }
@@ -42,7 +48,21 @@ final class HoverMonitor {
         }
     }
 
-    private func mouseMoved() {
+    private func handle(_ event: NSEvent) {
+        switch event.type {
+        case .mouseMoved:
+            if let point = CGEvent(source: nil)?.location { onMouseMoved?(point) }
+            restartDwell()
+        case .scrollWheel:
+            // Scrolling changes what's under the cursor, so it counts as movement for the dwell.
+            onScroll?()
+            restartDwell()
+        default:
+            onClick?()
+        }
+    }
+
+    private func restartDwell() {
         generation += 1
         guard !isPaused else { return }
         if let dwellTimer, dwellTimer.isValid {
