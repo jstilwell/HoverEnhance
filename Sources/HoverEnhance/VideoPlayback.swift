@@ -21,6 +21,8 @@ final class VideoPlayback {
         stop()
         let item = AVPlayerItem(url: url)
         let player = AVPlayer(playerItem: item)
+        // AirPlay device discovery would make macOS ask for local network access.
+        player.allowsExternalPlayback = false
         player.isMuted = UserDefaults.standard.bool(forKey: "videoMuted")
         player.volume = UserDefaults.standard.float(forKey: "videoVolume")
         self.player = player

@@ -61,7 +61,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         case .failure(.ownWindow):
             break
         case .failure(let error):
-            preview.reset()
+            preview.reset(because: "inspection failed: \(error)")
             lastInfo = nil
             if showsInspector { hud.show(error.message) }
         }
@@ -125,7 +125,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc private func togglePause() {
         monitor.isPaused.toggle()
         if monitor.isPaused {
-            preview.reset()
+            preview.reset(because: "paused")
             hud.hide()
         }
     }

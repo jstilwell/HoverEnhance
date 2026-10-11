@@ -23,8 +23,9 @@ reopening a video resumes where it stopped; mute/volume choice is remembered.
 ## Stage 3: Embedded players
 **Goal**: Sites without a playable stream play through their own embed player in a web view.
 **Success Criteria**: YouTube, Vimeo, TikTok, Instagram, and Twitch clip links play in the preview.
-**Tests**: URL → embed unit tests; manual check per site.
-**Status**: In Progress
+**Tests**: URL → embed unit tests; manual check per site (embed cases on `Tests/Manual/preview-test.html`).
+Instagram shows the reel but may need a click to start.
+**Status**: Complete
 
 ## Stage 4: Polish
 **Goal**: Rough edges found along the way.

@@ -14,6 +14,8 @@ enum MediaSource: Sendable, Hashable {
     case tweet(id: String)
     /// A Bluesky post; `actor` is a handle or DID.
     case blueskyPost(actor: String, rkey: String)
+    /// A video played through its site's embeddable player.
+    case embed(Embed)
 }
 
 /// One thing a preview can show.
@@ -22,6 +24,7 @@ enum MediaItem: Sendable, Equatable {
     case image([URL])
     /// A file or HLS stream AVFoundation can play, with its size when the site reports it.
     case video(URL, size: CGSize?)
+    case embed(Embed)
 }
 
 /// Resolved media: a single item, or an album.
@@ -35,6 +38,10 @@ enum MediaResolver {
         // A link to a post or video outranks the thumbnail inside it.
         if let link = info.linkURL, let source = SiteLinks.source(forLink: link) {
             return source
+        }
+        // Sites with their own players have their own hover previews; don't stack another on top.
+        if let link = info.linkURL, let embed = Embed.from(link: link), !isOnSite(info.pageURL, of: embed.site) {
+            return .embed(embed)
         }
         let images = imageCandidates(for: info)
         return images.isEmpty ? nil : .images(images)
@@ -51,6 +58,11 @@ enum MediaResolver {
             urls += ImageRules.fullSize(of: image) + [image]
         }
         return urls.uniqued()
+    }
+
+    private static func isOnSite(_ page: URL?, of site: Embed.Site) -> Bool {
+        guard let host = page?.host()?.lowercased() else { return false }
+        return site.domains.contains { host == $0 || host.hasSuffix("." + $0) }
     }
 }
 
