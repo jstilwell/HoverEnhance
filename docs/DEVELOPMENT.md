@@ -5,7 +5,7 @@
 Requires Xcode (the Makefile uses `xcrun swift`).
 
 ```sh
-./bin/run.sh # build and launch it, from any folder; --log also streams what it does
+./bin/run.sh # build it universal, as releases are, and launch it; --log also streams what it does
 make run     # build, bundle, sign, and launch build/HoverEnhance.app
 make log     # stream hover results from the unified log (debug builds)
 make stop
