@@ -97,21 +97,26 @@ final class FileCard {
                 if quitStates[user.pid] == .confirming { quitStates[user.pid] = nil }
             }
         case .confirming:
-            Task { await quit(user, force: false) }
+            quit(user, force: false)
         case .stillRunning:
-            Task { await quit(user, force: true) }
+            quit(user, force: true)
         case .quitting, .quit:
             break
         }
     }
 
-    private func quit(_ user: FileUser, force: Bool) async {
-        quitStates[user.pid] = .quitting
+    private func quit(_ user: FileUser, force: Bool) {
         guard FileUsers.quit(user.pid, force: force) else {
             quitStates[user.pid] = .failed
             return
         }
-        // Apps can take a moment, or stop to ask about unsaved changes.
+        // Set before anything waits, so more clicks meanwhile do nothing.
+        quitStates[user.pid] = .quitting
+        Task { await waitForExit(of: user, force: force) }
+    }
+
+    /// Apps can take a moment, or stop to ask about unsaved changes.
+    private func waitForExit(of user: FileUser, force: Bool) async {
         for _ in 0..<30 {
             try? await Task.sleep(for: .milliseconds(100))
             if !FileUsers.isRunning(user.pid) {
