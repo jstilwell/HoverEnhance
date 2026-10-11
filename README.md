@@ -17,7 +17,8 @@ extension needed.
   are using it. Images, videos, and audio show large beside their details, including what songs' and
   videos' own tags say. Click any detail to copy it.
 
-Move away, click, or switch apps, and the preview is gone.
+Images the page already shows large, and videos it's already playing, are left alone. Move away,
+click, or switch apps, and the preview is gone.
 
 ## Install
 

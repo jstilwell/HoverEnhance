@@ -18,6 +18,7 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- No preview pops up over a video the page is already playing, as on Instagram, or over an image it already shows large.
 - Clearing the image cache in Settings shows the new size right away.
 
 ## 0.1.1 - 10-11-2026

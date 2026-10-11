@@ -62,10 +62,17 @@ struct Media: Sendable, Equatable {
 
 /// Works out what to preview for a hover result.
 enum MediaResolver {
+    /// Videos on a page smaller than this, such as looping thumbnails, still get a preview.
+    static let smallestWatchableVideo = CGSize(width: 120, height: 90)
+
     static func source(for info: HoverInfo) -> MediaSource? {
         if let file = info.fileURL {
             // A card would cover Quick Look's panel, or the name being edited.
             return info.finderIsBusy ? nil : .file(file, onDesktop: info.fileIsOnDesktop)
+        }
+        // A video the page already shows under the cursor needs no preview, of it or of a still of it.
+        if let video = info.videoFrame, video.width >= smallestWatchableVideo.width, video.height >= smallestWatchableVideo.height {
+            return nil
         }
         var info = info
         // Only a local page may lead to local files. Browsers don't let web pages open them either:
