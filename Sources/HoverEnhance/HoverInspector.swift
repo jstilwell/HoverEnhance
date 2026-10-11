@@ -214,6 +214,8 @@ enum WebEngine {
 /// Whether one of this app's windows is in front at a point: the preview, its notch, a card, the HUD,
 /// Settings, About, the welcome window, or a menu.
 enum OwnWindows {
+    /// Asks the window server, so it runs where AppKit expects: on the main thread.
+    @MainActor
     static func areInFront(at point: CGPoint) -> Bool {
         let windows = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]] ?? []
         let screenTop = NSScreen.screens.first?.frame.maxY ?? 0
