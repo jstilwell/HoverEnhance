@@ -75,7 +75,11 @@ struct ScrollSettingsTests {
         let settings = AppSettings(defaults: defaults)
         #expect(settings.imageScroll == .zoom)
         #expect(settings.videoScroll == .scrub)
+        // On the notch, the volume; on the video itself, the position.
+        #expect(settings.notchVideoScroll == .volume)
         settings.videoScroll = .volume
+        settings.notchVideoScroll = .scrub
         #expect(AppSettings(defaults: defaults).videoScroll == .volume)
+        #expect(AppSettings(defaults: defaults).notchVideoScroll == .scrub)
     }
 }

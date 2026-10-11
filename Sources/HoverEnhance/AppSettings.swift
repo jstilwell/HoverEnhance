@@ -132,6 +132,7 @@ final class AppSettings {
         static let showsNotch = "showsNotch"
         static let imageScroll = "imageScroll"
         static let videoScroll = "videoScroll"
+        static let notchVideoScroll = "notchVideoScroll"
         static let videoSound = "videoSound"
         static let videoMuted = "videoMuted"
         static let videoVolume = "videoVolume"
@@ -192,7 +193,10 @@ final class AppSettings {
     var videoVolume: Double { didSet { defaults.set(videoVolume, forKey: Key.videoVolume) } }
     var loopVideos: Bool { didSet { defaults.set(loopVideos, forKey: Key.loopVideos) } }
     var resumeVideos: Bool { didSet { defaults.set(resumeVideos, forKey: Key.resumeVideos) } }
+    /// What scrolling on a video does.
     var videoScroll: VideoScroll { didSet { defaults.set(videoScroll.rawValue, forKey: Key.videoScroll) } }
+    /// What scrolling on the notch, or the volume rocker beside it, does to a video.
+    var notchVideoScroll: VideoScroll { didSet { defaults.set(notchVideoScroll.rawValue, forKey: Key.notchVideoScroll) } }
 
     // Finder
     var finderCards: Bool { didSet { defaults.set(finderCards, forKey: Key.finderCards) } }
@@ -234,6 +238,7 @@ final class AppSettings {
             Key.showsNotch: true,
             Key.imageScroll: ImageScroll.zoom.rawValue,
             Key.videoScroll: VideoScroll.scrub.rawValue,
+            Key.notchVideoScroll: VideoScroll.volume.rawValue,
             Key.videoSound: VideoSound.remember.rawValue,
             Key.videoMuted: true,
             Key.videoVolume: 1.0,
@@ -271,6 +276,7 @@ final class AppSettings {
         showsNotch = defaults.bool(forKey: Key.showsNotch)
         imageScroll = defaults.string(forKey: Key.imageScroll).flatMap(ImageScroll.init(rawValue:)) ?? .zoom
         videoScroll = defaults.string(forKey: Key.videoScroll).flatMap(VideoScroll.init(rawValue:)) ?? .scrub
+        notchVideoScroll = defaults.string(forKey: Key.notchVideoScroll).flatMap(VideoScroll.init(rawValue:)) ?? .volume
         videoSound = defaults.string(forKey: Key.videoSound).flatMap(VideoSound.init(rawValue:)) ?? .remember
         videoMuted = defaults.bool(forKey: Key.videoMuted)
         videoVolume = defaults.double(forKey: Key.videoVolume)

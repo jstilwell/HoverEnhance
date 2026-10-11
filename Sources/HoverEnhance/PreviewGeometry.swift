@@ -58,6 +58,28 @@ enum PreviewGeometry {
     }
 }
 
+extension PreviewGeometry {
+    static let rockerSize = CGSize(width: 18, height: 104)
+    /// Between the rocker and the notch, and between the rocker and the preview's edge.
+    static let rockerSpacing: CGFloat = 3
+
+    /// The volume rocker shown during a video: above the notch against the preview's edge, or below
+    /// the notch when there's no room above it.
+    static func rockerFrame(anchor: CGPoint, placeRight: Bool, visible: CGRect) -> CGRect {
+        let notch = notchFrame(anchor: anchor, placeRight: placeRight)
+        let x = placeRight ? anchor.x + gap - rockerSpacing - rockerSize.width : anchor.x - gap + rockerSpacing
+        let above = notch.minY - rockerSpacing - rockerSize.height
+        let y = above >= visible.minY ? above : notch.maxY + rockerSpacing
+        return CGRect(origin: CGPoint(x: x, y: y), size: rockerSize)
+    }
+
+    /// The rocker with the space between it and the notch, so the cursor can move from one to the
+    /// other without ending the hover.
+    static func rockerReach(rocker: CGRect, notch: CGRect) -> CGRect {
+        rocker.union(CGRect(x: rocker.minX, y: notch.minY, width: rocker.width, height: notch.height))
+    }
+}
+
 /// Converts between AppKit's screen space (origin at the bottom left of the primary display) and
 /// the global top-left-origin space. The conversion is its own inverse.
 enum ScreenSpace {
