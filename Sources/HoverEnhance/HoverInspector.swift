@@ -108,22 +108,26 @@ final class HoverInspector: @unchecked Sendable {
         info.frame = element.frame
 
         // Walk up to find the enclosing link and page. The path is handy while exploring.
+        var webArea: AXElement?
         var node: AXElement? = element
         while let current = node, info.ancestry.count < 40 {
             let role = current.role ?? "?"
             info.ancestry.append(role)
             if role == "AXLink", info.linkURL == nil { info.linkURL = current.url }
-            if role == "AXWebArea" { info.pageURL = current.url; break }
+            if role == "AXWebArea" { info.pageURL = current.url; webArea = current; break }
             if role == kAXWindowRole { break }
             node = current.parent
         }
 
+        var imageElement: AXElement?
         if element.role == kAXImageRole, let url = info.url {
             info.imageURL = url
             info.imageFrame = info.frame
+            imageElement = element
         } else if info.pageURL != nil, let image = image(at: point, near: element) {
             info.imageURL = image.url
             info.imageFrame = image.frame
+            imageElement = image.element
         }
         if info.pageURL != nil, info.linkURL != nil, info.imageURL == nil {
             info.isOnText = isText(at: point, element: element)
@@ -131,6 +135,11 @@ final class HoverInspector: @unchecked Sendable {
         // Only worth the look where there'd be a preview of a link or an image.
         if info.pageURL != nil, !info.isOnText, info.linkURL != nil || info.imageURL != nil {
             info.videoFrame = video(at: point, near: element)
+        }
+        // A photo outside any link, as in Instagram's feed: the post it's from, which may hold more.
+        if info.linkURL == nil, info.videoFrame == nil, let webArea, let image = imageElement, let frame = info.imageFrame,
+           let site = info.pageURL?.host().flatMap(MediaSite.init(host:)) {
+            (info.postURL, info.postSearch) = postLink(before: image, frame: frame, in: webArea, site: site)
         }
         if info.bundleID == FinderItem.bundleID {
             info.fileURL = FinderItem.url(at: element)
@@ -165,7 +174,7 @@ final class HoverInspector: @unchecked Sendable {
     /// Sites often cover images with transparent links or buttons, so the hit element isn't the image.
     /// Look for one under the point among the descendants of the element, its parent, and its
     /// grandparent. Each node costs a few AX round-trips, so the search is capped.
-    private func image(at point: CGPoint, near element: AXElement) -> (url: URL, frame: CGRect)? {
+    private func image(at point: CGPoint, near element: AXElement) -> (element: AXElement, url: URL, frame: CGRect)? {
         var budget = 40
         var searched: AXElement?
         var root: AXElement? = element
@@ -178,7 +187,7 @@ final class HoverInspector: @unchecked Sendable {
                     budget -= 1
                     guard budget > 0 else { break }
                     guard let frame = child.frame, frame.contains(point) else { continue }
-                    if child.role == kAXImageRole, let url = child.url { return (url, frame) }
+                    if child.role == kAXImageRole, let url = child.url { return (child, url, frame) }
                     queue.append(child)
                 }
             }
@@ -186,6 +195,29 @@ final class HoverInspector: @unchecked Sendable {
             root = current.parent
         }
         return nil
+    }
+
+    /// The link to the post a photo is from: the nearest before it in the page that leads to a post on
+    /// the page's site, as the time in a post's header does, just above its photos. It must be close
+    /// above the photo and across from it, or it's another post's.
+    /// Also returns what it passed over, for the inspector.
+    private func postLink(before image: AXElement, frame: CGRect, in webArea: AXElement, site: MediaSite) -> (URL?, String) {
+        var passed: [String] = []
+        for link in webArea.search("AXLinkSearchKey", limit: 8, from: image, backward: true) {
+            guard let url = link.url else { continue }
+            guard let source = SiteLinks.source(forLink: url), source.isPost, source.site == site else {
+                passed.append(url.path())
+                continue
+            }
+            guard let linkFrame = link.frame, linkFrame.maxY <= frame.minY + 1, frame.minY - linkFrame.maxY < 400,
+                  linkFrame.maxX > frame.minX, linkFrame.minX < frame.maxX else {
+                let at = link.frame.map { "\(Int($0.minX)),\(Int($0.minY)) \(Int($0.width))×\(Int($0.height))" } ?? "nowhere"
+                let photo = "\(Int(frame.minX)),\(Int(frame.minY)) \(Int(frame.width))×\(Int(frame.height))"
+                return (nil, (passed + ["\(url.path()) at \(at), not just above the photo at \(photo)"]).joined(separator: " · "))
+            }
+            return (url, passed.joined(separator: " · "))
+        }
+        return (nil, passed.isEmpty ? "no links before the photo" : (passed + ["no post link"]).joined(separator: " · "))
     }
 
     /// The frame of a video the page shows under the point. Sites cover videos with their controls as
@@ -197,7 +229,7 @@ final class HoverInspector: @unchecked Sendable {
         var root: AXElement? = element
         for _ in 0..<3 {
             guard let current = root, current.role != "AXWebArea" else { return nil }
-            for graphic in current.graphics(limit: 8) where budget > 0 {
+            for graphic in current.search("AXGraphicSearchKey", limit: 8) where budget > 0 {
                 budget -= 1
                 if graphic.role == kAXGroupRole, let frame = graphic.frame, frame.contains(point) { return frame }
             }

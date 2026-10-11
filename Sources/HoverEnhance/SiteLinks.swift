@@ -42,9 +42,10 @@ enum SiteLinks {
             return .blueskyPost(actor: parts[2], rkey: parts[4])
 
         case "instagram.com", "www.instagram.com":
-            // p/<code>, reel/<code>, reels/<code>, tv/<code>; share links may put <user>/ first.
+            // p/<code>, reel/<code>, reels/<code>, tv/<code>; share links may put <user>/ first. A post's
+            // song links to reels/audio/<id>, which isn't a post.
             let start = parts.count > 2 && ["p", "reel", "reels", "tv"].contains(parts[2]) ? 2 : 1
-            guard parts.count > start + 1, ["p", "reel", "reels", "tv"].contains(parts[start]),
+            guard parts.count > start + 1, ["p", "reel", "reels", "tv"].contains(parts[start]), parts[start + 1] != "audio",
                   parts[start + 1].allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "-" || $0 == "_") }) else { return nil }
             return .instagram(code: parts[start + 1])
 

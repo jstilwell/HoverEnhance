@@ -330,6 +330,8 @@ struct PreviewsSettingsView: View {
 struct VideoSettingsView: View {
     @Bindable var settings: AppSettings
 
+    static let scrubSteps = [1, 2, 5, 10]
+
     var body: some View {
         Form {
             Section {
@@ -355,6 +357,10 @@ struct VideoSettingsView: View {
                 Picker("Scrolling on the notch", selection: $settings.notchVideoScroll) {
                     ForEach(VideoScroll.allCases) { Text($0.label).tag($0) }
                 }
+                Picker("Each scroll step moves it", selection: $settings.videoScrubSeconds) {
+                    ForEach(VideoSettingsView.scrubSteps, id: \.self) { Text($0 == 1 ? "1 second" : "\($0) seconds").tag($0) }
+                }
+                .disabled(settings.videoScroll != .scrub && settings.notchVideoScroll != .scrub)
                 Toggle("Loop videos", isOn: $settings.loopVideos)
                 Toggle(isOn: $settings.resumeVideos) {
                     Text("Resume where you left off")

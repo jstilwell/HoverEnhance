@@ -28,6 +28,9 @@ after every build (the welcome window explains how to remove and re-add the app)
 - `AccessibilityWatcher` follows whether the app has Accessibility access; `WelcomeWindowController`
   shows the guide until it does, and `AppDelegate` starts everything else once it has.
 - `HoverMonitor` listens for global mouse-moved events and waits for the cursor to rest (150 ms).
+  On a web page it looks again a few times over the next two seconds while the cursor stays put,
+  since Chromium fills in its accessibility tree after scrolling and loading; a second look can
+  start a preview but never ends one, and clicks and key presses stop them.
 - `HoverInspector` hit-tests with `AXUIElementCopyElementAtPosition` on a background queue (AX
   calls are synchronous IPC into the target app) and walks up to the enclosing link and web area.
 - `MediaResolver` turns the hovered image or link into a `MediaSource` (`ImageRules` for
@@ -35,7 +38,10 @@ after every build (the welcome window explains how to remove and re-add the app)
   pages. `MediaFetcher` does any lookup the site needs (`SiteAPIs`, `RedditGallery`), giving `Media`:
   one item or an album, with web addresses only. Nothing is previewed over a video the page shows
   (WebKit gives videos their URL; Chromium shows them as plain groups, found through its search for
-  graphics), or over an image it already shows about as large as a preview could be. `AppKind` tells browsers and email apps apart from
+  graphics), or over an image it already shows about as large as a preview could be, unless it's from
+  a post holding more. A photo outside any link, as in Instagram's feed, takes its post from the
+  nearest link to one before it in the page (the time in the post's header), through the engine's
+  search for links. `AppKind` tells browsers and email apps apart from
   what they declare they open, and `OtherAppsPolicy` decides what may load outside browsers.
 - `PreviewController` shows items in `PreviewPanel`: images via `ImageLoader` (downloaded through
   `LimitedDownloader`, which stops at the size limit, and downsampled off the main thread), videos
