@@ -55,8 +55,10 @@ folders; a key press closes the card (Quick Look, renaming, typing); clicking a 
 **Success Criteria**: Turning off a detail hides it and skips reading it; Restore Defaults brings back
 the defaults; Space or Return over a card closes it until the cursor moves to another item.
 **Tests**: Field settings defaults and persistence; filter for desktop items and folders (Finder writes
-folder URLs with a trailing slash, packages without); offscreen render of the settings tab.
-**Status**: Complete
+folder URLs with a trailing slash, packages without); offscreen render of the settings tab. Still to
+do: a live check that Space and Return close a card, which relies on macOS passing key presses to an
+app with Accessibility access alone.
+**Status**: In Progress
 
 ## Stage 6: Thumbnail and system facts
 **Goal**: A Quick Look thumbnail in place of the icon; Finder tags with their colors; iCloud status;
