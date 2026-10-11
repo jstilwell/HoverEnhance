@@ -20,6 +20,7 @@ final class SettingsWindowController: NSWindowController {
         add("Previews", "photo.on.rectangle", PreviewsSettingsView(settings: settings))
         add("Video", "play.rectangle", VideoSettingsView(settings: settings))
         add("Sites", "globe", SitesSettingsView(settings: settings))
+        add("Accounts", "person.crop.circle", AccountsSettingsView(account: YouTubeAccount.shared))
         add("Advanced", "wrench.and.screwdriver", AdvancedSettingsView(settings: settings))
 
         let window = NSWindow(contentViewController: tabs)

@@ -350,3 +350,56 @@ struct AdvancedSettingsView: View {
         }
     }
 }
+
+// MARK: - Accounts
+
+struct AccountsSettingsView: View {
+    @Bindable var account: YouTubeAccount
+
+    var body: some View {
+        Form {
+            Section {
+                if account.status == .signedIn {
+                    LabeledContent("Signed in as") {
+                        HStack {
+                            Text(account.accountName ?? "Your YouTube account")
+                            Button("Sign Out") { Task { await account.signOut() } }
+                        }
+                    }
+                } else {
+                    TextField("Client ID", text: $account.clientID, prompt: Text("…apps.googleusercontent.com"))
+                    SecureField("Client secret", text: $account.clientSecret, prompt: Text("GOCSPX-…"))
+                    HStack {
+                        Spacer()
+                        Button(account.status == .signingIn ? "Waiting for the Browser…" : "Sign In with Google…") {
+                            Task { await account.signIn() }
+                        }
+                        .disabled(!account.canSignIn)
+                    }
+                }
+                if let error = account.lastError {
+                    Text(error).foregroundStyle(.red)
+                }
+            } header: {
+                Text("YouTube")
+            } footer: {
+                Footnote("Lets creator cards show whether you're subscribed, and subscribe or unsubscribe. Sign-in goes through your own Google Cloud OAuth client; its secret and your sign-in are kept in the Keychain.")
+            }
+            if account.status != .signedIn {
+                Section("Getting a client ID") {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("1. In Google Cloud Console, create a project and enable the **YouTube Data API v3**.")
+                        Text("2. Under **Google Auth Platform**, fill in Branding (an app name and your email). In Audience, choose External and **Publish app**, so sign-in doesn't expire every week.")
+                        Text("3. Under **Clients**, create a client of type **Desktop app**, then copy its ID and secret here.")
+                        Text("4. Sign in. Google warns that the app isn't verified, since it's your own: choose Advanced, then Go to the app.")
+                    }
+                    .font(.callout)
+                    .fixedSize(horizontal: false, vertical: true)
+                    Link("Open Google Cloud Console", destination: URL(string: "https://console.cloud.google.com/apis/library/youtube.googleapis.com")!)
+                }
+            }
+        }
+        .formStyle(.grouped)
+        .frame(width: settingsWidth, height: 520)
+    }
+}

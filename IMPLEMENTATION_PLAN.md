@@ -21,12 +21,12 @@ check on a YouTube search page (title and channel name show the card; thumbnail 
 (PKCE, loopback redirect), keeps the refresh token in the Keychain, refreshes access tokens, and
 signs out (revoking the token).
 **Tests**: PKCE and URL building; loopback redirect handling; token response parsing; error paths
-against Google's endpoints.
-**Status**: In Progress
+against Google's endpoints. A full sign-in needs the user's own OAuth client.
+**Status**: Complete
 
 ## Stage 3: Subscribe and unsubscribe
 **Goal**: The card's button subscribes or unsubscribes through the YouTube Data API.
 **Success Criteria**: The card shows whether you're subscribed; the button toggles it; signed out, it
 offers to sign in; API errors (quota, expired sign-in) show plainly.
 **Tests**: API request building and response parsing; manual check once signed in.
-**Status**: Not Started
+**Status**: In Progress
