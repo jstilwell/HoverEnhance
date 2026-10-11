@@ -83,3 +83,32 @@ struct RockerGeometryTests {
         }
     }
 }
+
+struct FileMediaLayoutTests {
+    private let details = CGSize(width: 340, height: 400)
+    private let room = CGSize(width: 900, height: 1000)
+
+    @Test func wideMediaPutsTheDetailsBelow() {
+        let (layout, size) = FileMediaLayout.choose(media: CGSize(width: 1600, height: 900), details: details, room: room)
+        #expect(layout == .below)
+        #expect(size == CGSize(width: 900, height: 506))
+    }
+
+    @Test func tallMediaPutsTheDetailsBeside() {
+        let (layout, size) = FileMediaLayout.choose(media: CGSize(width: 900, height: 1600), details: details, room: room)
+        #expect(layout == .beside)
+        #expect(size.width <= room.width - details.width && size.height <= room.height)
+    }
+
+    @Test func smallMediaIsntEnlarged() {
+        let (_, size) = FileMediaLayout.choose(media: CGSize(width: 200, height: 150), details: details, room: room)
+        #expect(size == CGSize(width: 200, height: 150))
+    }
+
+    @Test func detailsTallerThanTheRoomLeaveNoRoomForMedia() {
+        // Neither way fits; the caller shows the plain card instead.
+        let (_, size) = FileMediaLayout.choose(media: CGSize(width: 300, height: 300), details: CGSize(width: 340, height: 1200),
+                                               room: room)
+        #expect(size == .zero)
+    }
+}

@@ -419,6 +419,15 @@ struct FinderSettingsView: View {
                             Text("\(Int(max(settings.finderDelay, settings.hoverDelay))) ms").monospacedDigit().frame(width: 64, alignment: .trailing)
                         }
                     }
+                    Toggle(isOn: $settings.finderMediaPreviews) {
+                        Text("Large previews of images, videos, and audio")
+                        Text("The file itself, large, with its details beside or below. Videos play; audio shows its artwork.")
+                    }
+                    Toggle(isOn: $settings.finderAutoplayAudio) {
+                        Text("Play audio right away")
+                        Text("Otherwise its play button starts it")
+                    }
+                    .disabled(!settings.finderMediaPreviews)
                     Toggle("On the desktop", isOn: $settings.finderOnDesktop)
                     Toggle(isOn: $settings.finderForFolders) {
                         Text("For folders")
@@ -510,7 +519,7 @@ struct FinderSettingsView: View {
     private func footnote(for group: FileCardField.Group) -> String? {
         switch group {
         case .card:
-            "Details come from Spotlight and Finder's own records where they can. Thumbnails, and files Spotlight hasn't indexed, are read directly, so macOS may ask once before HoverEnhance reads files in Desktop, Documents, or Downloads."
+            "Details come from Spotlight and Finder's own records where they can. Thumbnails, the tags in audio and video files, and files Spotlight hasn't indexed are read directly, so macOS may ask once before HoverEnhance reads files in Desktop, Documents, or Downloads."
         case .inUse:
             "Quitting an app is like pressing ⌘Q in it, so it can still ask to save; other processes get the polite signal the kill command sends. Only your own processes are listed."
         default:

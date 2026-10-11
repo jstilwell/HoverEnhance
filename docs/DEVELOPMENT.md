@@ -39,9 +39,11 @@ after every build (the welcome window explains how to remove and re-add the app)
   `LimitedDownloader`, which stops at the size limit, and downsampled off the main thread), videos
   via `VideoPlayback` (AVPlayer). A spinner stands in for a preview that takes a moment. A small
   click-through notch sits under the cursor and joins it to the preview (`PreviewGeometry`); moving
-  off the notch any way but onto the preview ends the hover at once. Clicking and switching apps end it too, as does scrolling anywhere
-  else. `ScrollTap` (an active event tap) hands scroll events over the notch or preview to the
-  controller and swallows the ones it uses.
+  off the notch any way but onto the preview ends the hover at once. Clicking and switching apps end
+  it too, as does scrolling anywhere else. `ScrollTap` (an active event tap) hands scroll events over
+  the notch or preview to the controller and swallows the ones it uses: on the notch, a video's
+  volume, shown on `VolumeRockerView` above the notch, whose space counts as the notch; on the video,
+  its position.
 - In Finder, `FinderItem` finds the hovered item: each one is an element with `AXFilename` and a file
   reference `AXURL`, reached from other cells of a list row or the label under an icon through the row
   or the item's group. `FileDetails` reads the card's details from Spotlight and Finder's records
@@ -51,7 +53,11 @@ after every build (the welcome window explains how to remove and re-add the app)
   `git status`, with the repository's ability to run commands switched off, or not at all when its
   config could still run one. `FileUsers` finds apps whose windows show the file (`AXDocument`) and
   processes that hold it open, map it, or work in it (`proc_listpidspath`), and quits them. The card
-  grows as slower details fill in (`CardHostingView`).
+  grows as slower details fill in (`CardHostingView`). `MediaMetadata` reads audio and video files'
+  own tags (ID3, iTunes, QuickTime) and tracks with AVFoundation, since Spotlight often hasn't. Images,
+  videos, and audio show large in `FileMediaCardView`, with the card beside or below them as
+  `FileMediaLayout` decides; songs play through `VideoPlayback` too. `Tests/HoverEnhanceTests/Fixtures`
+  holds tiny tagged media for the tests, with the commands that made them.
 - `EmbedPlayer` hosts players in a web view loaded under an HTTPS origin (YouTube needs a
   Referer), with AirPlay and WebRTC off so nothing asks for local network access. Links clicked in a
   player open in the browser.

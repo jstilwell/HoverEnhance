@@ -8,7 +8,7 @@ enum FileCardField: String, CaseIterable, Identifiable, Sendable {
     case created, modified, opened
     case whereFrom, downloadedBy
     case tags, cloud
-    case dimensions, duration, pages, camera, exposure, codecs, music
+    case music, recording, dimensions, duration, pages, camera, exposure, codecs, mediaFormat
     case archive
     case appVersion, bundleID, architectures, minimumSystem, signature
     case gitBranch, gitChanges
@@ -47,7 +47,7 @@ enum FileCardField: String, CaseIterable, Identifiable, Sendable {
         case .created, .modified, .opened: .dates
         case .whereFrom, .downloadedBy: .downloads
         case .tags, .cloud: .status
-        case .dimensions, .duration, .pages, .camera, .exposure, .codecs, .music: .media
+        case .dimensions, .duration, .pages, .camera, .exposure, .recording, .codecs, .mediaFormat, .music: .media
         case .archive: .archives
         case .appVersion, .bundleID, .architectures, .minimumSystem, .signature: .apps
         case .gitBranch, .gitChanges: .git
@@ -74,8 +74,10 @@ enum FileCardField: String, CaseIterable, Identifiable, Sendable {
         case .pages: "Pages"
         case .camera: "Camera and lens"
         case .exposure: "Exposure"
+        case .recording: "Recording details"
         case .codecs: "Codecs and bit rate"
-        case .music: "Artist and album"
+        case .mediaFormat: "Frame rate and audio format"
+        case .music: "Song details"
         case .archive: "Zip contents"
         case .appVersion: "Version"
         case .bundleID: "Bundle ID"
@@ -105,8 +107,10 @@ enum FileCardField: String, CaseIterable, Identifiable, Sendable {
         case .pages: "Of PDFs and other documents"
         case .camera: "The camera and lens a photo was taken with"
         case .exposure: "Aperture, shutter speed, ISO, and focal length"
+        case .recording: "A video's title, when it was recorded, and on what"
         case .codecs: "How audio and video are encoded, such as H.264 or AAC"
-        case .music: "Of songs and other audio"
+        case .mediaFormat: "Frame rate, HDR, and the audio's sample rate and channels"
+        case .music: "Title, artist, album, composer, genre, year, and track, from the file's own tags"
         case .archive: "How many files a zip holds and how big they are unpacked, read without unpacking it"
         case .appVersion: "Of apps and other bundles"
         case .bundleID: "Such as com.apple.Safari"

@@ -21,6 +21,8 @@ final class PreviewController {
     /// The item on screen, which decides what the scroll wheel does.
     private var showing: MediaItem?
     private var albumSteps = StepAccumulator()
+    /// The play button of a song in a large Finder preview.
+    private var audioModel: AudioPreviewModel?
     /// When the scroll wheel last acted on the preview; those scrolls never reach the page.
     private var lastScrollHandled = Date.distantPast
 
@@ -38,6 +40,7 @@ final class PreviewController {
     init() {
         scrollTap.handler = { [weak self] input in self?.scroll(input) ?? false }
         playback.onVolumeChange = { [weak self] level, muted in self?.panel.updateVolume(level: level, muted: muted) }
+        playback.onPlayingChange = { [weak self] playing in self?.audioModel?.isPlaying = playing }
         activationObserver = NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main
         ) { [weak self] _ in
@@ -143,6 +146,7 @@ final class PreviewController {
         panel.hide()
         scrollTap.isEnabled = false
         showing = nil
+        audioModel = nil
         albumSteps.reset()
         playback.stop()
         embeds.suspend()
@@ -213,6 +217,8 @@ final class PreviewController {
         let requested = target
         let counter = media.items.count > 1 ? "\(position + 1)/\(media.items.count)" : nil
         let settings = AppSettings.shared
+        /// What the scroll wheel should take the item for, when not what it is: a Finder video plays.
+        var shownAs: MediaItem?
 
         switch media.items[position] {
         case .image(let candidates):
@@ -267,9 +273,19 @@ final class PreviewController {
             if extraWait > 0 { try? await Task.sleep(for: .milliseconds(extraWait)) }
             guard !Task.isCancelled, self.target == requested else { return false }
             let options = settings.fileCard
-            let details = await Task.detached { FileDetails.load(url, options: options) }.value
+            var details = await Task.detached { FileDetails.load(url, options: options) }.value
+            // What audio and video files say in their own tags, which Spotlight may not have indexed.
+            await details.addMedia(from: url, options: options, forPreview: settings.finderMediaPreviews)
             guard !Task.isCancelled, self.target == requested else { return false }
-            let view = CardHostingView(rootView: FileCardView(card: FileCard(url: url, details: details, options: options)))
+            let card = FileCard(url: url, details: details, options: options)
+            if settings.finderMediaPreviews, let kind = FileMediaKind(details: details),
+               let large = await showLarge(kind, url: url, card: card, details: details, counter: counter, target: requested) {
+                shownAs = large
+                log.infoPrivateInRelease("preview: large \(String(describing: kind)) for \(url.path(percentEncoded: false))")
+                break
+            }
+            guard !Task.isCancelled, self.target == requested else { return false }
+            let view = CardHostingView(rootView: FileCardView(card: card))
             // The list of apps using the file fills in after the card appears.
             view.onSizeChange = { [weak self, weak view] in
                 // SwiftUI is in the middle of layout here; refit once it's done.
@@ -280,10 +296,98 @@ final class PreviewController {
             log.infoPrivateInRelease("preview: file card for \(url.path(percentEncoded: false))")
         }
         index = position
-        showing = media.items[position]
+        showing = shownAs ?? media.items[position]
         scrollTap.isEnabled = true
         prefetch(position + 1)
         return true
+    }
+
+    /// A Finder image, video, or audio file large, with its card beside or below it, whichever leaves the
+    /// media larger. Returns what the scroll wheel should take it for, or nil to show the plain card,
+    /// as when there isn't room for the media to be worth it.
+    private func showLarge(_ kind: FileMediaKind, url: URL, card: FileCard, details: FileDetails, counter: String?,
+                           target requested: Target) async -> MediaItem? {
+        // Measured on a card of its own, so the one shown doesn't start loading before it's on screen.
+        let measure = FileCard(url: url, details: details, options: card.options)
+        let detailsSize = NSHostingView(rootView: FileCardView(card: measure, showsImage: false, width: FileMediaCardView.detailsWidth)).fittingSize
+        let room = panel.room(at: requested.anchor)
+        let natural: CGSize
+        switch kind {
+        case .image:
+            guard let size = await Task.detached(operation: { LocalImage.pixelSize(of: url) }).value else { return nil }
+            natural = size
+        case .video:
+            guard let size = await playback.start(url, key: Self.playbackKey(url)) else { return nil }
+            // Small videos are hard to watch at 1:1, as on the web.
+            let scale = max(1, 720 / max(size.width, size.height))
+            natural = CGSize(width: size.width * scale, height: size.height * scale)
+        case .audio:
+            natural = FileMediaCardView.artworkSize
+        }
+        guard !Task.isCancelled, target == requested else { return nil }
+        let (layout, mediaSize) = FileMediaLayout.choose(media: natural, details: detailsSize, room: room)
+        guard mediaSize.width >= 120, mediaSize.height >= 90 else {
+            playback.stop()
+            return nil
+        }
+
+        let content: FileMediaCardView.Content
+        switch kind {
+        case .image:
+            let scale = ScreenSpace.screen(containing: requested.anchor)?.backingScaleFactor ?? 2
+            let pixels = Int(max(mediaSize.width, mediaSize.height) * scale)
+            guard let image = await Task.detached(operation: { LocalImage.load(url, maxPixelSize: pixels) }).value,
+                  !Task.isCancelled, target == requested else { return nil }
+            content = .image(image)
+        case .video:
+            guard let player = playback.player else { return nil }
+            content = .video(player)
+        case .audio:
+            let model = AudioPreviewModel { [weak self] in self?.toggleAudio(url) }
+            audioModel = model
+            content = .audio(artwork: details.media?.artwork.flatMap(NSImage.init(data:)), model: model)
+        }
+        let view = CardHostingView(rootView: FileMediaCardView(card: card, content: content, layout: layout, mediaSize: mediaSize))
+        // The list of apps using the file fills in after the card appears.
+        view.onSizeChange = { [weak self, weak view] in
+            Task { @MainActor in if let self, let view { self.panel.refit(view) } }
+        }
+        if kind != .video { playback.stop() }
+        panel.show(view, counter: counter, anchor: requested.anchor)
+
+        switch kind {
+        case .video:
+            if let volume = playback.volume { panel.showVolume(level: volume.level, muted: volume.muted) }
+            return .video(url, size: nil)
+        case .audio where AppSettings.shared.finderAutoplayAudio:
+            return await startAudio(url) ? .video(url, size: nil) : .file(url)
+        case .audio, .image:
+            return .file(url)
+        }
+    }
+
+    /// The play button of a song in a large preview: starts it, or pauses and resumes it.
+    private func toggleAudio(_ url: URL) {
+        if let player = playback.player {
+            if player.timeControlStatus == .paused { player.play() } else { player.pause() }
+            return
+        }
+        Task {
+            // Now it plays, the scroll wheel acts on it as on a video.
+            if await startAudio(url) { showing = .video(url, size: nil) }
+        }
+    }
+
+    /// Plays a song in a large preview, with the volume rocker beside the notch. Returns whether it started.
+    private func startAudio(_ url: URL) async -> Bool {
+        guard await playback.start(url, key: Self.playbackKey(url), audioOnly: true) != nil, let volume = playback.volume else { return false }
+        panel.showVolume(level: volume.level, muted: volume.muted)
+        return true
+    }
+
+    /// Finder files resume where they left off, like videos online.
+    private static func playbackKey(_ url: URL) -> String {
+        "file:" + url.path(percentEncoded: false)
     }
 
     /// The too-large card's Load Anyway: loads the image at `position` whatever its size.

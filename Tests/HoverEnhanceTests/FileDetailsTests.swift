@@ -71,7 +71,10 @@ struct FileDetailsTests {
         let scratch = try Scratch()
         let url = try scratch.file("notes.txt")
         let details = FileDetails.load(url, options: FileCardOptions(hidden: Set(FileCardField.allCases)))
-        #expect(details == FileDetails())
+        // Only the file's type is read regardless, since it decides how the file is previewed.
+        var expected = FileDetails()
+        expected.contentType = details.contentType
+        #expect(details == expected)
         #expect(details.rows(pathStyle: .full).isEmpty)
 
         let datesOnly = FileDetails.load(url, options: FileCardOptions(hidden: [.kind, .size]))

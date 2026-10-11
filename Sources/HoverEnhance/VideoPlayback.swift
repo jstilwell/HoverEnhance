@@ -16,6 +16,9 @@ final class VideoPlayback {
     /// Called on the main thread when the player's volume or mute changes, by scrolling or its controls.
     var onVolumeChange: (@MainActor (_ level: Float, _ muted: Bool) -> Void)?
 
+    /// Called on the main thread when playback starts or stops, as at the end of a song.
+    var onPlayingChange: (@MainActor (_ playing: Bool) -> Void)?
+
     /// The player's volume and mute, while there's a player.
     var volume: (level: Float, muted: Bool)? {
         player.map { ($0.volume, $0.isMuted) }
@@ -23,14 +26,16 @@ final class VideoPlayback {
 
     /// Starts `url` and waits until it has a frame to show. Returns the video's size, or nil if it
     /// failed, timed out, or was replaced. `key` identifies the video for resuming.
-    func start(_ url: URL, key: String) async -> CGSize? {
+    /// `audioOnly` plays a file with no picture: it's ready without a frame, starts with sound (it was
+    /// asked for), and doesn't loop, which is for videos.
+    func start(_ url: URL, key: String, audioOnly: Bool = false) async -> CGSize? {
         stop()
         let item = AVPlayerItem(url: url)
         let player = AVPlayer(playerItem: item)
         // AirPlay device discovery would make macOS ask for local network access.
         player.allowsExternalPlayback = false
         let settings = AppSettings.shared
-        player.isMuted = settings.videosStartMuted
+        player.isMuted = audioOnly ? false : settings.videosStartMuted
         player.volume = Float(settings.videoVolume)
         self.player = player
         self.key = key
@@ -51,8 +56,12 @@ final class VideoPlayback {
                     self?.onVolumeChange?(level, muted)
                 }
             },
+            player.observe(\.timeControlStatus) { [weak self] player, _ in
+                let playing = player.timeControlStatus != .paused
+                Task { @MainActor in self?.onPlayingChange?(playing) }
+            },
         ]
-        if settings.loopVideos {
+        if settings.loopVideos, !audioOnly {
             loopObserver = NotificationCenter.default.addObserver(
                 forName: AVPlayerItem.didPlayToEndTimeNotification, object: item, queue: .main
             ) { [weak player] _ in
@@ -64,7 +73,7 @@ final class VideoPlayback {
         let deadline = ContinuousClock.now + .seconds(10)
         while ContinuousClock.now < deadline, item.status != .failed {
             guard !Task.isCancelled, self.player === player else { return nil }
-            if item.status == .readyToPlay, item.presentationSize != .zero {
+            if item.status == .readyToPlay, audioOnly || item.presentationSize != .zero {
                 if settings.resumeVideos, let seconds = positions[key] {
                     log.infoPrivateInRelease("resuming \(key) at \(String(format: "%.1f", seconds))s")
                     await player.seek(to: CMTime(seconds: seconds, preferredTimescale: 600))
