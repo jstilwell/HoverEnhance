@@ -22,7 +22,7 @@ struct FileUser: Sendable, Equatable, Identifiable {
 
     let pid: pid_t
     let name: String
-    /// The executable, for its icon when it isn't an app.
+    /// The executable's path.
     let executable: String?
     let use: Use
 
@@ -112,11 +112,34 @@ enum FileUsers {
         return (stat.vst_dev, stat.vst_ino)
     }
 
-    /// An app's name, or a command's.
+    /// An app's name, or the name a command was started under, which is what `ps` shows: Claude
+    /// Code's executable is named for its version ("2.1.296"), but it runs as "claude".
     static func name(of pid: pid_t) -> String {
-        NSRunningApplication(processIdentifier: pid)?.localizedName
-            ?? executable(of: pid).map { URL(filePath: $0).lastPathComponent }
-            ?? "Process \(pid)"
+        let app = NSRunningApplication(processIdentifier: pid)
+        if app?.bundleURL != nil, let name = app?.localizedName { return name }
+        return commandName(of: pid) ?? app?.localizedName ?? executable(of: pid).map { URL(filePath: $0).lastPathComponent } ?? "Process \(pid)"
+    }
+
+    /// The process's first argument, from the kernel's copy of its arguments: the argument count,
+    /// the executable's path, padding, then the arguments themselves.
+    static func commandName(of pid: pid_t) -> String? {
+        var request = [CTL_KERN, KERN_PROCARGS2, pid]
+        var size = 0
+        guard sysctl(&request, 3, nil, &size, nil, 0) == 0, size > 4 else { return nil }
+        var buffer = [UInt8](repeating: 0, count: size)
+        guard sysctl(&request, 3, &buffer, &size, nil, 0) == 0 else { return nil }
+        var index = 4
+        while index < size, buffer[index] != 0 { index += 1 }
+        while index < size, buffer[index] == 0 { index += 1 }
+        let start = index
+        while index < size, buffer[index] != 0 { index += 1 }
+        guard index > start else { return nil }
+        var name = String(decoding: buffer[start..<index], as: UTF8.self)
+        // Login shells start as "-zsh", or "-/bin/zsh".
+        if name.hasPrefix("-") { name.removeFirst() }
+        // A path names its program by the last part; a title a process gave itself ("npm exec …") stays whole.
+        if name.hasPrefix("/") { name = URL(filePath: name).lastPathComponent }
+        return name.isEmpty ? nil : name
     }
 
     static func executable(of pid: pid_t) -> String? {
