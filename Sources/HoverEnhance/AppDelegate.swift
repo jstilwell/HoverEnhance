@@ -1,7 +1,7 @@
 import AppKit
 import OSLog
 
-private let log = Logger(subsystem: Bundle.main.bundleIdentifier ?? "HoverEnhance", category: "hover")
+let log = Logger(subsystem: Bundle.main.bundleIdentifier ?? "HoverEnhance", category: "hover")
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
@@ -39,7 +39,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         monitor.onResult = { [weak self] result in self?.handle(result) }
         monitor.onMouseMoved = { [weak self] point in self?.preview.mouseMoved(to: point) }
-        monitor.onScroll = { [weak self] in self?.preview.reset() }
+        monitor.onScroll = { [weak self] in self?.preview.scrolled() }
         monitor.onClick = { [weak self] in self?.preview.dismiss() }
         monitor.start()
 

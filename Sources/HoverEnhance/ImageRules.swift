@@ -1,21 +1,5 @@
 import Foundation
 
-/// Decides what to preview for a hover result: full-size image URLs, best first.
-enum ImageResolver {
-    static func candidates(for info: HoverInfo) -> [URL] {
-        var urls: [URL] = []
-        // A link's target is usually the full image, so it outranks the thumbnail being shown.
-        if let link = info.linkURL {
-            urls += ImageRules.candidates(forLink: link)
-        }
-        if let image = info.imageURL, ImageRules.isFetchable(image) {
-            urls += ImageRules.fullSize(of: image) + [image]
-        }
-        var seen = Set<URL>()
-        return urls.filter { seen.insert($0).inserted }
-    }
-}
-
 /// Knowledge of where sites keep their full-size images.
 enum ImageRules {
     static let imageExtensions: Set<String> = [

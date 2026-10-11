@@ -71,7 +71,7 @@ struct ImageRulesTests {
     }
 }
 
-struct ImageResolverTests {
+struct ImageCandidateTests {
     private func info(link: String? = nil, image: String? = nil) -> HoverInfo {
         var info = HoverInfo(pid: 1)
         info.linkURL = link.flatMap(URL.init(string:))
@@ -80,7 +80,7 @@ struct ImageResolverTests {
     }
 
     @Test func linkTargetOutranksThumbnailAndOriginalComesLast() {
-        let candidates = ImageResolver.candidates(for: info(
+        let candidates = MediaResolver.imageCandidates(for: info(
             link: "https://i.redd.it/q8z5t2v7n4ma1.jpeg",
             image: "https://preview.redd.it/q8z5t2v7n4ma1.jpeg?width=640&s=abc"
         ))
@@ -91,13 +91,13 @@ struct ImageResolverTests {
     }
 
     @Test func plainImageIsItsOwnCandidate() {
-        let candidates = ImageResolver.candidates(for: info(image: "https://example.com/a.png"))
+        let candidates = MediaResolver.imageCandidates(for: info(image: "https://example.com/a.png"))
         #expect(candidates.map(\.absoluteString) == ["https://example.com/a.png"])
     }
 
     @Test func nothingToPreview() {
-        #expect(ImageResolver.candidates(for: info(link: "https://example.com/about")).isEmpty)
-        #expect(ImageResolver.candidates(for: info(image: "blob:https://example.com/1234")).isEmpty)
-        #expect(ImageResolver.candidates(for: info()).isEmpty)
+        #expect(MediaResolver.imageCandidates(for: info(link: "https://example.com/about")).isEmpty)
+        #expect(MediaResolver.imageCandidates(for: info(image: "blob:https://example.com/1234")).isEmpty)
+        #expect(MediaResolver.imageCandidates(for: info()).isEmpty)
     }
 }
