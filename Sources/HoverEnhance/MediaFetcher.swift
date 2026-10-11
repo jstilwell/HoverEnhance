@@ -35,6 +35,8 @@ actor MediaFetcher {
         case .youtubeChannel(let ref):
             lookedUp = await youtubeChannel(ref).map { Media(items: [.channel($0)]) }
         }
+        // A lookup cut short, as when the cursor moves on, is no answer to keep.
+        guard !Task.isCancelled else { return nil }
         let media = lookedUp?.webOnly()
         looked[source] = media.map { ($0, Date()) }
         return media
@@ -64,11 +66,12 @@ actor MediaFetcher {
     }
 
     private func instagram(code: String) async -> Media? {
-        if let page = await data(at: SiteAPIs.instagramEmbedURL(code: code)),
-           let media = SiteAPIs.instagram(embedPage: String(decoding: page, as: UTF8.self)) {
+        guard let page = await data(at: SiteAPIs.instagramEmbedURL(code: code)) else { return nil }
+        if let media = SiteAPIs.instagram(embedPage: String(decoding: page, as: UTF8.self)) {
             return media
         }
-        // Embedding is off for this post: show its image (a reel's cover) instead.
+        // A lone photo, whose embed page leaves its details out, or a post with embedding off: its
+        // image (a reel's cover). Not when the page didn't arrive, or an album would stay one photo.
         return Media(items: [.image([SiteAPIs.instagramImageURL(code: code)])])
     }
 
