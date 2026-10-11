@@ -252,7 +252,7 @@ enum MenuBarIcon {
         // MenuBarIcon.png, rendered from design/icons/menubar.svg; outside the app bundle (tests,
         // `swift run`) a system symbol stands in.
         let symbol: NSImage
-        if let icon = NSImage(named: "MenuBarIcon")?.copy() as? NSImage {
+        if let icon = Bundle.main.image(forResource: "MenuBarIcon") {
             icon.size = NSSize(width: 18, height: 18)
             symbol = icon
         } else {

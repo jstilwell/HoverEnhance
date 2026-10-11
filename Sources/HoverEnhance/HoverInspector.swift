@@ -54,6 +54,8 @@ final class HoverInspector: @unchecked Sendable {
     /// Asks Chromium and Electron apps to build their web-content accessibility tree, which they
     /// otherwise only do when they detect assistive technology.
     func prepare(pid: pid_t) {
+        // Never this app: see `OwnWindows`.
+        guard pid != ownPID else { return }
         queue.async { _ = self.prepareIfNeeded(pid: pid) }
     }
 
@@ -206,5 +208,27 @@ enum WebEngine {
             return
         }
         return nil
+    }
+}
+
+/// Whether one of this app's windows is in front at a point: the preview, its notch, a card, the HUD,
+/// Settings, About, the welcome window, or the menu bar menu. Click-through windows count, since
+/// accessibility hit-tests find them too.
+enum OwnWindows {
+    static func areInFront(at point: CGPoint) -> Bool {
+        let windows = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]] ?? []
+        return areInFront(at: point, windows: windows, ownPID: ProcessInfo.processInfo.processIdentifier)
+    }
+
+    /// `windows` is a window list front to back, as `CGWindowListCopyWindowInfo` gives it.
+    static func areInFront(at point: CGPoint, windows: [[String: Any]], ownPID: pid_t) -> Bool {
+        for window in windows {
+            guard let bounds = (window[kCGWindowBounds as String] as? NSDictionary).flatMap({ CGRect(dictionaryRepresentation: $0 as CFDictionary) }),
+                  bounds.contains(point) else { continue }
+            if (window[kCGWindowOwnerPID as String] as? Int).map(pid_t.init) == ownPID { return true }
+            // Another app's window that can be seen ends the search; a fully transparent one doesn't.
+            if (window[kCGWindowAlpha as String] as? Double ?? 1) > 0 { return false }
+        }
+        return false
     }
 }
