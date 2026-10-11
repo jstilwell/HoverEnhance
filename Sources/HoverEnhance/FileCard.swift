@@ -1,5 +1,6 @@
 import AppKit
 import QuickLookThumbnailing
+import UniformTypeIdentifiers
 
 /// What a file card shows about one file or folder.
 @MainActor @Observable
@@ -16,6 +17,10 @@ final class FileCard {
     @ObservationIgnored private var copyGeneration = 0
     /// A Quick Look thumbnail, which replaces the icon once it's made.
     private(set) var thumbnail: NSImage?
+    /// Who signed an app; nil for anything else.
+    private(set) var signature: FileDetails.Lookup<String>?
+    /// Uncommitted changes in a Git repository; nil for anything else.
+    private(set) var gitChanges: FileDetails.Lookup<Int>?
     /// Who's using it; nil while looking.
     private(set) var users: [FileUser]?
     private(set) var userIcons: [pid_t: NSImage] = [:]
@@ -38,6 +43,20 @@ final class FileCard {
         path = Self.path(of: url)
         name = FileManager.default.displayName(atPath: path)
         icon = NSWorkspace.shared.icon(forFile: path)
+        if details.app != nil, options.shows(.signature) { signature = .loading }
+        if details.git != nil, options.shows(.gitChanges) { gitChanges = .loading }
+    }
+
+    /// The signature and Git changes, which take longer than the rest.
+    func loadSlowDetails() async {
+        if signature == .loading {
+            let url = url
+            let found = await Task.detached { AppBundleInfo.signature(of: url) }.value
+            signature = found.map { .found($0) } ?? .failed
+        }
+        if gitChanges == .loading {
+            gitChanges = await GitRepository.changeCount(in: url).map { .found($0) } ?? .failed
+        }
     }
 
     nonisolated static func path(of url: URL) -> String {
@@ -52,7 +71,7 @@ final class FileCard {
         return [details.kind, size].compactMap { $0 }.joined(separator: " · ")
     }
 
-    var rows: [DetailRow] { details.rows(pathStyle: options.pathStyle) }
+    var rows: [DetailRow] { details.rows(pathStyle: options.pathStyle, signature: signature, changes: gitChanges) }
 
     static let pathID = "path"
     static let linkTargetID = "linkTarget"
@@ -79,8 +98,10 @@ final class FileCard {
         guard options.shows(.users), users == nil else { return }
         let found = await FileUsers.find(url)
         for user in found {
-            userIcons[user.pid] = NSRunningApplication(processIdentifier: user.pid)?.icon
-                ?? user.executable.map(NSWorkspace.shared.icon(forFile:))
+            // Commands get the Unix executable icon. Their own file's icon depends on its name, and
+            // Claude Code's, named for its version ("2.1.296"), looks like an unknown document.
+            let app = NSRunningApplication(processIdentifier: user.pid)
+            userIcons[user.pid] = app?.bundleURL != nil ? app?.icon : NSWorkspace.shared.icon(for: .unixExecutable)
         }
         users = found
     }

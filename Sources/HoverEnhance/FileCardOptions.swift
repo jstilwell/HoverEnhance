@@ -10,11 +10,13 @@ enum FileCardField: String, CaseIterable, Identifiable, Sendable {
     case tags, cloud
     case dimensions, duration, pages, camera, exposure, codecs, music
     case archive
+    case appVersion, bundleID, architectures, minimumSystem, signature
+    case gitBranch, gitChanges
     case users
 
     /// Sections of the card, and of its settings.
     enum Group: CaseIterable, Identifiable, Sendable {
-        case card, path, dates, downloads, status, media, archives, inUse
+        case card, path, dates, downloads, status, media, archives, apps, git, inUse
 
         var id: Self { self }
 
@@ -27,6 +29,8 @@ enum FileCardField: String, CaseIterable, Identifiable, Sendable {
             case .status: "Tags and iCloud"
             case .media: "Images, audio, and video"
             case .archives: "Archives"
+            case .apps: "Apps"
+            case .git: "Git repositories"
             case .inUse: "In use"
             }
         }
@@ -45,6 +49,8 @@ enum FileCardField: String, CaseIterable, Identifiable, Sendable {
         case .tags, .cloud: .status
         case .dimensions, .duration, .pages, .camera, .exposure, .codecs, .music: .media
         case .archive: .archives
+        case .appVersion, .bundleID, .architectures, .minimumSystem, .signature: .apps
+        case .gitBranch, .gitChanges: .git
         case .users: .inUse
         }
     }
@@ -71,6 +77,13 @@ enum FileCardField: String, CaseIterable, Identifiable, Sendable {
         case .codecs: "Codecs and bit rate"
         case .music: "Artist and album"
         case .archive: "Zip contents"
+        case .appVersion: "Version"
+        case .bundleID: "Bundle ID"
+        case .architectures: "Architectures"
+        case .minimumSystem: "Minimum macOS"
+        case .signature: "Code signature"
+        case .gitBranch: "Branch and remote"
+        case .gitChanges: "Uncommitted changes"
         case .users: "Apps using it"
         }
     }
@@ -95,6 +108,13 @@ enum FileCardField: String, CaseIterable, Identifiable, Sendable {
         case .codecs: "How audio and video are encoded, such as H.264 or AAC"
         case .music: "Of songs and other audio"
         case .archive: "How many files a zip holds and how big they are unpacked, read without unpacking it"
+        case .appVersion: "Of apps and other bundles"
+        case .bundleID: "Such as com.apple.Safari"
+        case .architectures: "Whether it runs natively on Apple silicon, Intel, or both"
+        case .minimumSystem: "The oldest macOS it runs on"
+        case .signature: "Apple, the Mac App Store, a developer, or no one"
+        case .gitBranch: "Of folders at the top of a repository; the remote opens in the browser"
+        case .gitChanges: "How many files differ from the last commit; this runs Git, which takes a moment in big repositories"
         case .users: "Apps with it open in a window, and processes holding it open or working in the folder"
         case .created, .modified: nil
         }

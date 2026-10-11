@@ -41,6 +41,7 @@ struct FileCardView: View {
         .frame(width: 400, alignment: .leading)
         .task { await card.loadUsers() }
         .task { await card.loadThumbnail() }
+        .task { await card.loadSlowDetails() }
     }
 
     private static func linkCaption(_ target: FileDetails.LinkTarget) -> String {
