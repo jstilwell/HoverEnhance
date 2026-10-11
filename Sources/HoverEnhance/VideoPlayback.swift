@@ -9,6 +9,9 @@ final class VideoPlayback {
     /// Seconds into each video, by key, for videos closed partway through.
     private var positions: [String: Double] = [:]
     private var loopObserver: NSObjectProtocol?
+    /// Where an in-flight scrub is headed, so quick scrolls add up instead of restarting from a
+    /// position that hasn't caught up yet.
+    private var scrubTarget: Double?
     private var settingObservations: [NSKeyValueObservation] = []
 
     /// Starts `url` and waits until it has a frame to show. Returns the video's size, or nil if it
@@ -65,6 +68,44 @@ final class VideoPlayback {
         return nil
     }
 
+    /// Moves playback by `seconds`. Returns the new position for display, like "1:23 / 2:45".
+    func scrub(by seconds: Double) -> String? {
+        guard let player, let item = player.currentItem else { return nil }
+        let duration = item.duration.seconds
+        var target = (scrubTarget ?? player.currentTime().seconds) + seconds
+        target = duration.isFinite ? min(max(target, 0), max(duration - 0.1, 0)) : max(target, 0)
+        scrubTarget = target
+        let destination = target
+        let tolerance = CMTime(seconds: 0.25, preferredTimescale: 600)
+        player.seek(to: CMTime(seconds: destination, preferredTimescale: 600), toleranceBefore: tolerance, toleranceAfter: tolerance) { [weak self] _ in
+            Task { @MainActor [self] in
+                if self?.scrubTarget == destination { self?.scrubTarget = nil }
+            }
+        }
+        return duration.isFinite ? "\(Self.clock(target)) / \(Self.clock(duration))" : Self.clock(target)
+    }
+
+    /// Changes the volume by `amount` (of 1). Scrolling up from muted unmutes, starting quiet.
+    /// Returns the new volume for display.
+    func changeVolume(by amount: Double) -> String? {
+        guard let player else { return nil }
+        if player.isMuted {
+            guard amount > 0 else { return "Muted" }
+            player.volume = Float(amount)
+            player.isMuted = false
+        } else {
+            player.volume = Float(min(max(Double(player.volume) + amount, 0), 1))
+        }
+        return "Volume \(Int((player.volume * 100).rounded()))%"
+    }
+
+    private static func clock(_ seconds: Double) -> String {
+        let total = Int(seconds.rounded(.down))
+        return total >= 3600
+            ? String(format: "%d:%02d:%02d", total / 3600, total / 60 % 60, total % 60)
+            : String(format: "%d:%02d", total / 60, total % 60)
+    }
+
     /// Pauses, remembers the position, and lets the player go.
     func stop() {
         guard let player, let key else { return }
@@ -75,6 +116,7 @@ final class VideoPlayback {
         positions[key] = partway ? time : nil
 
         player.pause()
+        scrubTarget = nil
         settingObservations = []
         if let loopObserver { NotificationCenter.default.removeObserver(loopObserver) }
         loopObserver = nil

@@ -11,11 +11,21 @@ final class PreviewPanel {
         contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: true
     )
     private let container = NSView()
+    /// Clips a zoomed image to the preview.
+    private let imageClip = NSView()
     private let imageView = NSImageView()
     private let playerView = AVPlayerView()
     private let badge = NSView()
     private let badgeLabel = NSTextField(labelWithString: "")
+    /// Briefly shows what the scroll wheel just did: zoom, volume, or position.
+    private let readout = NSView()
+    private let readoutLabel = NSTextField(labelWithString: "")
+    private var readoutGeneration = 0
     private var content: NSView?
+    private var zoom: CGFloat = 1
+    /// The point of the image that stays put while zooming, as fractions of it from the top left.
+    private var focus = CGPoint(x: 0.5, y: 0.5)
+    private let maximumZoom: CGFloat = 8
     /// Click-through, so the link under the cursor can still be clicked.
     private let notch = NSPanel(
         contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: true
@@ -51,6 +61,9 @@ final class PreviewPanel {
 
         imageView.imageScaling = .scaleProportionallyUpOrDown
         imageView.animates = true
+        imageClip.wantsLayer = true
+        imageClip.layer?.masksToBounds = true
+        imageClip.addSubview(imageView)
 
         playerView.controlsStyle = .floating
         playerView.showsFullScreenToggleButton = false
@@ -63,12 +76,26 @@ final class PreviewPanel {
         badgeLabel.textColor = .white
         badge.addSubview(badgeLabel)
         container.addSubview(badge)
+
+        readout.wantsLayer = true
+        readout.layer?.backgroundColor = NSColor(white: 0, alpha: 0.65).cgColor
+        readout.layer?.cornerRadius = 8
+        readout.isHidden = true
+        readoutLabel.font = .monospacedDigitSystemFont(ofSize: 13, weight: .semibold)
+        readoutLabel.textColor = .white
+        readout.addSubview(readoutLabel)
+        container.addSubview(readout)
     }
 
     /// Whether a global top-left-origin point is on the preview or its notch.
     func covers(_ point: CGPoint) -> Bool {
         guard panel.isVisible else { return false }
         return ScreenSpace.flip(panel.frame).contains(point) || ScreenSpace.flip(notch.frame).contains(point)
+    }
+
+    /// Whether a global top-left-origin point is on the preview itself.
+    func isOnPreview(_ point: CGPoint) -> Bool {
+        panel.isVisible && ScreenSpace.flip(panel.frame).contains(point)
     }
 
     /// The notch a preview for a cursor at `anchor` (global, top-left origin) will have, for use
@@ -78,11 +105,54 @@ final class PreviewPanel {
     }
 
     /// `anchor` is where the cursor rested, in global top-left-origin coordinates. `counter` is the
-    /// "2/5" album position, or nil for a single item.
-    func show(_ image: LoadedImage, counter: String?, anchor: CGPoint) {
+    /// "2/5" album position, or nil for a single item. `focus` is the part of the image to zoom in
+    /// on, as fractions from its top left.
+    func show(_ image: LoadedImage, counter: String?, anchor: CGPoint, focus: CGPoint = CGPoint(x: 0.5, y: 0.5)) {
         playerView.player = nil
         imageView.image = image.image
-        present(imageView, naturalSize: image.pixelSize, counter: counter, interactive: false, anchor: anchor)
+        zoom = 1
+        self.focus = focus
+        present(imageClip, naturalSize: image.pixelSize, counter: counter, interactive: false, anchor: anchor)
+        layoutImage()
+    }
+
+    /// Zooms a shown image in (factor > 1) or out, keeping the focus point in place.
+    func zoom(by factor: CGFloat) {
+        guard content === imageClip, panel.isVisible else { return }
+        zoom = min(max(zoom * factor, 1), maximumZoom)
+        layoutImage()
+        flash("\(Int((zoom * 100).rounded()))%")
+    }
+
+    /// Over a zoomed image, the part shown follows the cursor, like a loupe.
+    func pan(toward point: CGPoint) {
+        guard content === imageClip, zoom > 1, panel.isVisible else { return }
+        let area = ScreenSpace.flip(panel.frame).insetBy(dx: padding, dy: padding)
+        focus = CGPoint(x: min(max((point.x - area.minX) / area.width, 0), 1),
+                        y: min(max((point.y - area.minY) / area.height, 0), 1))
+        layoutImage()
+    }
+
+    /// Shows `text` over the bottom of the preview for a moment.
+    func flash(_ text: String) {
+        readoutLabel.stringValue = text
+        readoutLabel.sizeToFit()
+        let size = CGSize(width: readoutLabel.frame.width + 20, height: readoutLabel.frame.height + 10)
+        readout.frame = CGRect(x: (container.bounds.width - size.width) / 2, y: padding + 14, width: size.width, height: size.height)
+        readoutLabel.setFrameOrigin(CGPoint(x: 10, y: 5))
+        readout.isHidden = false
+        readout.alphaValue = 1
+        readoutGeneration += 1
+        let generation = readoutGeneration
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(1))
+            guard let self, generation == readoutGeneration else { return }
+            NSAnimationContext.runAnimationGroup({ $0.duration = 0.25; readout.animator().alphaValue = 0 }, completionHandler: nil)
+        }
+    }
+
+    private func layoutImage() {
+        imageView.frame = PreviewGeometry.zoomedImageFrame(in: imageClip.bounds, zoom: zoom, focus: focus)
     }
 
     func show(_ player: AVPlayer, videoSize: CGSize, counter: String?, anchor: CGPoint) {
@@ -134,6 +204,7 @@ final class PreviewPanel {
             content = view
         }
         view.frame = container.bounds.insetBy(dx: padding, dy: padding)
+        readout.isHidden = true
         layoutBadge(counter)
         panel.ignoresMouseEvents = !interactive
 

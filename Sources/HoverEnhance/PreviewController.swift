@@ -17,6 +17,11 @@ final class PreviewController {
     /// The album position being shown, or being loaded after a scroll.
     private var index = 0
     private var task: Task<Void, Never>?
+    /// The item on screen, which decides what the scroll wheel does.
+    private var showing: MediaItem?
+    private var albumSteps = StepAccumulator()
+    /// When the scroll wheel last acted on the preview; those scrolls never reach the page.
+    private var lastScrollHandled = Date.distantPast
 
     private struct Target: Equatable {
         let source: MediaSource
@@ -24,11 +29,13 @@ final class PreviewController {
         let anchor: CGPoint
         /// The notch under the cursor. Leaving it any way but onto the preview ends the hover.
         let notch: CGRect
+        /// The hovered element, for zooming into the part of an image the cursor is on.
+        let element: CGRect?
         let page: URL?
     }
 
     init() {
-        scrollTap.onStep = { [weak self] step in self?.step(by: step) }
+        scrollTap.handler = { [weak self] input in self?.scroll(input) ?? false }
         activationObserver = NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main
         ) { [weak self] _ in
@@ -55,7 +62,7 @@ final class PreviewController {
 
         reset(because: "new target")
         let elementFrame = info.imageFrame ?? info.frame
-        let newTarget = Target(source: source, anchor: cursor, notch: panel.notchFrame(at: cursor), page: info.pageURL)
+        let newTarget = Target(source: source, anchor: cursor, notch: panel.notchFrame(at: cursor), element: elementFrame, page: info.pageURL)
         target = newTarget
         task = Task {
             guard let fetched = await fetcher.media(for: source), let media = AppSettings.shared.filter.apply(to: fetched),
@@ -68,13 +75,18 @@ final class PreviewController {
 
     /// Ends the hover the moment the cursor leaves the notch, unless it moves onto the preview.
     func mouseMoved(to point: CGPoint) {
-        guard let target, !target.notch.contains(point), !panel.covers(point) else { return }
-        reset(because: "left the notch")
+        guard let target else { return }
+        if panel.isOnPreview(point) {
+            panel.pan(toward: point)
+        } else if !target.notch.contains(point) && !panel.covers(point) {
+            reset(because: "left the notch")
+        }
     }
 
-    /// Content moved under the cursor. While an album is up, the scroll tap has the wheel instead.
+    /// Content moved under the cursor. Scrolls the preview took never get here, but in case the
+    /// system reports them anyway, recent ones are ignored.
     func scrolled() {
-        if !scrollTap.isEnabled { reset(because: "scrolled") }
+        if Date().timeIntervalSince(lastScrollHandled) > 0.3 { reset(because: "scrolled") }
     }
 
     /// Hides the preview but remembers the target, so it stays hidden until the cursor moves on.
@@ -98,8 +110,51 @@ final class PreviewController {
         // Take the windows down first; stopping playback can take a moment.
         panel.hide()
         scrollTap.isEnabled = false
+        showing = nil
+        albumSteps.reset()
         playback.stop()
         embeds.suspend()
+    }
+
+    /// The scroll wheel with the cursor on the notch or the preview acts on the preview. Returns
+    /// whether it did, in which case the page underneath doesn't scroll.
+    private func scroll(_ input: ScrollInput) -> Bool {
+        guard let target, let media, let showing,
+              target.notch.contains(input.location) || panel.covers(input.location) else { return false }
+        let handled = act(on: input, showing: showing, isAlbum: media.items.count > 1)
+        if handled { lastScrollHandled = Date() }
+        return handled
+    }
+
+    private func act(on input: ScrollInput, showing: MediaItem, isAlbum: Bool) -> Bool {
+        let settings = AppSettings.shared
+        if isAlbum {
+            // Momentum is swallowed but ignored, so a flick doesn't race through the album.
+            guard !input.isMomentum else { return true }
+            let steps = albumSteps.steps(input.forward, precise: input.isPrecise)
+            if steps != 0 { step(by: steps) }
+            return true
+        }
+        switch showing {
+        case .image:
+            guard settings.imageScroll == .zoom else { return false }
+            guard !input.isMomentum, input.up != 0 else { return true }
+            panel.zoom(by: input.isPrecise ? exp(input.up * 0.01) : (input.up > 0 ? 1.25 : 0.8))
+        case .video:
+            guard !input.isMomentum else { return true }
+            let readout = switch settings.videoScroll {
+            case .scrub:
+                // A wheel notch is 5 seconds; trackpad travel is a tenth of a second per point.
+                input.forward == 0 ? nil : playback.scrub(by: input.isPrecise ? input.forward * 0.1 : (input.forward > 0 ? 5 : -5))
+            case .volume:
+                input.up == 0 ? nil : playback.changeVolume(by: input.isPrecise ? input.up * 0.005 : (input.up > 0 ? 0.05 : -0.05))
+            }
+            if let readout { panel.flash(readout) }
+        case .embed:
+            // On the player, scrolling belongs to it; on the notch, it mustn't move the page away.
+            return !panel.isOnPreview(input.location)
+        }
+        return true
     }
 
     private func step(by delta: Int) {
@@ -124,7 +179,7 @@ final class PreviewController {
             let enlargement = AppSettings.shared.minimumEnlargement
             if let shown, image.pixelSize.width <= shown.width * enlargement, image.pixelSize.height <= shown.height * enlargement { return }
             playback.stop()
-            panel.show(image, counter: counter, anchor: requested.anchor)
+            panel.show(image, counter: counter, anchor: requested.anchor, focus: Self.focus(of: requested.anchor, in: requested.element))
             log.info("preview \(position + 1)/\(media.items.count): \(image.url.absoluteString, privacy: .public)")
 
         case .video(let url, let reportedSize):
@@ -143,8 +198,17 @@ final class PreviewController {
             logPlaybackState(of: view, after: .seconds(5))
         }
         index = position
-        scrollTap.isEnabled = media.items.count > 1
+        showing = media.items[position]
+        scrollTap.isEnabled = true
         prefetch(position + 1)
+    }
+
+    /// Where the cursor rests on the thumbnail, as fractions from its top left: the part of the
+    /// full image to zoom in on.
+    private static func focus(of anchor: CGPoint, in element: CGRect?) -> CGPoint {
+        guard let element, element.width > 0, element.height > 0 else { return CGPoint(x: 0.5, y: 0.5) }
+        return CGPoint(x: min(max((anchor.x - element.minX) / element.width, 0), 1),
+                       y: min(max((anchor.y - element.minY) / element.height, 0), 1))
     }
 
     /// Embeds give no load or error callbacks we can use, so record whether media is actually playing.

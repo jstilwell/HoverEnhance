@@ -36,6 +36,18 @@ enum PreviewGeometry {
         return CGRect(x: x, y: y, width: size.width, height: size.height)
     }
 
+    /// Where to put an image zoomed by `zoom` inside `bounds` (AppKit view coordinates, origin bottom
+    /// left) so the point at `focus` (fractions of the image from its top left) stays at the same
+    /// place in the frame. The image's edges never pull inside the frame.
+    static func zoomedImageFrame(in bounds: CGRect, zoom: CGFloat, focus: CGPoint) -> CGRect {
+        let size = CGSize(width: bounds.width * zoom, height: bounds.height * zoom)
+        return CGRect(
+            x: bounds.minX + (bounds.width - size.width) * focus.x,
+            y: bounds.minY + (bounds.height - size.height) * (1 - focus.y),
+            width: size.width, height: size.height
+        )
+    }
+
     /// A small tab under the cursor that reaches across the gap to the preview's edge. Leaving it
     /// any way but onto the preview ends the hover.
     static func notchFrame(anchor: CGPoint, placeRight: Bool) -> CGRect {
