@@ -42,7 +42,7 @@ for a second click, quits politely, and offers Force Quit if the process is stil
 setting hides the quit buttons.
 **Tests**: The scan finds a file held open and a working folder (this test process); quitting a child
 process ends it; manual check in Finder on a file held open by `sleep`.
-**Status**: In Progress
+**Status**: Complete
 
 # YouTube creator card
 

@@ -340,9 +340,25 @@ struct FinderSettingsView: View {
                 Footnote("Details come from Spotlight where it has them. Files it hasn't indexed are read directly, so macOS may ask once before HoverEnhance reads files in Desktop, Documents, or Downloads.")
             }
             .disabled(!settings.finderCards)
+            Section {
+                Toggle(isOn: $settings.finderShowsUsers) {
+                    Text("Apps using it")
+                    Text("Apps with it open in a window, and processes holding it open or working in the folder")
+                }
+                Toggle(isOn: $settings.finderOffersQuit) {
+                    Text("Offer to quit them")
+                    Text("Quit takes a second click to confirm. If something doesn't quit, Force Quit appears.")
+                }
+                .disabled(!settings.finderShowsUsers)
+            } header: {
+                Text("In use")
+            } footer: {
+                Footnote("Quitting an app is like pressing ⌘Q in it, so it can still ask to save; other processes get the polite signal the kill command sends. Only your own processes are listed.")
+            }
+            .disabled(!settings.finderCards)
         }
         .formStyle(.grouped)
-        .frame(width: settingsWidth, height: 620)
+        .frame(width: settingsWidth, height: 780)
     }
 }
 

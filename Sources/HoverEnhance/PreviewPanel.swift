@@ -1,5 +1,6 @@
 import AVKit
 import AppKit
+import SwiftUI
 import WebKit
 
 /// A floating panel that shows media beside the cursor, joined to it by a small notch under the
@@ -22,6 +23,8 @@ final class PreviewPanel {
     private let readoutLabel = NSTextField(labelWithString: "")
     private var readoutGeneration = 0
     private var content: NSView?
+    /// The card on screen: its size and where it was shown, for refitting it.
+    private var card: (size: CGSize, counter: String?, anchor: CGPoint)?
     private var zoom: CGFloat = 1
     /// The point of the image that stays put while zooming, as fractions of it from the top left.
     private var focus = CGPoint(x: 0.5, y: 0.5)
@@ -171,11 +174,22 @@ final class PreviewPanel {
         present(webView, naturalSize: size, counter: counter, interactive: true, anchor: anchor)
     }
 
-    /// Any interactive view, at its own fitting size; used for creator cards.
+    /// Any interactive view, at its own fitting size; used for cards.
     func show(_ view: NSView, counter: String?, anchor: CGPoint) {
         imageView.image = nil
         playerView.player = nil
+        card = (view.fittingSize, counter, anchor)
         present(view, naturalSize: view.fittingSize, counter: counter, interactive: true, anchor: anchor)
+    }
+
+    /// Resizes a card on screen whose content changed size, such as a list that filled in.
+    func refit(_ view: NSView) {
+        guard content === view, panel.isVisible, let card else { return }
+        let size = view.fittingSize
+        // Setting the frame can make SwiftUI ask again; an unchanged size ends it there.
+        guard abs(size.width - card.size.width) > 0.5 || abs(size.height - card.size.height) > 0.5 else { return }
+        self.card?.size = size
+        present(view, naturalSize: size, counter: card.counter, interactive: true, anchor: card.anchor)
     }
 
     func hide() {
@@ -230,5 +244,15 @@ final class PreviewPanel {
         // Top left; the container isn't flipped, so "top" is maxY.
         badge.frame = CGRect(x: padding + 8, y: container.bounds.maxY - padding - 8 - size.height, width: size.width, height: size.height)
         badgeLabel.setFrameOrigin(CGPoint(x: inset.width, y: inset.height))
+    }
+}
+
+/// Hosts a SwiftUI card and reports when its content wants a different size, so the panel can refit it.
+final class CardHostingView<Content: View>: NSHostingView<Content> {
+    var onSizeChange: (@MainActor () -> Void)?
+
+    override func invalidateIntrinsicContentSize() {
+        super.invalidateIntrinsicContentSize()
+        onSizeChange?()
     }
 }
