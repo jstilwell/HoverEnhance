@@ -259,6 +259,8 @@ private struct ExcludedAppsEditor: View {
 struct PreviewsSettingsView: View {
     @Bindable var settings: AppSettings
 
+    static let imageLimits = [5, 10, 25, 50, 100]
+
     var body: some View {
         Form {
             Section("Show") {
@@ -296,10 +298,13 @@ struct PreviewsSettingsView: View {
                         Text(String(format: "%.1f×", settings.minimumEnlargement)).monospacedDigit().frame(width: 44, alignment: .trailing)
                     }
                 }
+                Picker("Largest image to download", selection: $settings.largestImageMegabytes) {
+                    ForEach(PreviewsSettingsView.imageLimits, id: \.self) { Text("\($0) MB").tag($0) }
+                }
             } header: {
                 Text("Size")
             } footer: {
-                Footnote("Previews take up to this share of the space beside the cursor. An image isn't previewed unless it would appear at least this much bigger than it does on the page.")
+                Footnote("Previews take up to this share of the space beside the cursor. An image isn't previewed unless it would appear at least this much bigger than it does on the page. A larger image than the download limit shows its size instead, with Load Anyway.")
             }
             Section {
                 Toggle("Show the notch under the cursor", isOn: $settings.showsNotch)
