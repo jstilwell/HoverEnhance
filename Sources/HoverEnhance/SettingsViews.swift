@@ -194,14 +194,17 @@ struct PreviewsSettingsView: View {
             }
             Section {
                 Toggle("Show the notch under the cursor", isOn: $settings.showsNotch)
+                Picker("Scroll wheel on images", selection: $settings.imageScroll) {
+                    ForEach(ImageScroll.allCases) { Text($0.label).tag($0) }
+                }
             } header: {
-                Text("Notch")
+                Text("Notch and scroll wheel")
             } footer: {
-                Footnote("Moving off the notch any way but onto the preview closes the preview. That still applies when the notch is hidden.")
+                Footnote("Moving off the notch any way but onto the preview closes the preview, even with the notch hidden. With the cursor on the notch or the preview, the scroll wheel acts on the preview instead of the page: albums step through their items, and single images do what's set here.")
             }
         }
         .formStyle(.grouped)
-        .frame(width: settingsWidth, height: 670)
+        .frame(width: settingsWidth, height: 730)
     }
 }
 
@@ -228,16 +231,23 @@ struct VideoSettingsView: View {
             } footer: {
                 Footnote("“As last set” keeps whatever you last chose with a video's mute button. Embedded players have their own volume.")
             }
-            Section("Playback") {
+            Section {
+                Picker("Scroll wheel", selection: $settings.videoScroll) {
+                    ForEach(VideoScroll.allCases) { Text($0.label).tag($0) }
+                }
                 Toggle("Loop videos", isOn: $settings.loopVideos)
                 Toggle(isOn: $settings.resumeVideos) {
                     Text("Resume where you left off")
                     Text("Reopening a video picks up where its preview closed")
                 }
+            } header: {
+                Text("Playback")
+            } footer: {
+                Footnote("The scroll wheel works with the cursor on the notch or the video. Embedded players handle scrolling themselves.")
             }
         }
         .formStyle(.grouped)
-        .frame(width: settingsWidth, height: 340)
+        .frame(width: settingsWidth, height: 430)
     }
 }
 

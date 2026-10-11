@@ -14,6 +14,9 @@ other apps' UI through the Accessibility API, so it works in browsers without an
 - **Embedded players**: YouTube, Vimeo, TikTok, and Twitch clip links play through each
   site's own player (skipped on the site itself, which has its own hover previews). The last one
   stays paused in the background, so hovering it again resumes.
+- **Scroll wheel**: with the cursor on the notch or the preview, scrolling acts on the preview, not
+  the page. Albums step through their items; images zoom (move onto the preview to pan); videos
+  move through the timeline or change the volume, as set in Settings.
 - **Settings** (menu bar icon → Settings…, or open the app again): when previews appear (always, or
   only/except while holding a modifier key), hover delay, excluded apps, which kinds of media and
   which sites to preview, preview size, video sound/loop/resume, cache and website data, and an
@@ -47,7 +50,9 @@ the grant survives rebuilds. With ad-hoc signing you'd have to re-grant after ev
 - `PreviewController` shows items in `PreviewPanel`: images via `ImageLoader` (downsampled off the
   main thread), videos via `VideoPlayback` (AVPlayer). A small click-through notch sits under the
   cursor and joins it to the preview (`PreviewGeometry`); moving off the notch any way but onto the
-  preview ends the hover at once. Scrolling, clicking, and switching apps end it too. `ScrollTap`
+  preview ends the hover at once. Clicking and switching apps end it too, as does scrolling anywhere
+  else. `ScrollTap` (an active event tap) hands scroll events over the notch or preview to the
+  controller and swallows the ones it uses. `ScrollTap`
   swallows scroll events while an album is up.
 - `EmbedPlayer` hosts players in a web view loaded under an HTTPS origin (YouTube needs a
   Referer), with AirPlay and WebRTC off so nothing asks for local network access.

@@ -1,25 +1,61 @@
 import AppKit
 
-/// While enabled, swallows scroll-wheel events and turns them into next/previous steps, so paging
-/// through an album doesn't also scroll the page underneath. Swallowing events takes an active
-/// event tap, which Accessibility access allows.
+/// One scroll-wheel event, reduced to what the preview needs.
+struct ScrollInput: Sendable {
+    /// Content-direction deltas, as in `NSEvent.scrollingDeltaX/Y`: points from trackpads and Magic
+    /// Mice, lines from wheels.
+    var dx: CGFloat
+    var dy: CGFloat
+    var isPrecise: Bool
+    /// The glide after a trackpad flick.
+    var isMomentum: Bool
+    /// "Natural" scrolling, where content follows the fingers.
+    var isInverted: Bool
+    /// The cursor, in global top-left-origin coordinates.
+    var location: CGPoint
+
+    /// Positive when scrolling down or right through content: on to the next item, or later in a video.
+    var forward: CGFloat { -(abs(dy) >= abs(dx) ? dy : dx) }
+
+    /// Positive when the fingers or wheel move up or away, whichever way scrolling is set: louder, bigger.
+    var up: CGFloat { isInverted ? -dy : dy }
+}
+
+/// Turns scrolling into whole steps: a wheel notch is one step; trackpad travel adds up to one per
+/// `distance` points.
+struct StepAccumulator {
+    var distance: CGFloat = 40
+    private var total: CGFloat = 0
+
+    mutating func steps(_ amount: CGFloat, precise: Bool) -> Int {
+        guard precise else { return amount > 0 ? 1 : amount < 0 ? -1 : 0 }
+        total += amount
+        let steps = Int(total / distance)
+        total -= CGFloat(steps) * distance
+        return steps
+    }
+
+    mutating func reset() {
+        total = 0
+    }
+}
+
+/// While enabled, offers every scroll-wheel event to `handler`, which can act on it and swallow it so
+/// the page underneath doesn't scroll. Swallowing events takes an active event tap, which
+/// Accessibility access allows.
 @MainActor
 final class ScrollTap {
-    /// +1 for next, -1 for previous.
-    var onStep: ((Int) -> Void)?
+    /// Return true to swallow the event.
+    var handler: ((ScrollInput) -> Bool)?
     var isEnabled = false {
         didSet {
             guard isEnabled != oldValue else { return }
             if isEnabled { install() }
             if let port { CGEvent.tapEnable(tap: port, enable: isEnabled) }
-            accumulated = 0
         }
     }
 
     private var port: CFMachPort?
-    private var accumulated: CGFloat = 0
-    /// Trackpad travel, in points, per step.
-    private let stepDistance: CGFloat = 40
 
     private func install() {
         guard port == nil else { return }
@@ -44,24 +80,11 @@ final class ScrollTap {
             if isEnabled, let port { CGEvent.tapEnable(tap: port, enable: true) }
             return false
         }
-        guard isEnabled, type == .scrollWheel else { return false }
-
-        if event.getIntegerValueField(.scrollWheelEventIsContinuous) == 0 {
-            // Mouse wheel: a notch is a step.
-            let vertical = event.getIntegerValueField(.scrollWheelEventDeltaAxis1)
-            let delta = vertical != 0 ? vertical : event.getIntegerValueField(.scrollWheelEventDeltaAxis2)
-            if delta != 0 { onStep?(delta < 0 ? 1 : -1) }
-        } else if event.getIntegerValueField(.scrollWheelEventMomentumPhase) == 0 {
-            // Trackpad: step per `stepDistance` of finger travel. Momentum is ignored so a flick
-            // doesn't race through the album.
-            let dy = event.getDoubleValueField(.scrollWheelEventPointDeltaAxis1)
-            let dx = event.getDoubleValueField(.scrollWheelEventPointDeltaAxis2)
-            accumulated += abs(dy) >= abs(dx) ? dy : dx
-            while abs(accumulated) >= stepDistance {
-                onStep?(accumulated < 0 ? 1 : -1)
-                accumulated += accumulated < 0 ? stepDistance : -stepDistance
-            }
-        }
-        return true
+        guard isEnabled, type == .scrollWheel, let handler, let scroll = NSEvent(cgEvent: event) else { return false }
+        return handler(ScrollInput(
+            dx: scroll.scrollingDeltaX, dy: scroll.scrollingDeltaY,
+            isPrecise: scroll.hasPreciseScrollingDeltas, isMomentum: scroll.momentumPhase != [],
+            isInverted: scroll.isDirectionInvertedFromDevice, location: event.location
+        ))
     }
 }

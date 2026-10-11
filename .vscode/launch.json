@@ -1,0 +1,24 @@
+{
+  "configurations": [
+    {
+      "type": "swift",
+      "request": "launch",
+      "args": [],
+      "cwd": "${workspaceFolder:HoverEnhance}",
+      "name": "Debug HoverEnhance",
+      "target": "HoverEnhance",
+      "configuration": "debug",
+      "preLaunchTask": "swift: Build Debug HoverEnhance"
+    },
+    {
+      "type": "swift",
+      "request": "launch",
+      "args": [],
+      "cwd": "${workspaceFolder:HoverEnhance}",
+      "name": "Release HoverEnhance",
+      "target": "HoverEnhance",
+      "configuration": "release",
+      "preLaunchTask": "swift: Build Release HoverEnhance"
+    }
+  ]
+}

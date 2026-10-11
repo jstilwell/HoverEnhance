@@ -55,6 +55,34 @@ enum VideoSound: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
+/// What the scroll wheel does to a single image, with the cursor on the notch or the preview.
+enum ImageScroll: String, CaseIterable, Identifiable, Sendable {
+    case zoom, page
+
+    var id: Self { self }
+
+    var label: String {
+        switch self {
+        case .zoom: "Zoom in and out"
+        case .page: "Scroll the page"
+        }
+    }
+}
+
+/// What the scroll wheel does to a video, with the cursor on the notch or the video.
+enum VideoScroll: String, CaseIterable, Identifiable, Sendable {
+    case scrub, volume
+
+    var id: Self { self }
+
+    var label: String {
+        switch self {
+        case .scrub: "Move through the video"
+        case .volume: "Change the volume"
+        }
+    }
+}
+
 struct ExcludedApp: Codable, Hashable, Identifiable, Sendable {
     let bundleID: String
     let name: String
@@ -81,6 +109,8 @@ final class AppSettings {
         static let minimumEnlargement = "minimumEnlargement"
         static let maximumSize = "maximumSize"
         static let showsNotch = "showsNotch"
+        static let imageScroll = "imageScroll"
+        static let videoScroll = "videoScroll"
         static let videoSound = "videoSound"
         static let videoMuted = "videoMuted"
         static let videoVolume = "videoVolume"
@@ -114,6 +144,7 @@ final class AppSettings {
     /// The largest preview, as a fraction of the room beside the cursor.
     var maximumSize: Double { didSet { defaults.set(maximumSize, forKey: Key.maximumSize) } }
     var showsNotch: Bool { didSet { defaults.set(showsNotch, forKey: Key.showsNotch) } }
+    var imageScroll: ImageScroll { didSet { defaults.set(imageScroll.rawValue, forKey: Key.imageScroll) } }
 
     // Video
     var videoSound: VideoSound { didSet { defaults.set(videoSound.rawValue, forKey: Key.videoSound) } }
@@ -122,6 +153,7 @@ final class AppSettings {
     var videoVolume: Double { didSet { defaults.set(videoVolume, forKey: Key.videoVolume) } }
     var loopVideos: Bool { didSet { defaults.set(loopVideos, forKey: Key.loopVideos) } }
     var resumeVideos: Bool { didSet { defaults.set(resumeVideos, forKey: Key.resumeVideos) } }
+    var videoScroll: VideoScroll { didSet { defaults.set(videoScroll.rawValue, forKey: Key.videoScroll) } }
 
     // Advanced
     var showsInspector: Bool { didSet { defaults.set(showsInspector, forKey: Key.showsInspector) } }
@@ -139,6 +171,8 @@ final class AppSettings {
             Key.minimumEnlargement: 1.2,
             Key.maximumSize: 1.0,
             Key.showsNotch: true,
+            Key.imageScroll: ImageScroll.zoom.rawValue,
+            Key.videoScroll: VideoScroll.scrub.rawValue,
             Key.videoSound: VideoSound.remember.rawValue,
             Key.videoMuted: true,
             Key.videoVolume: 1.0,
@@ -160,6 +194,8 @@ final class AppSettings {
         minimumEnlargement = defaults.double(forKey: Key.minimumEnlargement)
         maximumSize = defaults.double(forKey: Key.maximumSize)
         showsNotch = defaults.bool(forKey: Key.showsNotch)
+        imageScroll = defaults.string(forKey: Key.imageScroll).flatMap(ImageScroll.init(rawValue:)) ?? .zoom
+        videoScroll = defaults.string(forKey: Key.videoScroll).flatMap(VideoScroll.init(rawValue:)) ?? .scrub
         videoSound = defaults.string(forKey: Key.videoSound).flatMap(VideoSound.init(rawValue:)) ?? .remember
         videoMuted = defaults.bool(forKey: Key.videoMuted)
         videoVolume = defaults.double(forKey: Key.videoVolume)
