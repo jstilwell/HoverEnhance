@@ -41,9 +41,8 @@ folder, and the running app for an app bundle; each can be quit.
 for a second click, quits politely, and offers Force Quit if the process is still running; a Finder
 setting hides the quit buttons.
 **Tests**: The scan finds a file held open and a working folder (this test process); quitting a child
-process ends it; cards rendered offscreen with the list loaded and Quit confirming. Still to do: a
-live check in Finder (the list filling in and the card growing; Quit on a real app).
-**Status**: In Progress
+process ends it; cards rendered offscreen with the list loaded and Quit confirming; checked live.
+**Status**: Complete
 
 Stages 5–8 borrow ideas from FinderHover (MIT), written fresh with in-process APIs rather than
 spawning a tool per hover. Its file detection, long tail of formats, file notes, layout editor, and
@@ -55,9 +54,10 @@ folders; a key press closes the card (Quick Look, renaming, typing); clicking a 
 **Success Criteria**: Turning off a detail hides it and skips reading it; Restore Defaults brings back
 the defaults; Space or Return over a card closes it until the cursor moves to another item.
 **Tests**: Field settings defaults and persistence; filter for desktop items and folders (Finder writes
-folder URLs with a trailing slash, packages without); offscreen render of the settings tab. Still to
-do: a live check that Space and Return close a card, which relies on macOS passing key presses to an
-app with Accessibility access alone.
+folder URLs with a trailing slash, packages without); offscreen render of the settings tab; Return
+closes a card, checked live. No card while Quick Look's panel is open (Finder's own window, subrole
+"Quick Look") or a name is being edited, checked against Finder with the app's own code. Still to do:
+a live check that a card no longer comes back over Quick Look.
 **Status**: In Progress
 
 ## Stage 6: Thumbnail and system facts

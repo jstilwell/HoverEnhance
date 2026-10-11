@@ -45,7 +45,10 @@ struct Media: Sendable, Equatable {
 /// Works out what to preview for a hover result.
 enum MediaResolver {
     static func source(for info: HoverInfo) -> MediaSource? {
-        if let file = info.fileURL { return .file(file, onDesktop: info.fileIsOnDesktop) }
+        if let file = info.fileURL {
+            // A card would cover Quick Look's panel, or the name being edited.
+            return info.finderIsBusy ? nil : .file(file, onDesktop: info.fileIsOnDesktop)
+        }
         // On YouTube itself, its thumbnails and hover previews are left alone. Text links to its
         // videos and channels get a card about the creator; text links elsewhere preview as usual.
         if YouTube.isYouTube(info.pageURL) {

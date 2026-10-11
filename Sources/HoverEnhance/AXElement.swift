@@ -39,6 +39,14 @@ struct AXElement {
     }
 
     var parent: AXElement? { element(kAXParentAttribute) }
+    var focusedElement: AXElement? { element(kAXFocusedUIElementAttribute) }
+
+    var windows: [AXElement] {
+        guard let value = attribute(kAXWindowsAttribute), let array = value as? [AnyObject] else { return [] }
+        return array.compactMap { item in
+            CFGetTypeID(item) == AXUIElementGetTypeID() ? AXElement(ref: item as! AXUIElement) : nil
+        }
+    }
 
     var children: [AXElement] {
         guard let value = attribute(kAXChildrenAttribute), let array = value as? [AnyObject] else { return [] }
