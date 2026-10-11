@@ -17,3 +17,6 @@
 *.mobileprovision
 *.provisionprofile
 *private*key*
+
+# Local instructions for Claude Code
+CLAUDE.md
