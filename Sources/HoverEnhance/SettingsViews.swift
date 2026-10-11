@@ -523,12 +523,17 @@ struct AdvancedSettingsView: View {
     let access: AccessibilityWatcher
     @Bindable var updates: Updates
 
-    /// "0.2.0 (14)".
+    /// "0.2.0".
+    static var shortVersion: String {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "–"
+    }
+
+    /// "0.2.0", or "0.2.0 (14)" when the build number differs.
     static var version: String {
         let info = Bundle.main.infoDictionary ?? [:]
         let short = info["CFBundleShortVersionString"] as? String
-        let build = info["CFBundleVersion"] as? String
-        return [short, build.map { "(\($0))" }].compactMap { $0 }.joined(separator: " ").nilIfEmpty ?? "–"
+        let build = (info["CFBundleVersion"] as? String).flatMap { $0 == short ? nil : "(\($0))" }
+        return [short, build].compactMap { $0 }.joined(separator: " ").nilIfEmpty ?? "–"
     }
     @State private var cacheBytes = Maintenance.imageCacheBytes
     @State private var websiteDataCleared = false
@@ -555,7 +560,14 @@ struct AdvancedSettingsView: View {
                         Text(ByteCountFormatter.string(fromByteCount: Int64(cacheBytes), countStyle: .file)).monospacedDigit()
                         Button("Clear") {
                             Maintenance.clearImageCache()
-                            cacheBytes = Maintenance.imageCacheBytes
+                            // The files are removed in the background, so the size drops a moment later.
+                            Task {
+                                for _ in 0..<20 {
+                                    cacheBytes = Maintenance.imageCacheBytes
+                                    if cacheBytes == 0 { break }
+                                    try? await Task.sleep(for: .milliseconds(100))
+                                }
+                            }
                         }
                     }
                 }
