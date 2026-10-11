@@ -28,6 +28,27 @@ struct FileDetails: Sendable, Equatable {
     var tags: [Tag] = []
     var cloud: CloudStatus?
     var linkTarget: LinkTarget?
+    /// "Apple iPhone 15 Pro".
+    var camera: String?
+    var lens: String?
+    var exposure: Exposure?
+    /// "H.264", "AAC".
+    var codecs: [String] = []
+    /// Kilobits per second, as Spotlight records it.
+    var bitRate: Double?
+    var artist: String?
+    var album: String?
+    var archive: ZipSummary?
+
+    struct Exposure: Sendable, Equatable {
+        var fNumber: Double?
+        var seconds: Double?
+        var iso: Int?
+        /// Millimeters.
+        var focalLength: Double?
+
+        var isEmpty: Bool { fNumber == nil && seconds == nil && iso == nil && focalLength == nil }
+    }
 
     /// Reads what `options` asks for. This touches the disk and Spotlight, so call it off the main thread.
     ///
@@ -48,7 +69,9 @@ struct FileDetails: Sendable, Equatable {
         if options.shows(.tags) { details.tags = tags(of: url) ?? [] }
         if options.shows(.cloud) { details.cloud = cloudStatus(of: url) }
 
-        let spotlightFields: [FileCardField] = [.opened, .dimensions, .duration, .pages, .whereFrom]
+        if options.shows(.archive), url.pathExtension.lowercased() == "zip" { details.archive = ZipSummary.read(url) }
+
+        let spotlightFields: [FileCardField] = [.opened, .dimensions, .duration, .pages, .whereFrom, .camera, .exposure, .codecs, .music]
         guard spotlightFields.contains(where: options.shows) else { return details }
         let spotlight = MDItemCreateWithURL(nil, url as CFURL)
         func attribute<Value>(_ name: CFString) -> Value? {
@@ -59,12 +82,35 @@ struct FileDetails: Sendable, Equatable {
             let latest = [values?.creationDate, values?.contentModificationDate].compactMap { $0 }.max() ?? .distantPast
             if opened.timeIntervalSince(latest) > 60 { details.opened = opened }
         }
-        if options.shows(.dimensions) {
-            if let width: Int = attribute(kMDItemPixelWidth), let height: Int = attribute(kMDItemPixelHeight), width > 0, height > 0 {
-                details.dimensions = Dimensions(width: width, height: height)
-            } else if values?.contentType?.conforms(to: .image) == true {
-                details.dimensions = imageDimensions(of: url)
-            }
+        var indexedDimensions: Dimensions?
+        if let width: Int = attribute(kMDItemPixelWidth), let height: Int = attribute(kMDItemPixelHeight), width > 0, height > 0 {
+            indexedDimensions = Dimensions(width: width, height: height)
+        }
+        if options.shows(.dimensions) { details.dimensions = indexedDimensions }
+        if options.shows(.camera) {
+            details.camera = cameraName(make: attribute(kMDItemAcquisitionMake), model: attribute(kMDItemAcquisitionModel))
+            details.lens = attribute("kMDItemLensModel" as CFString)
+        }
+        if options.shows(.exposure) {
+            let exposure = Exposure(fNumber: attribute(kMDItemFNumber), seconds: attribute(kMDItemExposureTimeSeconds),
+                                    iso: attribute(kMDItemISOSpeed), focalLength: attribute(kMDItemFocalLength))
+            details.exposure = exposure.isEmpty ? nil : exposure
+        }
+        // An image Spotlight hasn't indexed: read its header once for all three. Indexed images always
+        // have dimensions, so screenshots, which have no camera, aren't opened for nothing.
+        if indexedDimensions == nil, values?.contentType?.conforms(to: .image) == true,
+           [.dimensions, .camera, .exposure].contains(where: options.shows) {
+            details.fillIn(fromImageAt: url, options: options)
+        }
+        if options.shows(.codecs) {
+            details.codecs = attribute(kMDItemCodecs) ?? []
+            let total: Double? = attribute(kMDItemTotalBitRate)
+            let parts = [attribute(kMDItemVideoBitRate), attribute(kMDItemAudioBitRate)].compactMap { $0 as Double? }
+            details.bitRate = total ?? (parts.isEmpty ? nil : parts.reduce(0, +))
+        }
+        if options.shows(.music), values?.contentType?.conforms(to: .audio) == true {
+            details.artist = (attribute(kMDItemAuthors) as [String]?).map { $0.joined(separator: ", ") }
+            details.album = attribute(kMDItemAlbum)
         }
         if options.shows(.duration) {
             details.duration = attribute(kMDItemDurationSeconds).flatMap { (seconds: Double) in seconds > 0 ? seconds : nil }
@@ -102,6 +148,14 @@ struct FileDetails: Sendable, Equatable {
         add(.dimensions, "Dimensions", dimensions.map { "\($0.width) × \($0.height)" })
         add(.duration, "Length", duration.map(Self.formatDuration))
         add(.pages, "Pages", pages.map(String.init))
+        add(.camera, "Camera", camera)
+        add(.camera, "Lens", lens)
+        add(.exposure, "Exposure", exposure.map(Self.formatExposure))
+        let encoding = [codecs.isEmpty ? nil : codecs.joined(separator: ", "), bitRate.map(Self.formatBitRate)].compactMap { $0 }
+        add(.codecs, "Codecs", encoding.isEmpty ? nil : encoding.joined(separator: " · "))
+        add(.music, "Artist", artist)
+        add(.music, "Album", album)
+        add(.archive, "Contents", archive?.label)
         return rows
     }
 
@@ -117,13 +171,35 @@ struct FileDetails: Sendable, Equatable {
             .flatMap { try? PropertyListSerialization.propertyList(from: $0, format: nil) as? [String] }
     }
 
-    /// Reads only the image's header.
-    static func imageDimensions(of url: URL) -> Dimensions? {
+    /// Dimensions, camera, and exposure from the image's header, for what Spotlight didn't have.
+    mutating func fillIn(fromImageAt url: URL, options: FileCardOptions) {
         guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
-              let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
-              let width = properties[kCGImagePropertyPixelWidth] as? Int,
-              let height = properties[kCGImagePropertyPixelHeight] as? Int else { return nil }
-        return Dimensions(width: width, height: height)
+              let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any] else { return }
+        let exif = properties[kCGImagePropertyExifDictionary] as? [CFString: Any] ?? [:]
+        let tiff = properties[kCGImagePropertyTIFFDictionary] as? [CFString: Any] ?? [:]
+        if options.shows(.dimensions), dimensions == nil,
+           let width = properties[kCGImagePropertyPixelWidth] as? Int, let height = properties[kCGImagePropertyPixelHeight] as? Int {
+            dimensions = Dimensions(width: width, height: height)
+        }
+        if options.shows(.camera) {
+            camera = camera ?? Self.cameraName(make: tiff[kCGImagePropertyTIFFMake] as? String, model: tiff[kCGImagePropertyTIFFModel] as? String)
+            lens = lens ?? exif[kCGImagePropertyExifLensModel] as? String
+        }
+        if options.shows(.exposure), exposure == nil {
+            let read = Exposure(fNumber: exif[kCGImagePropertyExifFNumber] as? Double, seconds: exif[kCGImagePropertyExifExposureTime] as? Double,
+                                iso: (exif[kCGImagePropertyExifISOSpeedRatings] as? [Int])?.first,
+                                focalLength: exif[kCGImagePropertyExifFocalLength] as? Double)
+            exposure = read.isEmpty ? nil : read
+        }
+    }
+
+    /// Cameras often repeat their maker in the model ("Canon" and "Canon EOS R5"); say it once.
+    static func cameraName(make: String?, model: String?) -> String? {
+        let make = make?.trimmingCharacters(in: .whitespaces), model = model?.trimmingCharacters(in: .whitespaces)
+        guard let model, !model.isEmpty else { return make?.isEmpty == false ? make : nil }
+        guard let make, !make.isEmpty,
+              let brand = make.split(separator: " ").first, !model.lowercased().hasPrefix(brand.lowercased()) else { return model }
+        return make + " " + model
     }
 
     // MARK: - Formatting
@@ -151,6 +227,21 @@ struct FileDetails: Sendable, Equatable {
         return hours > 0
             ? String(format: "%d:%02d:%02d", hours, minutes, rest)
             : String(format: "%d:%02d", minutes, rest)
+    }
+
+    /// "ƒ/1.8 · 1/120 s · ISO 50 · 26 mm", as photographers write it.
+    static func formatExposure(_ exposure: Exposure) -> String {
+        func number(_ value: Double) -> String {
+            value.rounded() == value ? String(Int(value)) : String(format: "%.1f", value)
+        }
+        let shutter = exposure.seconds.map { $0 < 1 ? "1/\(Int((1 / $0).rounded())) s" : "\(number($0)) s" }
+        return [exposure.fNumber.map { "ƒ/" + number($0) }, shutter, exposure.iso.map { "ISO \($0)" },
+                exposure.focalLength.map { "\(Int($0.rounded())) mm" }].compactMap { $0 }.joined(separator: " · ")
+    }
+
+    /// "658 kbps", "4.2 Mbps".
+    static func formatBitRate(_ kilobits: Double) -> String {
+        kilobits < 1000 ? "\(Int(kilobits.rounded())) kbps" : String(format: "%.1f Mbps", kilobits / 1000)
     }
 
     /// "example.com/reports/2025", without the scheme or a leading "www.".

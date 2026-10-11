@@ -74,7 +74,7 @@ album for music (all from Spotlight); file count, unpacked size, and encryption 
 26 mm); zip summaries handle Zip64 and skip `__MACOSX`; large central directories are left alone.
 **Tests**: Exposure and bit-rate formatting; zip summaries of archives made with `zip` (files,
 folders, `__MACOSX`, encrypted), Zip64 fields, and truncated files.
-**Status**: In Progress
+**Status**: Complete
 
 ## Stage 8: Apps and Git
 **Goal**: For app bundles, version, bundle ID, architectures, minimum macOS, and code signature;
@@ -84,7 +84,7 @@ for Git repositories, branch, remote, and uncommitted changes.
 taking Git's locks; repos without a remote or on a detached HEAD read sensibly.
 **Tests**: Info of a system app; signatures of a system app, an ad-hoc signed and an unsigned binary;
 HEAD and config parsing (branch, detached, worktree `.git` file, remotes); changes in a temp repo.
-**Status**: Not Started
+**Status**: In Progress
 
 # YouTube creator card
 
