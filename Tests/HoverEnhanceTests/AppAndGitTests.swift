@@ -168,8 +168,25 @@ struct GitRepositoryTests {
         #expect(await GitRepository.changeCount(in: include) == nil)
         #expect(!FileManager.default.fileExists(atPath: marker.path(percentEncoded: false)))
 
-        #expect(GitRepository.configSectionsRunCommands("[includeIf \"gitdir:~/work/\"]\n\tpath = x"))
-        #expect(!GitRepository.configSectionsRunCommands("[core]\n\tbare = false\n[remote \"origin\"]\n\turl = x"))
+        // A config Git could read but HoverEnhance can't is refused too.
+        let unreadable = try repository("unreadable", config: "")
+        try FileManager.default.setAttributes([.posixPermissions: 0o000], ofItemAtPath: unreadable.appending(path: ".git/config").path(percentEncoded: false))
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: unreadable.appending(path: ".git/config").path(percentEncoded: false)) }
+        #expect(GitRepository.configRunsCommands(unreadable))
+        #expect(!GitRepository.configRunsCommands(monitor))
+    }
+
+    @Test func configChecksIgnoreCaseAndBadBytes() {
+        func runs(_ text: String) -> Bool { GitRepository.configMayRunCommands(Data(text.utf8)) }
+        #expect(runs("[includeIf \"gitdir:~/work/\"]\n\tpath = x"))
+        #expect(runs("[FILTER \"x\"]\n\tClean = y"))
+        #expect(runs("[filter.x]\nclean = y"))
+        #expect(runs("[core] sshCommand = evil"))
+        #expect(runs("[extensions]\n\tpartialClone = origin"))
+        #expect(runs("[remote \"origin\"]\n\tpromisor = true"))
+        // Bytes that aren't UTF-8 can't hide a filter.
+        #expect(GitRepository.configMayRunCommands(Data([0xFF, 0xFE]) + Data("[filter \"x\"]".utf8) + Data([0xC3])))
+        #expect(!runs("[core]\n\tbare = false\n\tfsmonitor = true\n[remote \"origin\"]\n\turl = git@github.com:a/b.git"))
     }
 
     @Test func aHungGitIsGivenUpOn() async throws {

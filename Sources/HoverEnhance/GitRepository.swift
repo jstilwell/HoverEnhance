@@ -118,26 +118,28 @@ struct GitRepository: Sendable, Equatable {
     }
 
     /// Whether the repository's settings could run commands that `-c` can't switch off: clean and
-    /// smudge filters (run to compare changed files, and named per filter), or other config files pulled
-    /// in that might define them. A repository from elsewhere, such as an unzipped download, is the
-    /// user's own as far as Git can tell, so this is the only thing standing between a hover and its
-    /// commands.
+    /// smudge filters (run to compare changed files, and named per filter), other config files pulled
+    /// in that might define them, or fetching missing objects in a partial clone, which can run its ssh
+    /// command. A repository from elsewhere, such as an unzipped download, is the user's own as far as
+    /// Git can tell, so this stands between a hover and its commands. It errs toward refusing: a config
+    /// that can't be read counts, and so does any mention of these words, wherever it is.
     static func configRunsCommands(_ folder: URL) -> Bool {
         guard let gitDirectory = gitDirectory(of: folder) else { return true }
         let common = commonDirectory(of: gitDirectory)
         let configs = [common.appending(path: "config"), common.appending(path: "config.worktree"),
                        gitDirectory.appending(path: "config"), gitDirectory.appending(path: "config.worktree")]
         return configs.contains { url in
-            guard let text = try? String(contentsOf: url, encoding: .utf8) else { return false }
-            return configSectionsRunCommands(text)
+            let path = url.path(percentEncoded: false)
+            guard FileManager.default.fileExists(atPath: path) else { return false }
+            guard let data = FileManager.default.contents(atPath: path) else { return true }
+            return configMayRunCommands(data)
         }
     }
 
-    static func configSectionsRunCommands(_ config: String) -> Bool {
-        config.split(whereSeparator: \.isNewline).contains { line in
-            let section = line.trimmingCharacters(in: .whitespaces).lowercased()
-            return ["[filter", "[include", "[includeif"].contains { section.hasPrefix($0) }
-        }
+    /// Git reads config as bytes and its names ignore case, so this looks at the bytes, ignoring case.
+    static func configMayRunCommands(_ config: Data) -> Bool {
+        let text = String(decoding: config, as: UTF8.self).lowercased()
+        return ["filter", "include", "sshcommand", "promisor", "partialclone"].contains { text.contains($0) }
     }
 
     private static func runStatus(_ git: URL, in folder: URL, timeout: TimeInterval) -> Int? {
@@ -158,9 +160,15 @@ struct GitRepository: Sendable, Equatable {
             "-c", "core.fsmonitor=false", "-c", "core.hooksPath=/dev/null",
             // No optional locks: this mustn't write the index or block the user's own Git commands.
             "--no-optional-locks", "-C", folder.path(percentEncoded: false),
-            // Submodules have settings of their own, which aren't checked; leave them out.
-            "status", "--porcelain", "--untracked-files=normal", "--ignore-submodules=all",
+            // Submodules have settings of their own, which aren't checked; leave them out. Without
+            // renames, Git has no reason to read what's in the files.
+            "status", "--porcelain", "--untracked-files=normal", "--ignore-submodules=all", "--no-renames",
         ]
+        var environment = ProcessInfo.processInfo.environment
+        // Never fetch missing objects, and never ask for a password.
+        environment["GIT_NO_LAZY_FETCH"] = "1"
+        environment["GIT_TERMINAL_PROMPT"] = "0"
+        process.environment = environment
         process.standardOutput = output
         process.standardError = FileHandle.nullDevice
         let finished = DispatchSemaphore(value: 0)
