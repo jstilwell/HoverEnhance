@@ -41,6 +41,21 @@ enum PreviewGeometry {
         return CGSize(width: sideRoom * maxFraction - 2 * padding, height: visible.height * maxFraction - 2 * padding)
     }
 
+    /// Whether a preview of an image `natural` pixels in size, fitted into `room`, would be wider or
+    /// taller than the page shows it (`shown`) by more than `enlargement`.
+    static func enlarges(_ natural: CGSize, shown: CGSize, room: CGSize, by enlargement: Double) -> Bool {
+        let scale = min(1, room.width / natural.width, room.height / natural.height)
+        return natural.width * scale > shown.width * enlargement || natural.height * scale > shown.height * enlargement
+    }
+
+    /// Whether any preview of an image the page shows at `shown` could be larger by more than
+    /// `enlargement`, before knowing the image's own size: none can when the page shows it about as
+    /// large as `room` allows for its shape.
+    static func couldEnlarge(shown: CGSize, room: CGSize, by enlargement: Double) -> Bool {
+        guard shown.width > 0, shown.height > 0 else { return true }
+        return min(room.width / shown.width, room.height / shown.height) > enlargement
+    }
+
     /// Where to put an image zoomed by `zoom` inside `bounds` (AppKit view coordinates, origin bottom
     /// left) so the point at `focus` (fractions of the image from its top left) stays at the same
     /// place in the frame. The image's edges never pull inside the frame.
