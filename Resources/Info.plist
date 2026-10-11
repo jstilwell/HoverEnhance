@@ -27,7 +27,7 @@
 	<key>LSUIElement</key>
 	<true/>
 	<key>NSHumanReadableCopyright</key>
-	<string>© 2026 Jesse Stilwell</string>
+	<string>Copyright © 2026 Stilwe LLC. All rights reserved.</string>
 	<key>SUFeedURL</key>
 	<string>https://github.com/jstilwell/HoverEnhance/releases/latest/download/appcast.xml</string>
 	<key>SUPublicEDKey</key>

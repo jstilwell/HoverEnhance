@@ -25,6 +25,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let access = AccessibilityWatcher()
     private var statusItem: NSStatusItem?
     private var settingsWindow: SettingsWindowController?
+    private var aboutWindow: AboutWindowController?
     private var welcome: WelcomeWindowController?
     /// Whether the app proper is up: the menu bar item and the hover monitor. It waits for access.
     private var isRunning = false
@@ -176,15 +177,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     // MARK: - Menus
 
     private func makeMenu() -> NSMenu {
-        permissionItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
-        grantItem = NSMenuItem(title: "Grant Accessibility Access…", action: #selector(grantAccess), keyEquivalent: "")
-        previewsItem = NSMenuItem(title: "Show Previews", action: #selector(togglePreviews), keyEquivalent: "e")
-        copyItem = NSMenuItem(title: "Copy Inspector Result", action: #selector(copyLastResult), keyEquivalent: "c")
-        updateItem = NSMenuItem(title: "Check for Updates…", action: #selector(checkForUpdates), keyEquivalent: "")
-        let settingsItem = NSMenuItem(title: "Settings…", action: #selector(showSettings), keyEquivalent: ",")
-        for item in [grantItem, previewsItem, copyItem, updateItem, settingsItem] {
-            item?.target = self
-        }
+        permissionItem = menuItem("", action: nil, symbol: "accessibility")
+        grantItem = menuItem("Grant Accessibility Access…", action: #selector(grantAccess), symbol: "hand.raised")
+        previewsItem = menuItem("Show Previews", action: #selector(togglePreviews), key: "e", symbol: "eye")
+        copyItem = menuItem("Copy Inspector Result", action: #selector(copyLastResult), key: "c", symbol: "doc.on.doc")
+        updateItem = menuItem("Check for Updates…", action: #selector(checkForUpdates), symbol: "arrow.triangle.2.circlepath")
 
         let menu = NSMenu()
         menu.delegate = self
@@ -192,18 +189,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.items = [
             permissionItem, grantItem, .separator(),
             previewsItem, copyItem, .separator(),
-            updateItem, settingsItem, .separator(),
-            NSMenuItem(title: "Quit HoverEnhance", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"),
+            menuItem("About HoverEnhance", action: #selector(showAbout), symbol: "info.circle"),
+            updateItem,
+            menuItem("Settings…", action: #selector(showSettings), key: ",", symbol: "gearshape"),
+            .separator(),
+            menuItem("Quit HoverEnhance", action: #selector(NSApplication.terminate(_:)), key: "q", symbol: "xmark.circle", target: NSApp),
         ]
         return menu
+    }
+
+    /// A menu item with a symbol before its title, as in LockAudio's menu.
+    private func menuItem(_ title: String, action: Selector?, key: String = "", symbol: String, target: AnyObject? = nil) -> NSMenuItem {
+        let item = NSMenuItem(title: title, action: action, keyEquivalent: key)
+        item.target = target ?? self
+        item.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)
+        // macOS 27 hides menu items' images unless they ask to be shown.
+        if #available(macOS 27, *) { item.preferredImageVisibility = .visible }
+        return item
     }
 
     /// Never shown for a menu bar app, but it gives the Settings window ⌘, ⌘W, and ⌘Q.
     private func installMainMenu() {
         let appMenu = NSMenu()
+        let aboutItem = NSMenuItem(title: "About HoverEnhance", action: #selector(showAbout), keyEquivalent: "")
         let settingsItem = NSMenuItem(title: "Settings…", action: #selector(showSettings), keyEquivalent: ",")
+        aboutItem.target = self
         settingsItem.target = self
         appMenu.items = [
+            aboutItem, .separator(),
             settingsItem, .separator(),
             NSMenuItem(title: "Quit HoverEnhance", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"),
         ]
@@ -234,6 +247,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc private func checkForUpdates() {
         Updates.shared.checkForUpdates()
+    }
+
+    @objc private func showAbout() {
+        if aboutWindow == nil { aboutWindow = AboutWindowController() }
+        aboutWindow?.show()
     }
 
     @objc private func showSettings() {

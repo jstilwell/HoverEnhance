@@ -103,6 +103,13 @@ final class HoverMonitor {
     private func mouseSettled() {
         // CGEvent reports the cursor in the same top-left-origin space the AX API uses.
         guard let point = CGEvent(source: nil)?.location else { return }
+        // Accessibility questions about this app's own windows are answered in this process, on the
+        // inspector's queue: AppKit and SwiftUI would run off the main thread, throw, and leave
+        // SwiftUI locked, freezing the app. So they're never asked.
+        if OwnWindows.areInFront(at: point) {
+            onResult?(.failure(.ownWindow))
+            return
+        }
         let requested = generation
         Task {
             let result = await inspector.inspect(at: point)
