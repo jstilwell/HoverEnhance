@@ -7,7 +7,7 @@ SWIFT     := xcrun swift
 # A stable signing identity keeps the Accessibility grant valid across rebuilds; ad-hoc (-) doesn't.
 SIGN_ID   ?= $(shell security find-identity -v -p codesigning | awk -F'"' '/Apple Development|Developer ID Application/ { print $$2; exit }')
 
-.PHONY: build app run stop log clean
+.PHONY: build app run stop test log clean
 
 build:
 	$(SWIFT) build -c $(CONFIG)
@@ -21,6 +21,9 @@ app: build
 
 run: app stop
 	open "$(APP)"
+
+test:
+	$(SWIFT) test
 
 stop:
 	@pkill -x $(APP_NAME) && sleep 0.5 || true

@@ -24,7 +24,7 @@ repeat hovers hit the cache; cross-origin requests send only the page's origin a
 than they already appear; hides when the cursor leaves the element, on scroll, and on click;
 menu toggle for previews.
 **Tests**: Manual: hover thumbnails in Safari/Chromium, scroll, click, move between images.
-**Status**: In Progress
+**Status**: Complete
 
 ## Stage 4: More sites and polish
 **Goal**: Broader coverage and nicer feel.
