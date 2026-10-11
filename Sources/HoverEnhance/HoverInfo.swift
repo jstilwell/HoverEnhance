@@ -5,6 +5,8 @@ struct HoverInfo: Sendable, Equatable {
     var pid: pid_t
     var appName: String?
     var bundleID: String?
+    /// Whether the app is a browser, an email app, or something else.
+    var appKind = AppKind.other
 
     var role: String?
     var subrole: String?
@@ -40,6 +42,7 @@ struct HoverInfo: Sendable, Equatable {
             guard let value, !value.isEmpty else { return }
             lines.append(key.padding(toLength: 7, withPad: " ", startingAt: 0) + value)
         }
+        add("kind", appKind == .other ? nil : appKind.rawValue)
         add("role", [role, subrole].compactMap { $0 }.joined(separator: " / "))
         add("title", title)
         add("label", label)

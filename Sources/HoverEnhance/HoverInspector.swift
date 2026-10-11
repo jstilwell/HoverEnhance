@@ -81,7 +81,10 @@ final class HoverInspector: @unchecked Sendable {
         case .electron:
             app.set("AXManualAccessibility", to: kCFBooleanTrue)
         case .chromium:
-            // What VoiceOver sets on launch. Chromium enables full web accessibility in response.
+            // What VoiceOver sets on launch. Chromium enables full web accessibility in response, two
+            // seconds after the last change. It's the only switch Chrome listens to: it ignores
+            // Electron's AXManualAccessibility. While it's on, AppKit animates window moves made
+            // through accessibility, which window managers such as Rectangle work around.
             app.set("AXEnhancedUserInterface", to: kCFBooleanTrue)
         }
         return true
@@ -90,6 +93,7 @@ final class HoverInspector: @unchecked Sendable {
     private func describe(_ element: AXElement, pid: pid_t, at point: CGPoint) -> HoverInfo {
         let app = NSRunningApplication(processIdentifier: pid)
         var info = HoverInfo(pid: pid, appName: app?.localizedName, bundleID: app?.bundleIdentifier)
+        info.appKind = app?.bundleURL.map(AppKind.of(appAt:)) ?? .other
         info.role = element.role
         info.subrole = element.subrole
         info.title = element.title

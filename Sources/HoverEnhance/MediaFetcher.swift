@@ -12,7 +12,7 @@ actor MediaFetcher {
 
     func media(for source: MediaSource) async -> Media? {
         if let cached = looked[source], Date().timeIntervalSince(cached.time) < lookupLifetime { return cached.media }
-        let media: Media?
+        let lookedUp: Media?
         switch source {
         case .images(let urls):
             return Media(items: [.image(urls)])
@@ -23,18 +23,19 @@ actor MediaFetcher {
         case .file(let url, _):
             return Media(items: [.file(url)])
         case .redditGallery(let id):
-            media = await redditGallery(id: id)
+            lookedUp = await redditGallery(id: id)
         case .streamable(let id):
-            media = await data(at: SiteAPIs.streamableURL(id: id)).flatMap(SiteAPIs.streamable)
+            lookedUp = await data(at: SiteAPIs.streamableURL(id: id)).flatMap(SiteAPIs.streamable)
         case .tweet(let id):
-            media = await data(at: SiteAPIs.tweetURL(id: id)).flatMap(SiteAPIs.tweet)
+            lookedUp = await data(at: SiteAPIs.tweetURL(id: id)).flatMap(SiteAPIs.tweet)
         case .blueskyPost(let actor, let rkey):
-            media = await blueskyPost(actor: actor, rkey: rkey)
+            lookedUp = await blueskyPost(actor: actor, rkey: rkey)
         case .instagram(let code):
-            media = await instagram(code: code)
+            lookedUp = await instagram(code: code)
         case .youtubeChannel(let ref):
-            media = await youtubeChannel(ref).map { Media(items: [.channel($0)]) }
+            lookedUp = await youtubeChannel(ref).map { Media(items: [.channel($0)]) }
         }
+        let media = lookedUp?.webOnly()
         looked[source] = media.map { ($0, Date()) }
         return media
     }

@@ -116,6 +116,10 @@ final class AppSettings {
         static let activationKey = "activationKey"
         static let hoverDelay = "hoverDelay"
         static let excludedApps = "excludedApps"
+        static let previewsInOtherApps = "previewsInOtherApps"
+        static let otherAppsSkipEmail = "otherAppsSkipEmail"
+        static let otherAppsKnownSitesOnly = "otherAppsKnownSitesOnly"
+        static let otherAppsNeedKey = "otherAppsNeedKey"
         static let showImages = "showImages"
         static let showAlbums = "showAlbums"
         static let showVideos = "showVideos"
@@ -155,6 +159,11 @@ final class AppSettings {
     var excludedApps: [ExcludedApp] {
         didSet { defaults.set(try? JSONEncoder().encode(excludedApps), forKey: Key.excludedApps) }
     }
+    /// Previews that load from the network in apps other than browsers; see `OtherAppsPolicy`.
+    var previewsInOtherApps: Bool { didSet { defaults.set(previewsInOtherApps, forKey: Key.previewsInOtherApps) } }
+    var otherAppsSkipEmail: Bool { didSet { defaults.set(otherAppsSkipEmail, forKey: Key.otherAppsSkipEmail) } }
+    var otherAppsKnownSitesOnly: Bool { didSet { defaults.set(otherAppsKnownSitesOnly, forKey: Key.otherAppsKnownSitesOnly) } }
+    var otherAppsNeedKey: Bool { didSet { defaults.set(otherAppsNeedKey, forKey: Key.otherAppsNeedKey) } }
 
     // Previews
     var showImages: Bool { didSet { defaults.set(showImages, forKey: Key.showImages) } }
@@ -206,6 +215,10 @@ final class AppSettings {
             Key.activation: Activation.always.rawValue,
             Key.activationKey: ModifierKey.option.rawValue,
             Key.hoverDelay: 150.0,
+            Key.previewsInOtherApps: false,
+            Key.otherAppsSkipEmail: true,
+            Key.otherAppsKnownSitesOnly: true,
+            Key.otherAppsNeedKey: false,
             Key.showImages: true,
             Key.showAlbums: true,
             Key.showVideos: true,
@@ -237,6 +250,10 @@ final class AppSettings {
         activationKey = defaults.string(forKey: Key.activationKey).flatMap(ModifierKey.init(rawValue:)) ?? .option
         hoverDelay = defaults.double(forKey: Key.hoverDelay)
         excludedApps = defaults.data(forKey: Key.excludedApps).flatMap { try? JSONDecoder().decode([ExcludedApp].self, from: $0) } ?? []
+        previewsInOtherApps = defaults.bool(forKey: Key.previewsInOtherApps)
+        otherAppsSkipEmail = defaults.bool(forKey: Key.otherAppsSkipEmail)
+        otherAppsKnownSitesOnly = defaults.bool(forKey: Key.otherAppsKnownSitesOnly)
+        otherAppsNeedKey = defaults.bool(forKey: Key.otherAppsNeedKey)
         showImages = defaults.bool(forKey: Key.showImages)
         showAlbums = defaults.bool(forKey: Key.showAlbums)
         showVideos = defaults.bool(forKey: Key.showVideos)
@@ -268,6 +285,17 @@ final class AppSettings {
     var filter: PreviewFilter {
         PreviewFilter(images: showImages, albums: showAlbums, videos: showVideos, embeds: showEmbeds, cards: showCards,
                       files: finderCards, filesOnDesktop: finderOnDesktop, folders: finderForFolders, disabledSites: disabledSites)
+    }
+
+    var otherApps: OtherAppsPolicy {
+        OtherAppsPolicy(enabled: previewsInOtherApps, skipsEmail: otherAppsSkipEmail, knownSitesOnly: otherAppsKnownSitesOnly,
+                        needsKey: otherAppsNeedKey)
+    }
+
+    /// Whether the activation key matters anywhere, so pressing or releasing it should show or hide a
+    /// preview at once.
+    var usesActivationKey: Bool {
+        activation != .always || (previewsInOtherApps && otherAppsNeedKey)
     }
 
     var fileCard: FileCardOptions {
