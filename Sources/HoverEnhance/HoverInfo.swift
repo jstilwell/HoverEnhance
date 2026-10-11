@@ -29,6 +29,8 @@ struct HoverInfo: Sendable, Equatable {
     var videoFrame: CGRect?
     /// For a photo outside any link, as in Instagram's feed: the post it's from.
     var postURL: URL?
+    /// The links passed over looking for `postURL`, for the inspector.
+    var postSearch: String?
     /// In Finder: the file or folder under the cursor.
     var fileURL: URL?
     /// The file is an icon on the desktop rather than an item in a Finder window.
@@ -54,7 +56,7 @@ struct HoverInfo: Sendable, Equatable {
         add("url", url?.absoluteString)
         add("image", imageURL == url ? nil : imageURL?.absoluteString)
         add("link", linkURL?.absoluteString)
-        add("post", postURL?.absoluteString)
+        add("post", postURL?.absoluteString ?? postSearch.map { "none: \($0)" })
         add("page", pageURL?.absoluteString)
         add("text", isOnText ? "yes" : nil)
         add("video", videoFrame.map { "on the page, \(Int($0.width))×\(Int($0.height))" })
