@@ -8,12 +8,13 @@ enum FileCardField: String, CaseIterable, Identifiable, Sendable {
     case created, modified, opened
     case whereFrom, downloadedBy
     case tags, cloud
-    case dimensions, duration, pages
+    case dimensions, duration, pages, camera, exposure, codecs, music
+    case archive
     case users
 
     /// Sections of the card, and of its settings.
     enum Group: CaseIterable, Identifiable, Sendable {
-        case card, path, dates, downloads, status, media, inUse
+        case card, path, dates, downloads, status, media, archives, inUse
 
         var id: Self { self }
 
@@ -25,6 +26,7 @@ enum FileCardField: String, CaseIterable, Identifiable, Sendable {
             case .downloads: "Downloads"
             case .status: "Tags and iCloud"
             case .media: "Images, audio, and video"
+            case .archives: "Archives"
             case .inUse: "In use"
             }
         }
@@ -41,7 +43,8 @@ enum FileCardField: String, CaseIterable, Identifiable, Sendable {
         case .created, .modified, .opened: .dates
         case .whereFrom, .downloadedBy: .downloads
         case .tags, .cloud: .status
-        case .dimensions, .duration, .pages: .media
+        case .dimensions, .duration, .pages, .camera, .exposure, .codecs, .music: .media
+        case .archive: .archives
         case .users: .inUse
         }
     }
@@ -63,6 +66,11 @@ enum FileCardField: String, CaseIterable, Identifiable, Sendable {
         case .dimensions: "Dimensions"
         case .duration: "Length"
         case .pages: "Pages"
+        case .camera: "Camera and lens"
+        case .exposure: "Exposure"
+        case .codecs: "Codecs and bit rate"
+        case .music: "Artist and album"
+        case .archive: "Zip contents"
         case .users: "Apps using it"
         }
     }
@@ -82,6 +90,11 @@ enum FileCardField: String, CaseIterable, Identifiable, Sendable {
         case .dimensions: "Of images and videos"
         case .duration: "Of audio and video"
         case .pages: "Of PDFs and other documents"
+        case .camera: "The camera and lens a photo was taken with"
+        case .exposure: "Aperture, shutter speed, ISO, and focal length"
+        case .codecs: "How audio and video are encoded, such as H.264 or AAC"
+        case .music: "Of songs and other audio"
+        case .archive: "How many files a zip holds and how big they are unpacked, read without unpacking it"
         case .users: "Apps with it open in a window, and processes holding it open or working in the folder"
         case .created, .modified: nil
         }
