@@ -23,6 +23,8 @@ struct HoverInfo: Sendable, Equatable {
     var imageFrame: CGRect?
     /// The cursor is on a link's text, as opposed to its image or video.
     var isOnText = false
+    /// In Finder: the file or folder under the cursor.
+    var fileURL: URL?
     /// Frame in global display coordinates (top-left origin).
     var frame: CGRect?
     /// Roles from the element up to its web area or window, innermost first.
@@ -43,6 +45,7 @@ struct HoverInfo: Sendable, Equatable {
         add("link", linkURL?.absoluteString)
         add("page", pageURL?.absoluteString)
         add("text", isOnText ? "yes" : nil)
+        add("file", fileURL?.path(percentEncoded: false))
         add("frame", frame.map { "\(Int($0.minX)),\(Int($0.minY))  \(Int($0.width))×\(Int($0.height))" })
         add("path", Self.collapsingRepeats(ancestry).joined(separator: " › "))
         return lines.joined(separator: "\n")
