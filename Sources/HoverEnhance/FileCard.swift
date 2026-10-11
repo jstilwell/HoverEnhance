@@ -126,7 +126,7 @@ final class FileCard {
     }
 
     private func quit(_ user: FileUser, force: Bool) {
-        guard FileUsers.quit(user.pid, force: force) else {
+        guard FileUsers.quit(user, force: force) else {
             quitStates[user.pid] = .failed
             return
         }
@@ -139,7 +139,7 @@ final class FileCard {
     private func waitForExit(of user: FileUser, force: Bool) async {
         for _ in 0..<30 {
             try? await Task.sleep(for: .milliseconds(100))
-            if !FileUsers.isRunning(user.pid) {
+            if !FileUsers.isRunning(user) {
                 quitStates[user.pid] = .quit
                 return
             }

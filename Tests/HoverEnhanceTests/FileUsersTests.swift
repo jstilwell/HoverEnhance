@@ -82,14 +82,33 @@ struct FileUsersTests {
 
         card.quitClicked(user)
         #expect(card.quitStates[user.pid] == .confirming)
-        #expect(FileUsers.isRunning(user.pid))
+        #expect(FileUsers.isRunning(user))
 
         card.quitClicked(user)
         for _ in 0..<40 where card.quitStates[user.pid] != .quit {
             try await Task.sleep(for: .milliseconds(100))
         }
         #expect(card.quitStates[user.pid] == .quit)
-        #expect(!FileUsers.isRunning(user.pid))
+        #expect(!FileUsers.isRunning(user))
+    }
+
+    @MainActor
+    @Test func aRecycledPidIsLeftAlone() async throws {
+        let file = try tempFile()
+        defer { try? FileManager.default.removeItem(at: file) }
+        let sleeper = try holder(of: file)
+        defer { if sleeper.isRunning { sleeper.terminate() } }
+
+        let found = try #require(await FileUsers.find(file).first { $0.pid == sleeper.processIdentifier })
+        let started = try #require(found.started)
+        #expect(FileUsers.startTime(of: sleeper.processIdentifier) == started)
+        // The same pid, but a process that started at another time: the one found has ended.
+        let earlier = FileUser(pid: found.pid, started: started - 1, name: found.name, executable: found.executable, use: found.use)
+        #expect(!FileUsers.isRunning(earlier))
+        #expect(FileUsers.quit(earlier, force: true))
+        try await Task.sleep(for: .milliseconds(200))
+        #expect(sleeper.isRunning)
+        #expect(FileUsers.isRunning(found))
     }
 
     @MainActor
