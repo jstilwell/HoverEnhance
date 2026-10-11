@@ -187,8 +187,7 @@ final class PreviewController {
             // On the video itself, and on the notch and the volume rocker beside it, as set for each.
             switch panel.isOnPreview(input.location) ? settings.videoScroll : settings.notchVideoScroll {
             case .scrub:
-                // A wheel notch is 5 seconds; trackpad travel is a tenth of a second per point.
-                if input.forward != 0, let position = playback.scrub(by: input.isPrecise ? input.forward * 0.1 : (input.forward > 0 ? 5 : -5)) {
+                if input.forward != 0, let position = playback.scrub(by: input.scrubSeconds(perStep: Double(settings.videoScrubSeconds))) {
                     panel.flash(position)
                 }
             case .volume:

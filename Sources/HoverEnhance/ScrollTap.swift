@@ -19,12 +19,21 @@ struct ScrollInput: Sendable {
 
     /// Positive when the fingers or wheel move up or away, whichever way scrolling is set: louder, bigger.
     var up: CGFloat { isInverted ? -dy : dy }
+
+    /// How far to move a video, for `step` seconds a step: a wheel notch, or a step's worth of
+    /// trackpad travel, as for albums.
+    func scrubSeconds(perStep step: Double) -> Double {
+        guard isPrecise else { return forward > 0 ? step : forward < 0 ? -step : 0 }
+        return Double(forward / StepAccumulator.stepDistance) * step
+    }
 }
 
 /// Turns scrolling into whole steps: a wheel notch is one step; trackpad travel adds up to one per
 /// `distance` points.
 struct StepAccumulator {
-    var distance: CGFloat = 40
+    /// Trackpad travel that makes a step, about what smooth-scrolling tools turn a wheel notch into.
+    static let stepDistance: CGFloat = 40
+    var distance = stepDistance
     private var total: CGFloat = 0
 
     mutating func steps(_ amount: CGFloat, precise: Bool) -> Int {
