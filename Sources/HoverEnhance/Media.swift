@@ -18,6 +18,8 @@ enum MediaSource: Sendable, Hashable {
     case instagram(code: String)
     /// A video played through its site's embeddable player.
     case embed(Embed)
+    /// On YouTube itself: the creator behind a video or channel link.
+    case youtubeChannel(YouTubeChannelRef)
 }
 
 /// One thing a preview can show.
@@ -27,6 +29,8 @@ enum MediaItem: Sendable, Equatable {
     /// A file or HLS stream AVFoundation can play, with its size when the site reports it.
     case video(URL, size: CGSize?)
     case embed(Embed)
+    /// A card about a YouTube creator.
+    case channel(YouTubeChannel)
 }
 
 /// Resolved media: a single item, or an album.
@@ -37,6 +41,12 @@ struct Media: Sendable, Equatable {
 /// Works out what to preview for a hover result.
 enum MediaResolver {
     static func source(for info: HoverInfo) -> MediaSource? {
+        // On YouTube itself, its thumbnails and hover previews are left alone. Text links to its
+        // videos and channels get a card about the creator; text links elsewhere preview as usual.
+        if YouTube.isYouTube(info.pageURL) {
+            guard info.isOnText, let link = info.linkURL else { return nil }
+            if let ref = YouTube.channelRef(fromLink: link) { return .youtubeChannel(ref) }
+        }
         // A link to a post or video outranks the thumbnail inside it.
         if let link = info.linkURL, let source = SiteLinks.source(forLink: link) {
             return source

@@ -7,6 +7,8 @@ actor MediaFetcher {
     private var looked: [MediaSource: (media: Media, time: Date)] = [:]
     private let lookupLifetime: TimeInterval = 30 * 60
     private var blueskyDIDs: [String: String] = [:]
+    /// YouTube channel pages are about a megabyte, so each is read once per session.
+    private var youtubeChannels: [URL: YouTubeChannel] = [:]
 
     func media(for source: MediaSource) async -> Media? {
         if let cached = looked[source], Date().timeIntervalSince(cached.time) < lookupLifetime { return cached.media }
@@ -28,6 +30,8 @@ actor MediaFetcher {
             media = await blueskyPost(actor: actor, rkey: rkey)
         case .instagram(let code):
             media = await instagram(code: code)
+        case .youtubeChannel(let ref):
+            media = await youtubeChannel(ref).map { Media(items: [.channel($0)]) }
         }
         looked[source] = media.map { ($0, Date()) }
         return media
@@ -63,6 +67,18 @@ actor MediaFetcher {
         }
         // Embedding is off for this post: show its image (a reel's cover) instead.
         return Media(items: [.image([SiteAPIs.instagramImageURL(code: code)])])
+    }
+
+    private func youtubeChannel(_ ref: YouTubeChannelRef) async -> YouTubeChannel? {
+        var page = YouTube.channelPageURL(for: ref)
+        if case .video(let id) = ref {
+            page = await data(at: YouTube.oEmbedURL(videoID: id)).flatMap(YouTube.channelPageURL(fromOEmbed:))
+        }
+        guard let page else { return nil }
+        if let known = youtubeChannels[page] { return known }
+        guard let html = await data(at: page), let channel = YouTube.channel(inPage: String(decoding: html, as: UTF8.self)) else { return nil }
+        youtubeChannels[page] = channel
+        return channel
     }
 
     private func data(at url: URL) async -> Data? {

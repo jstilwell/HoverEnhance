@@ -173,6 +173,10 @@ struct PreviewsSettingsView: View {
                     Text("Embedded players")
                     Text("YouTube, Vimeo, TikTok, and Twitch, in each site's own player")
                 }
+                Toggle(isOn: $settings.showCards) {
+                    Text("Creator cards")
+                    Text("On YouTube, a video title or channel name shows its creator. Thumbnails are left to YouTube.")
+                }
             }
             Section {
                 LabeledContent("Largest preview") {
@@ -204,7 +208,7 @@ struct PreviewsSettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: settingsWidth, height: 730)
+        .frame(width: settingsWidth, height: 780)
     }
 }
 

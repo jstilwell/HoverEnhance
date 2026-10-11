@@ -70,6 +70,7 @@ extension MediaSource {
         case .tweet: .x
         case .blueskyPost: .bluesky
         case .instagram: .instagram
+        case .youtubeChannel: .youtube
         case .embed(let embed):
             switch embed.site {
             case .youtube: .youtube
@@ -88,6 +89,7 @@ struct PreviewFilter: Sendable, Equatable {
     var albums = true
     var videos = true
     var embeds = true
+    var cards = true
     var disabledSites: Set<MediaSite> = []
 
     /// Whether to look this source up at all.
@@ -97,6 +99,7 @@ struct PreviewFilter: Sendable, Equatable {
         case .images, .redditGallery: return images
         case .video, .streamable: return videos
         case .embed: return embeds
+        case .youtubeChannel: return cards
         // Posts can hold photos or videos; what's turned off is dropped once they're looked up.
         case .tweet, .blueskyPost, .instagram: return images || videos
         }
@@ -109,6 +112,7 @@ struct PreviewFilter: Sendable, Equatable {
             case .image: images
             case .video: videos
             case .embed: embeds
+            case .channel: cards
             }
         }
         if !albums { items = Array(items.prefix(1)) }
