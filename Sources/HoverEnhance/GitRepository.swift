@@ -15,12 +15,16 @@ struct GitRepository: Sendable, Equatable {
     /// Nil unless `folder` is the top of a repository. Reads `.git` directly rather than running Git.
     static func read(_ folder: URL) -> GitRepository? {
         guard let gitDirectory = gitDirectory(of: folder) else { return nil }
-        // Worktrees keep their own HEAD but share the main repository's config.
-        let common = (try? String(contentsOf: gitDirectory.appending(path: "commondir"), encoding: .utf8))
-            .map { URL(filePath: $0.trimmingCharacters(in: .whitespacesAndNewlines), relativeTo: gitDirectory).standardized } ?? gitDirectory
+        let common = commonDirectory(of: gitDirectory)
         let head = (try? String(contentsOf: gitDirectory.appending(path: "HEAD"), encoding: .utf8)).flatMap(parseHead)
         let config = try? String(contentsOf: common.appending(path: "config"), encoding: .utf8)
         return GitRepository(head: head, remote: config.flatMap(remote(inConfig:)).map(withoutCredentials))
+    }
+
+    /// Worktrees keep their own HEAD but share the main repository's config.
+    private static func commonDirectory(of gitDirectory: URL) -> URL {
+        (try? String(contentsOf: gitDirectory.appending(path: "commondir"), encoding: .utf8))
+            .map { URL(filePath: $0.trimmingCharacters(in: .whitespacesAndNewlines), relativeTo: gitDirectory).standardized } ?? gitDirectory
     }
 
     /// `.git` is a folder, or for worktrees and submodules a file naming the real one.
@@ -102,13 +106,37 @@ struct GitRepository: Sendable, Equatable {
     }()
 
     /// How many files have uncommitted changes, counting new ones. Nil when Git isn't installed,
-    /// refuses, or takes longer than `timeout`, as it can in a very large repository.
+    /// refuses, takes longer than `timeout` (as it can in a very large repository), or when the
+    /// repository's own settings could make Git run commands.
     static func changeCount(in folder: URL, git: URL? = executable, timeout: TimeInterval = 3) async -> Int? {
-        guard let git else { return nil }
+        guard let git, !configRunsCommands(folder) else { return nil }
         return await withCheckedContinuation { continuation in
             DispatchQueue.global(qos: .utility).async {
                 continuation.resume(returning: runStatus(git, in: folder, timeout: timeout))
             }
+        }
+    }
+
+    /// Whether the repository's settings could run commands that `-c` can't switch off: clean and
+    /// smudge filters (run to compare changed files, and named per filter), or other config files pulled
+    /// in that might define them. A repository from elsewhere, such as an unzipped download, is the
+    /// user's own as far as Git can tell, so this is the only thing standing between a hover and its
+    /// commands.
+    static func configRunsCommands(_ folder: URL) -> Bool {
+        guard let gitDirectory = gitDirectory(of: folder) else { return true }
+        let common = commonDirectory(of: gitDirectory)
+        let configs = [common.appending(path: "config"), common.appending(path: "config.worktree"),
+                       gitDirectory.appending(path: "config"), gitDirectory.appending(path: "config.worktree")]
+        return configs.contains { url in
+            guard let text = try? String(contentsOf: url, encoding: .utf8) else { return false }
+            return configSectionsRunCommands(text)
+        }
+    }
+
+    static func configSectionsRunCommands(_ config: String) -> Bool {
+        config.split(whereSeparator: \.isNewline).contains { line in
+            let section = line.trimmingCharacters(in: .whitespaces).lowercased()
+            return ["[filter", "[include", "[includeif"].contains { section.hasPrefix($0) }
         }
     }
 
@@ -124,8 +152,15 @@ struct GitRepository: Sendable, Equatable {
         }
         let process = Process()
         process.executableURL = git
-        // No optional locks: a status running beside the user's own Git commands mustn't block them.
-        process.arguments = ["--no-optional-locks", "-C", folder.path(percentEncoded: false), "status", "--porcelain", "--untracked-files=normal"]
+        process.arguments = [
+            // Settings given here outrank the repository's, which could otherwise name a program for
+            // Git to run just because the folder was hovered.
+            "-c", "core.fsmonitor=false", "-c", "core.hooksPath=/dev/null",
+            // No optional locks: this mustn't write the index or block the user's own Git commands.
+            "--no-optional-locks", "-C", folder.path(percentEncoded: false),
+            // Submodules have settings of their own, which aren't checked; leave them out.
+            "status", "--porcelain", "--untracked-files=normal", "--ignore-submodules=all",
+        ]
         process.standardOutput = output
         process.standardError = FileHandle.nullDevice
         let finished = DispatchSemaphore(value: 0)

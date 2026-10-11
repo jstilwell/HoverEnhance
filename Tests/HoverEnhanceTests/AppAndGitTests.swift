@@ -134,14 +134,55 @@ struct GitRepositoryTests {
         #expect(await GitRepository.changeCount(in: scratch.folder) == nil)
     }
 
+    @Test func repositoriesThatWouldRunCommandsArentAsked() async throws {
+        let git = try #require(GitRepository.executable, "the developer tools' Git is needed")
+        let scratch = try Scratch()
+        let marker = scratch.folder.appending(path: "ran")
+        let payload = scratch.folder.appending(path: "payload.sh")
+        try Data("#!/bin/sh\ntouch '\(marker.path(percentEncoded: false))'\n".utf8).write(to: payload)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: payload.path(percentEncoded: false))
+
+        func repository(_ name: String, config: String) throws -> URL {
+            let repo = scratch.folder.appending(path: name, directoryHint: .isDirectory)
+            try FileManager.default.createDirectory(at: repo, withIntermediateDirectories: true)
+            #expect(try scratch.run(git.path(percentEncoded: false), ["-C", repo.path(percentEncoded: false), "init", "-q"]) == 0)
+            let handle = try FileHandle(forWritingTo: repo.appending(path: ".git/config"))
+            try handle.seekToEnd()
+            try handle.write(contentsOf: Data(config.utf8))
+            try handle.close()
+            try Data("x".utf8).write(to: repo.appending(path: "file.txt"))
+            try Data("* filter=evil\n".utf8).write(to: repo.appending(path: ".gitattributes"))
+            return repo
+        }
+        let payloadPath = payload.path(percentEncoded: false)
+
+        // A file system monitor is switched off from the command line, so this one is asked, safely.
+        let monitor = try repository("monitor", config: "[core]\n\tfsmonitor = \(payloadPath)\n")
+        #expect(await GitRepository.changeCount(in: monitor) == 2)
+        #expect(!FileManager.default.fileExists(atPath: marker.path(percentEncoded: false)))
+
+        // Filters can't be, so a repository defining one, or pulling in other settings, isn't asked.
+        let filter = try repository("filter", config: "[filter \"evil\"]\n\tclean = \(payloadPath)\n")
+        #expect(await GitRepository.changeCount(in: filter) == nil)
+        let include = try repository("include", config: "[include]\n\tpath = ../../elsewhere.config\n")
+        #expect(await GitRepository.changeCount(in: include) == nil)
+        #expect(!FileManager.default.fileExists(atPath: marker.path(percentEncoded: false)))
+
+        #expect(GitRepository.configSectionsRunCommands("[includeIf \"gitdir:~/work/\"]\n\tpath = x"))
+        #expect(!GitRepository.configSectionsRunCommands("[core]\n\tbare = false\n[remote \"origin\"]\n\turl = x"))
+    }
+
     @Test func aHungGitIsGivenUpOn() async throws {
         let scratch = try Scratch()
         let slow = scratch.folder.appending(path: "slow-git")
         // The sleep is a child that keeps the output open after the script itself is stopped.
         try Data("#!/bin/sh\nsleep 10\ntrue\n".utf8).write(to: slow)
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: slow.path(percentEncoded: false))
+        // Looks enough like a repository for Git to be run.
+        try FileManager.default.createDirectory(at: scratch.folder.appending(path: ".git"), withIntermediateDirectories: true)
         let start = Date()
         #expect(await GitRepository.changeCount(in: scratch.folder, git: slow, timeout: 0.3) == nil)
+        #expect(Date().timeIntervalSince(start) > 0.25)
         #expect(Date().timeIntervalSince(start) < 3)
     }
 
