@@ -31,7 +31,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var isRunning = false
     private var lastInfo: HoverInfo?
 
-    private var permissionItem: NSMenuItem!
+    private var versionItem: NSMenuItem!
     private var grantItem: NSMenuItem!
     private var previewsItem: NSMenuItem!
     private var copyItem: NSMenuItem!
@@ -177,7 +177,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     // MARK: - Menus
 
     private func makeMenu() -> NSMenu {
-        permissionItem = menuItem("", action: nil, symbol: "accessibility")
+        // Greyed out at the top, as in LockAudio. Accessibility access goes without saying: without it
+        // the welcome window shows instead of this menu.
+        versionItem = NSMenuItem(title: "Version \(AdvancedSettingsView.shortVersion)", action: nil, keyEquivalent: "")
+        versionItem.isEnabled = false
         grantItem = menuItem("Grant Accessibility Access…", action: #selector(grantAccess), symbol: "hand.raised")
         previewsItem = menuItem("Show Previews", action: #selector(togglePreviews), key: "e", symbol: "eye")
         copyItem = menuItem("Copy Inspector Result", action: #selector(copyLastResult), key: "c", symbol: "doc.on.doc")
@@ -187,7 +190,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.delegate = self
         menu.autoenablesItems = false
         menu.items = [
-            permissionItem, grantItem, .separator(),
+            versionItem, grantItem, .separator(),
             previewsItem, copyItem, .separator(),
             menuItem("About HoverEnhance", action: #selector(showAbout), symbol: "info.circle"),
             updateItem,
@@ -234,8 +237,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func menuNeedsUpdate(_ menu: NSMenu) {
         let granted = access.isGranted
-        permissionItem.title = granted ? "Accessibility access: on" : "Accessibility access: off"
-        permissionItem.isEnabled = false
         grantItem.isHidden = granted
         previewsItem.state = settings.previewsEnabled ? .on : .off
         copyItem.isHidden = !settings.showsInspector
