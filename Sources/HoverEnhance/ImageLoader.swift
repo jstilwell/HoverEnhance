@@ -11,9 +11,10 @@ struct LoadedImage: Sendable {
 
 /// Fetches preview candidates in order and decodes the first one that works.
 actor ImageLoader {
-    /// Downloaded images, on disk. Settings shows its size and can clear it.
+    /// Downloaded images, on disk. Settings shows its size and can clear it. Little is kept in memory:
+    /// the decoded images below are what's shown again.
     static let diskCache = URLCache(
-        memoryCapacity: 32 << 20, diskCapacity: 512 << 20,
+        memoryCapacity: 8 << 20, diskCapacity: 512 << 20,
         directory: FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0].appending(path: "HoverEnhance/Images")
     )
 
@@ -29,7 +30,10 @@ actor ImageLoader {
 
     init(configuration: URLSessionConfiguration = ImageLoader.configuration()) {
         downloader = LimitedDownloader(configuration: configuration)
-        decoded.totalCostLimit = 256 << 20
+        // Enough for an album's neighbors and recent hovers; each can be as large as the screen, and an
+        // older one comes back from the disk cache quickly. NSCache also gives them up under memory pressure.
+        decoded.countLimit = 12
+        decoded.totalCostLimit = 128 << 20
     }
 
     static func configuration() -> URLSessionConfiguration {
