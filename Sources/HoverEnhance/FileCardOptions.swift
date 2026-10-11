@@ -3,16 +3,17 @@ import Foundation
 /// One thing a file card can show. Each has its own switch in Settings → Finder; a detail that's off
 /// isn't read at all.
 enum FileCardField: String, CaseIterable, Identifiable, Sendable {
-    case kind, size
-    case path
+    case thumbnail, kind, size
+    case path, linkTarget
     case created, modified, opened
-    case whereFrom
+    case whereFrom, downloadedBy
+    case tags, cloud
     case dimensions, duration, pages
     case users
 
     /// Sections of the card, and of its settings.
     enum Group: CaseIterable, Identifiable, Sendable {
-        case card, path, dates, downloads, media, inUse
+        case card, path, dates, downloads, status, media, inUse
 
         var id: Self { self }
 
@@ -22,6 +23,7 @@ enum FileCardField: String, CaseIterable, Identifiable, Sendable {
             case .path: "Path"
             case .dates: "Dates"
             case .downloads: "Downloads"
+            case .status: "Tags and iCloud"
             case .media: "Images, audio, and video"
             case .inUse: "In use"
             }
@@ -34,10 +36,11 @@ enum FileCardField: String, CaseIterable, Identifiable, Sendable {
 
     var group: Group {
         switch self {
-        case .kind, .size: .card
-        case .path: .path
+        case .thumbnail, .kind, .size: .card
+        case .path, .linkTarget: .path
         case .created, .modified, .opened: .dates
-        case .whereFrom: .downloads
+        case .whereFrom, .downloadedBy: .downloads
+        case .tags, .cloud: .status
         case .dimensions, .duration, .pages: .media
         case .users: .inUse
         }
@@ -45,13 +48,18 @@ enum FileCardField: String, CaseIterable, Identifiable, Sendable {
 
     var name: String {
         switch self {
+        case .thumbnail: "Thumbnail"
         case .kind: "Kind"
         case .size: "Size"
         case .path: "Path"
+        case .linkTarget: "Where an alias points"
         case .created: "Created"
         case .modified: "Modified"
         case .opened: "Last opened"
         case .whereFrom: "Where it came from"
+        case .downloadedBy: "Who downloaded it"
+        case .tags: "Tags"
+        case .cloud: "iCloud status"
         case .dimensions: "Dimensions"
         case .duration: "Length"
         case .pages: "Pages"
@@ -61,11 +69,16 @@ enum FileCardField: String, CaseIterable, Identifiable, Sendable {
 
     var detail: String? {
         switch self {
+        case .thumbnail: "A preview of images, documents, and videos in place of the icon"
         case .kind: "Such as PNG image or Folder"
         case .size: "Not shown for folders, which would mean adding up everything in them"
         case .path: "Click it to copy it"
+        case .linkTarget: "The original of an alias or symbolic link; click it to copy it"
         case .opened: "Only when it was opened after it last changed"
         case .whereFrom: "The website a download came from"
+        case .downloadedBy: "The app that downloaded it, and when"
+        case .tags: "Finder tags, with their colors"
+        case .cloud: "Whether a file in iCloud is on this Mac, in the cloud only, or syncing"
         case .dimensions: "Of images and videos"
         case .duration: "Of audio and video"
         case .pages: "Of PDFs and other documents"

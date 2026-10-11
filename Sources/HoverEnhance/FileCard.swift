@@ -1,4 +1,5 @@
 import AppKit
+import QuickLookThumbnailing
 
 /// What a file card shows about one file or folder.
 @MainActor @Observable
@@ -13,6 +14,8 @@ final class FileCard {
     /// What was just copied (the path, or a row's label); it shows a checkmark for a moment.
     private(set) var copied: String?
     @ObservationIgnored private var copyGeneration = 0
+    /// A Quick Look thumbnail, which replaces the icon once it's made.
+    private(set) var thumbnail: NSImage?
     /// Who's using it; nil while looking.
     private(set) var users: [FileUser]?
     private(set) var userIcons: [pid_t: NSImage] = [:]
@@ -50,6 +53,27 @@ final class FileCard {
     }
 
     var rows: [DetailRow] { details.rows(pathStyle: options.pathStyle) }
+
+    static let pathID = "path"
+    static let linkTargetID = "linkTarget"
+    /// The icon or thumbnail's size, in points.
+    static let imageSize: CGFloat = 52
+
+    /// Folders and files Quick Look can't draw keep their icon.
+    func loadThumbnail() async {
+        guard options.shows(.thumbnail), thumbnail == nil else { return }
+        let request = QLThumbnailGenerator.Request(fileAt: url, size: CGSize(width: Self.imageSize, height: Self.imageSize),
+                                                   scale: NSScreen.main?.backingScaleFactor ?? 2, representationTypes: .thumbnail)
+        thumbnail = try? await QLThumbnailGenerator.shared.generateBestRepresentation(for: request).nsImage
+    }
+
+    /// Where an alias or symbolic link points, written like the path.
+    var formattedLinkTarget: String? {
+        switch details.linkTarget {
+        case .found(let path)?, .missing(let path?)?: options.pathStyle.format(path)
+        default: nil
+        }
+    }
 
     func loadUsers() async {
         guard options.shows(.users), users == nil else { return }
@@ -101,8 +125,6 @@ final class FileCard {
         }
         quitStates[user.pid] = force ? .failed : .stillRunning
     }
-
-    static let pathID = "path"
 
     /// Copies `text`; `id` marks what was copied, for the checkmark.
     func copy(_ text: String, id: String) {
