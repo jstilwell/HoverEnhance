@@ -42,8 +42,9 @@ the grant survives rebuilds. With ad-hoc signing you'd have to re-grant after ev
   full-size image URLs, `SiteLinks` for posts and videos). `MediaFetcher` does any lookup the site
   needs (`SiteAPIs`, `RedditGallery`), giving `Media`: one item or an album.
 - `PreviewController` shows items in `PreviewPanel`: images via `ImageLoader` (downsampled off the
-  main thread), videos via `VideoPlayback` (AVPlayer). It hides the preview when the cursor leaves
-  the element (or the video, for videos), on scroll or click, or on app switch. `ScrollTap`
+  main thread), videos via `VideoPlayback` (AVPlayer). A small click-through notch sits under the
+  cursor and joins it to the preview (`PreviewGeometry`); moving off the notch any way but onto the
+  preview ends the hover at once. Scrolling, clicking, and switching apps end it too. `ScrollTap`
   swallows scroll events while an album is up.
 - `EmbedPlayer` hosts players in a web view loaded under an HTTPS origin (YouTube needs a
   Referer), with AirPlay and WebRTC off so nothing asks for local network access.

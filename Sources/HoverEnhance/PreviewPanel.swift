@@ -2,8 +2,9 @@ import AVKit
 import AppKit
 import WebKit
 
-/// A floating panel that shows media beside the cursor. Images are click-through; videos take
-/// the mouse so their playback controls work.
+/// A floating panel that shows media beside the cursor, joined to it by a small notch under the
+/// cursor. Images and the notch are click-through; videos take the mouse so their playback controls
+/// work.
 @MainActor
 final class PreviewPanel {
     private let panel = NSPanel(
@@ -15,24 +16,35 @@ final class PreviewPanel {
     private let badge = NSView()
     private let badgeLabel = NSTextField(labelWithString: "")
     private var content: NSView?
+    /// Click-through, so the link under the cursor can still be clicked.
+    private let notch = NSPanel(
+        contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: true
+    )
+    private let notchView = NSView()
 
-    private let padding: CGFloat = 4
-    /// Space between the cursor and the panel, so the panel never sits under the cursor.
-    private let gap: CGFloat = 20
+    private let padding = PreviewGeometry.padding
     private let screenMargin: CGFloat = 8
+    private static let background = NSColor(white: 0.12, alpha: 1)
 
     init() {
-        panel.level = .statusBar
-        panel.isOpaque = false
-        panel.backgroundColor = .clear
+        for window in [panel, notch] {
+            window.level = .statusBar
+            window.isOpaque = false
+            window.backgroundColor = .clear
+            window.ignoresMouseEvents = true
+            window.hidesOnDeactivate = false
+            window.animationBehavior = .none
+            window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
+        }
         panel.hasShadow = true
-        panel.ignoresMouseEvents = true
-        panel.hidesOnDeactivate = false
-        panel.animationBehavior = .none
-        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
+
+        notchView.wantsLayer = true
+        notchView.layer?.backgroundColor = Self.background.withAlphaComponent(0.85).cgColor
+        notchView.layer?.cornerRadius = 6
+        notch.contentView = notchView
 
         container.wantsLayer = true
-        container.layer?.backgroundColor = NSColor(white: 0.12, alpha: 1).cgColor
+        container.layer?.backgroundColor = Self.background.cgColor
         container.layer?.cornerRadius = 8
         container.layer?.masksToBounds = true
         panel.contentView = container
@@ -53,64 +65,64 @@ final class PreviewPanel {
         container.addSubview(badge)
     }
 
-    /// The panel's frame in global top-left-origin coordinates, while it's on screen.
-    var globalFrame: CGRect? {
-        guard panel.isVisible, let primary = NSScreen.screens.first else { return nil }
-        let frame = panel.frame
-        return CGRect(x: frame.minX, y: primary.frame.maxY - frame.maxY, width: frame.width, height: frame.height)
+    /// Whether a global top-left-origin point is on the preview or its notch.
+    func covers(_ point: CGPoint) -> Bool {
+        guard panel.isVisible else { return false }
+        return ScreenSpace.flip(panel.frame).contains(point) || ScreenSpace.flip(notch.frame).contains(point)
     }
 
-    /// `counter` is the "2/5" album position, or nil for a single item.
-    func show(_ image: LoadedImage, counter: String?) {
+    /// The notch a preview for a cursor at `anchor` (global, top-left origin) will have, for use
+    /// before the preview has loaded.
+    func notchFrame(at anchor: CGPoint) -> CGRect {
+        PreviewGeometry.notchFrame(anchor: anchor, placeRight: PreviewGeometry.placesRight(anchor: anchor, visible: visibleFrame(at: anchor)))
+    }
+
+    /// `anchor` is where the cursor rested, in global top-left-origin coordinates. `counter` is the
+    /// "2/5" album position, or nil for a single item.
+    func show(_ image: LoadedImage, counter: String?, anchor: CGPoint) {
         playerView.player = nil
         imageView.image = image.image
-        present(imageView, naturalSize: image.pixelSize, counter: counter, interactive: false)
+        present(imageView, naturalSize: image.pixelSize, counter: counter, interactive: false, anchor: anchor)
     }
 
-    func show(_ player: AVPlayer, videoSize: CGSize, counter: String?) {
+    func show(_ player: AVPlayer, videoSize: CGSize, counter: String?, anchor: CGPoint) {
         imageView.image = nil
         playerView.player = player
         // Small videos are hard to watch at 1:1, so bring the long edge up to at least 720 points.
         let scale = max(1, 720 / max(videoSize.width, videoSize.height))
         present(playerView, naturalSize: CGSize(width: videoSize.width * scale, height: videoSize.height * scale),
-                counter: counter, interactive: true)
+                counter: counter, interactive: true, anchor: anchor)
     }
 
     /// A site's own player; it takes the mouse for its controls.
-    func show(_ webView: WKWebView, size: CGSize, counter: String?) {
+    func show(_ webView: WKWebView, size: CGSize, counter: String?, anchor: CGPoint) {
         imageView.image = nil
         playerView.player = nil
-        present(webView, naturalSize: size, counter: counter, interactive: true)
+        present(webView, naturalSize: size, counter: counter, interactive: true, anchor: anchor)
     }
 
     func hide() {
         panel.orderOut(nil)
+        notch.orderOut(nil)
         imageView.image = nil
         playerView.player = nil
     }
 
-    /// Shows `view` at one pixel per point (like a browser at 100% zoom), scaled down to fit beside
-    /// the cursor on whichever side has more room.
-    private func present(_ view: NSView, naturalSize: CGSize, counter: String?, interactive: Bool) {
-        let cursor = NSEvent.mouseLocation
-        guard let screen = NSScreen.screens.first(where: { NSMouseInRect(cursor, $0.frame, false) }) ?? NSScreen.main,
-              naturalSize.width > 0, naturalSize.height > 0 else { return }
+    private func visibleFrame(at point: CGPoint) -> CGRect {
+        guard let screen = ScreenSpace.screen(containing: point) else { return .zero }
+        return ScreenSpace.flip(screen.visibleFrame).insetBy(dx: screenMargin, dy: screenMargin)
+    }
 
-        let visible = screen.visibleFrame.insetBy(dx: screenMargin, dy: screenMargin)
-        let roomRight = visible.maxX - (cursor.x + gap)
-        let roomLeft = (cursor.x - gap) - visible.minX
-        let placeRight = roomRight >= roomLeft
-        let room = CGSize(width: max(roomRight, roomLeft) - 2 * padding, height: visible.height - 2 * padding)
-        let scale = min(1, room.width / naturalSize.width, room.height / naturalSize.height)
-        guard scale > 0 else { return }
+    private func present(_ view: NSView, naturalSize: CGSize, counter: String?, interactive: Bool, anchor: CGPoint) {
+        guard let frame = PreviewGeometry.panelFrame(anchor: anchor, naturalSize: naturalSize, visible: visibleFrame(at: anchor)) else { return }
+        panel.setFrame(ScreenSpace.flip(frame), display: false)
 
-        let size = CGSize(
-            width: (naturalSize.width * scale).rounded() + 2 * padding,
-            height: (naturalSize.height * scale).rounded() + 2 * padding
-        )
-        let x = placeRight ? cursor.x + gap : cursor.x - gap - size.width
-        let y = min(max(cursor.y - size.height / 2, visible.minY), visible.maxY - size.height)
-        panel.setFrame(NSRect(x: x, y: y, width: size.width, height: size.height), display: false)
+        let placeRight = frame.minX > anchor.x
+        notch.setFrame(ScreenSpace.flip(PreviewGeometry.notchFrame(anchor: anchor, placeRight: placeRight)), display: false)
+        // Round only the end under the cursor; the other end meets the preview.
+        notchView.layer?.maskedCorners = placeRight
+            ? [.layerMinXMinYCorner, .layerMinXMaxYCorner]
+            : [.layerMaxXMinYCorner, .layerMaxXMaxYCorner]
 
         if content !== view {
             content?.removeFromSuperview()
@@ -121,6 +133,7 @@ final class PreviewPanel {
         layoutBadge(counter)
         panel.ignoresMouseEvents = !interactive
 
+        notch.orderFrontRegardless()
         panel.orderFrontRegardless()
         panel.invalidateShadow()
     }
