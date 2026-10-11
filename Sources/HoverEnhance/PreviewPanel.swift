@@ -1,6 +1,8 @@
+import AVKit
 import AppKit
 
-/// A click-through floating panel that shows media beside the cursor.
+/// A floating panel that shows media beside the cursor. Images are click-through; videos take
+/// the mouse so their playback controls work.
 @MainActor
 final class PreviewPanel {
     private let panel = NSPanel(
@@ -8,6 +10,7 @@ final class PreviewPanel {
     )
     private let container = NSView()
     private let imageView = NSImageView()
+    private let playerView = AVPlayerView()
     private let badge = NSView()
     private let badgeLabel = NSTextField(labelWithString: "")
     private var content: NSView?
@@ -36,6 +39,10 @@ final class PreviewPanel {
         imageView.imageScaling = .scaleProportionallyUpOrDown
         imageView.animates = true
 
+        playerView.controlsStyle = .floating
+        playerView.showsFullScreenToggleButton = false
+        playerView.allowsPictureInPicturePlayback = false
+
         badge.wantsLayer = true
         badge.layer?.backgroundColor = NSColor(white: 0, alpha: 0.65).cgColor
         badge.layer?.cornerRadius = 6
@@ -45,20 +52,38 @@ final class PreviewPanel {
         container.addSubview(badge)
     }
 
+    /// The panel's frame in global top-left-origin coordinates, while it's on screen.
+    var globalFrame: CGRect? {
+        guard panel.isVisible, let primary = NSScreen.screens.first else { return nil }
+        let frame = panel.frame
+        return CGRect(x: frame.minX, y: primary.frame.maxY - frame.maxY, width: frame.width, height: frame.height)
+    }
+
     /// `counter` is the "2/5" album position, or nil for a single item.
     func show(_ image: LoadedImage, counter: String?) {
+        playerView.player = nil
         imageView.image = image.image
-        present(imageView, naturalSize: image.pixelSize, counter: counter)
+        present(imageView, naturalSize: image.pixelSize, counter: counter, interactive: false)
+    }
+
+    func show(_ player: AVPlayer, videoSize: CGSize, counter: String?) {
+        imageView.image = nil
+        playerView.player = player
+        // Small videos are hard to watch at 1:1, so bring the long edge up to at least 720 points.
+        let scale = max(1, 720 / max(videoSize.width, videoSize.height))
+        present(playerView, naturalSize: CGSize(width: videoSize.width * scale, height: videoSize.height * scale),
+                counter: counter, interactive: true)
     }
 
     func hide() {
         panel.orderOut(nil)
         imageView.image = nil
+        playerView.player = nil
     }
 
     /// Shows `view` at one pixel per point (like a browser at 100% zoom), scaled down to fit beside
     /// the cursor on whichever side has more room.
-    private func present(_ view: NSView, naturalSize: CGSize, counter: String?) {
+    private func present(_ view: NSView, naturalSize: CGSize, counter: String?, interactive: Bool) {
         let cursor = NSEvent.mouseLocation
         guard let screen = NSScreen.screens.first(where: { NSMouseInRect(cursor, $0.frame, false) }) ?? NSScreen.main,
               naturalSize.width > 0, naturalSize.height > 0 else { return }
@@ -86,6 +111,7 @@ final class PreviewPanel {
         }
         view.frame = container.bounds.insetBy(dx: padding, dy: padding)
         layoutBadge(counter)
+        panel.ignoresMouseEvents = !interactive
 
         panel.orderFrontRegardless()
         panel.invalidateShadow()

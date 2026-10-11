@@ -2,13 +2,14 @@ import AppKit
 
 /// Decides when to show a preview for what the cursor is resting on, and when to hide it.
 @MainActor
-final class ImagePreviewController {
+final class PreviewController {
     var isEnabled = true {
         didSet { if !isEnabled { reset() } }
     }
 
     private let fetcher = MediaFetcher()
     private let loader = ImageLoader()
+    private let playback = VideoPlayback()
     private let panel = PreviewPanel()
     private let scrollTap = ScrollTap()
     private var activationObserver: NSObjectProtocol?
@@ -18,6 +19,8 @@ final class ImagePreviewController {
     /// The album position being shown, or being loaded after a scroll.
     private var index = 0
     private var task: Task<Void, Never>?
+    /// While a video is showing, the cursor may move onto the panel to use its controls.
+    private var isShowingVideo = false
 
     private struct Target: Equatable {
         let source: MediaSource
@@ -61,7 +64,11 @@ final class ImagePreviewController {
     }
 
     func mouseMoved(to point: CGPoint) {
-        if let target, !target.area.contains(point) { reset() }
+        guard let target else { return }
+        var area = target.area
+        // The bounding box of element and video covers the gap between them, so the cursor can cross over.
+        if isShowingVideo, let panelFrame = panel.globalFrame { area = area.union(panelFrame) }
+        if !area.contains(point) { reset() }
     }
 
     /// Content moved under the cursor. While an album is up, the scroll tap has the wheel instead.
@@ -72,8 +79,7 @@ final class ImagePreviewController {
     /// Hides the preview but remembers the target, so it stays hidden until the cursor moves on.
     func dismiss() {
         task?.cancel()
-        scrollTap.isEnabled = false
-        panel.hide()
+        hidePanel()
     }
 
     func reset() {
@@ -82,6 +88,12 @@ final class ImagePreviewController {
         target = nil
         media = nil
         index = 0
+        hidePanel()
+    }
+
+    private func hidePanel() {
+        playback.stop()
+        isShowingVideo = false
         scrollTap.isEnabled = false
         panel.hide()
     }
@@ -90,7 +102,7 @@ final class ImagePreviewController {
         guard let media, media.items.count > 1 else { return }
         let next = min(max(index + delta, 0), media.items.count - 1)
         guard next != index else { return }
-        // Move the index now so quick scrolls add up, even before the image arrives.
+        // Move the index now so quick scrolls add up, even before the item arrives.
         index = next
         task?.cancel()
         task = Task { await display(next) }
@@ -99,21 +111,33 @@ final class ImagePreviewController {
     private func display(_ position: Int, unlessSmallerThan shown: CGSize? = nil) async {
         guard let media, media.items.indices.contains(position), let target else { return }
         let requested = target
+        let counter = media.items.count > 1 ? "\(position + 1)/\(media.items.count)" : nil
+
         switch media.items[position] {
         case .image(let candidates):
             let image = await loader.load(candidates, page: target.page, maxPixelSize: Self.maxPixelSize())
             guard let image, !Task.isCancelled, self.target == requested else { return }
             if let shown, image.pixelSize.width <= shown.width * 1.2, image.pixelSize.height <= shown.height * 1.2 { return }
-            index = position
-            let isAlbum = media.items.count > 1
+            playback.stop()
+            isShowingVideo = false
+            panel.show(image, counter: counter)
             log.info("preview \(position + 1)/\(media.items.count): \(image.url.absoluteString, privacy: .public)")
-            panel.show(image, counter: isAlbum ? "\(position + 1)/\(media.items.count)" : nil)
-            scrollTap.isEnabled = isAlbum
-            prefetch(position + 1)
+
+        case .video(let url, let reportedSize):
+            // Keyed by source and position, so the same video resumes however it was reached.
+            let key = "\(requested.source)#\(position)"
+            guard let size = await playback.start(url, key: key), !Task.isCancelled, self.target == requested,
+                  let player = playback.player else { return }
+            isShowingVideo = true
+            panel.show(player, videoSize: reportedSize ?? size, counter: counter)
+            log.info("preview \(position + 1)/\(media.items.count): video \(url.absoluteString, privacy: .public)")
         }
+        index = position
+        scrollTap.isEnabled = media.items.count > 1
+        prefetch(position + 1)
     }
 
-    /// Warms the loader's cache so stepping forward is instant.
+    /// Warms the loader's cache so stepping forward to an image is instant.
     private func prefetch(_ position: Int) {
         guard let media, media.items.indices.contains(position), case .image(let candidates) = media.items[position] else { return }
         let page = target?.page

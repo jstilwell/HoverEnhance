@@ -6,7 +6,7 @@ let log = Logger(subsystem: Bundle.main.bundleIdentifier ?? "HoverEnhance", cate
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let monitor = HoverMonitor()
-    private let preview = ImagePreviewController()
+    private let preview = PreviewController()
     private let hud = HUD()
     private let defaults = UserDefaults.standard
     private var statusItem: NSStatusItem?
