@@ -1,33 +1,63 @@
-# YouTube creator card
+# Review fixes
 
-Previews, albums, video, embeds, the notch, settings, and scroll handling are done. On youtube.com
-itself, hovering a text link (a video title or channel name) shows a card about the creator instead
-of a preview; hovering media (thumbnails, YouTube's own hover previews, avatars) shows nothing.
+Fixes from a review of the whole app: privacy and security, first run, preview polish, settings, and
+packaging. Carried over from the YouTube creator card plan: subscribing still needs a signed-in check
+with the user's own OAuth client.
 
-Left over from earlier polish: a loading indicator for slow previews.
+Still to check live (none of it can be seen offscreen): the welcome window with access removed from
+the list and dragged back in; the panel's material, fades, and spinner; Load Anyway; a link clicked
+in an embedded player; the other-apps sheet; and, once the repository is public, a first release
+and an update installing over it.
 
-## Stage 1: Creator card
-**Goal**: The card, with info that needs no sign-in.
-**Success Criteria**: On youtube.com, text links to videos or channels show avatar, name, handle,
-subscriber and video counts, description, and Open Channel; thumbnails, avatars, and YouTube's
-hover previews show nothing; a Creator cards switch in Settings.
-**Tests**: Link → channel reference; channel page and oEmbed parsing; "on text" detection; manual
-check on a YouTube search page (title and channel name show the card; thumbnail and avatar don't).
+## Stage 1: Privacy and security
+**Goal**: Hovering can't leak what's on screen or reach places a web page shouldn't.
+**Success Criteria**: Hover summaries reach the log only while the inspector is on, and URLs and text
+are private outside debug builds; `file:` URLs are followed only from local pages; network previews
+happen only in browsers unless Settings → General allows other apps, and turning that on offers safety
+options (skip email apps, known sites only, only while holding a key); Vimeo hashes are checked like
+other IDs; the sign-in listener ignores replies with the wrong state; Keychain write failures surface;
+Quit and Force Quit never signal a process that reused the pid.
+**Tests**: `file:` links from web and local pages; browser and email app detection from Info.plist
+contents; resolver results in browsers, other apps, email apps, and for unknown sites; Vimeo hash
+validation; loopback ignores a wrong state and still catches the right one; a recycled pid isn't
+signalled; new settings persist.
 **Status**: Complete
 
-## Stage 2: YouTube sign-in
-**Goal**: Sign in to YouTube with the user's own Google Cloud OAuth client.
-**Success Criteria**: Settings → Accounts takes a client ID and secret, signs in through the browser
-(PKCE, loopback redirect), keeps the refresh token in the Keychain, refreshes access tokens, and
-signs out (revoking the token).
-**Tests**: PKCE and URL building; loopback redirect handling; token response parsing; error paths
-against Google's endpoints. A full sign-in needs the user's own OAuth client.
+## Stage 2: Image size limit
+**Goal**: Large images don't download unasked.
+**Success Criteria**: Settings → Previews sets the largest image to download; a larger one (by its
+Content-Length, or by bytes received when there's none) stops downloading and the preview says how big
+it is, with Load Anyway, which loads it.
+**Tests**: Capped downloads through a stub URLProtocol: under the limit, over by Content-Length, over
+without one; the setting persists.
 **Status**: Complete
 
-## Stage 3: Subscribe and unsubscribe
-**Goal**: The card's button subscribes or unsubscribes through the YouTube Data API.
-**Success Criteria**: The card shows whether you're subscribed; the button toggles it; signed out, it
-offers to sign in; API errors (quota, expired sign-in) show plainly.
-**Tests**: API request building and response parsing; signed-out card checked live (the Sign In
-button opens Settings → Accounts). Still to do: a signed-in check with the user's OAuth client.
-**Status**: In Progress
+## Stage 3: Welcome window
+**Goal**: Nothing runs until Accessibility is on, and the first thing seen explains how to turn it on.
+**Success Criteria**: Without Accessibility, launch shows only a welcome window: what the app does, a
+button to open the Accessibility settings, the app icon to drag into the list, and how to remove and
+re-add the app when it's listed but not working. Granting starts the app and says where it lives.
+Closing the window before then quits. Losing access while running brings the window back.
+**Tests**: The window's state follows trust (checked through an injected trust check); manual check
+of the drag into System Settings and of granting and revoking.
+**Status**: Complete
+
+## Stage 4: Preview polish
+**Goal**: Previews feel finished.
+**Success Criteria**: A spinner in the notch while a preview loads; previews fade in and out (not
+with Reduce Motion); panels use a system material and follow light and dark mode; links in embedded
+players open in the browser; the menu bar icon dims while previews are off; Pause and Enable Previews
+become one Show Previews item, and nothing is inspected while previews and the inspector are both off.
+**Tests**: Existing geometry and scroll tests; visual checks rendered offscreen.
+**Status**: Complete
+
+## Stage 5: Settings and packaging
+**Goal**: The app looks and ships like a finished one.
+**Success Criteria**: Settings tabs share one height and scroll; Accessibility status and Clear
+website data update live; About shows version, build, and the repository; tabs are opened by an enum;
+an app icon; Info.plist has copyright and category; `make release` signs with the hardened runtime and
+notarizes; README matches.
+**Tests**: Settings tests; `make app` and the release signing step run; `codesign --verify`.
+**Status**: Complete. Also added: the app icon (concept B, "Notch, sharpened") with a matching menu
+bar icon; Sparkle updates, published as GitHub releases by `bin/build-release.sh`; and an MIT license
+for open-sourcing the repository.

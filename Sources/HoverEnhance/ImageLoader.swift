@@ -17,40 +17,64 @@ actor ImageLoader {
         directory: FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0].appending(path: "HoverEnhance/Images")
     )
 
-    private let session: URLSession
+    enum Outcome: Sendable {
+        case loaded(LoadedImage)
+        /// Over the size limit, and not downloaded: its size in bytes, when the server said.
+        case tooLarge(URL, bytes: Int64?)
+        case failed
+    }
+
+    private let downloader: LimitedDownloader
     private let decoded = NSCache<NSURL, CacheEntry>()
 
-    init() {
-        let configuration = URLSessionConfiguration.default
-        configuration.urlCache = Self.diskCache
-        configuration.timeoutIntervalForRequest = 15
-        configuration.httpAdditionalHeaders = ["Accept": "image/avif,image/webp,image/apng,image/*;q=0.9,*/*;q=0.5"]
-        session = URLSession(configuration: configuration)
+    init(configuration: URLSessionConfiguration = ImageLoader.configuration()) {
+        downloader = LimitedDownloader(configuration: configuration)
         decoded.totalCostLimit = 256 << 20
     }
 
-    /// Returns the first candidate that loads, or nil. `page` is the page showing the image; some
-    /// image hosts refuse requests without a Referer from their own site.
-    func load(_ candidates: [URL], page: URL?, maxPixelSize: Int) async -> LoadedImage? {
-        for url in candidates {
-            if Task.isCancelled { return nil }
-            if let entry = decoded.object(forKey: url as NSURL) { return entry.image }
-            guard let image = await fetch(url, page: page, maxPixelSize: maxPixelSize) else { continue }
-            let cost = Int(image.image.size.width * image.image.size.height) * 4
-            decoded.setObject(CacheEntry(image), forKey: url as NSURL, cost: cost)
-            return image
-        }
-        return nil
+    static func configuration() -> URLSessionConfiguration {
+        let configuration = URLSessionConfiguration.default
+        configuration.urlCache = diskCache
+        configuration.timeoutIntervalForRequest = 15
+        configuration.httpAdditionalHeaders = ["Accept": "image/avif,image/webp,image/apng,image/*;q=0.9,*/*;q=0.5"]
+        return configuration
     }
 
-    private func fetch(_ url: URL, page: URL?, maxPixelSize: Int) async -> LoadedImage? {
+    /// Returns the first candidate that loads. `page` is the page showing the image; some image hosts
+    /// refuse requests without a Referer from their own site. A candidate larger than `byteLimit`
+    /// isn't downloaded, and ends the search: the caller says how big it is and offers to load it.
+    func load(_ candidates: [URL], page: URL?, maxPixelSize: Int, byteLimit: Int64?) async -> Outcome {
+        for url in candidates {
+            if Task.isCancelled { return .failed }
+            if let entry = decoded.object(forKey: url as NSURL) { return .loaded(entry.image) }
+            switch await fetch(url, page: page, maxPixelSize: maxPixelSize, byteLimit: byteLimit) {
+            case .loaded(let image):
+                let cost = Int(image.image.size.width * image.image.size.height) * 4
+                decoded.setObject(CacheEntry(image), forKey: url as NSURL, cost: cost)
+                return .loaded(image)
+            case .tooLarge(_, let bytes):
+                return .tooLarge(url, bytes: bytes)
+            case .failed:
+                continue
+            }
+        }
+        return .failed
+    }
+
+    private func fetch(_ url: URL, page: URL?, maxPixelSize: Int, byteLimit: Int64?) async -> Outcome {
         var request = URLRequest(url: url)
         if let referer = page.flatMap({ Self.referer(from: $0, to: url) }) {
             request.setValue(referer, forHTTPHeaderField: "Referer")
         }
-        guard let (data, response) = try? await session.data(for: request) else { return nil }
-        if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) { return nil }
-        return ImageDecoder.decode(data, from: url, maxPixelSize: maxPixelSize)
+        switch await downloader.data(for: request, limit: byteLimit) {
+        case .data(let data, let response):
+            if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) { return .failed }
+            return ImageDecoder.decode(data, from: url, maxPixelSize: maxPixelSize).map(Outcome.loaded) ?? .failed
+        case .tooLarge(let bytes):
+            return .tooLarge(url, bytes: bytes)
+        case .failed:
+            return .failed
+        }
     }
 
     /// The page's origin, as browsers send cross-site by default (strict-origin-when-cross-origin);

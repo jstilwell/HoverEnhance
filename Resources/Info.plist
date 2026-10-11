@@ -6,6 +6,8 @@
 	<string>en</string>
 	<key>CFBundleExecutable</key>
 	<string>HoverEnhance</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
 	<key>CFBundleIdentifier</key>
 	<string>com.jessestilwell.HoverEnhance</string>
 	<key>CFBundleInfoDictionaryVersion</key>
@@ -17,10 +19,22 @@
 	<key>CFBundleShortVersionString</key>
 	<string>0.1.0</string>
 	<key>CFBundleVersion</key>
-	<string>1</string>
+	<string>0.1.0</string>
+	<key>LSApplicationCategoryType</key>
+	<string>public.app-category.utilities</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>14.0</string>
 	<key>LSUIElement</key>
+	<true/>
+	<key>NSHumanReadableCopyright</key>
+	<string>© 2026 Jesse Stilwell</string>
+	<key>SUFeedURL</key>
+	<string>https://github.com/jstilwell/HoverEnhance/releases/latest/download/appcast.xml</string>
+	<key>SUPublicEDKey</key>
+	<string>fZ4NlJ+2ZPYpX53Iiex5cAeUUpGUHzULj/JI/Y4X784=</string>
+	<key>SURequireSignedFeed</key>
+	<true/>
+	<key>SUVerifyUpdateBeforeExtraction</key>
 	<true/>
 </dict>
 </plist>

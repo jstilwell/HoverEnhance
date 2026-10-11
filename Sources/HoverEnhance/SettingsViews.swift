@@ -3,6 +3,9 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 private let settingsWidth: CGFloat = 540
+/// Every tab is the same size, so the window doesn't jump between tabs, and short enough for a
+/// 1280 × 800 screen; longer tabs scroll.
+private let settingsHeight: CGFloat = 600
 
 /// Section footers in grouped forms trail-align by default; settings text reads better leading.
 private struct Footnote: View {
@@ -22,6 +25,7 @@ private struct Footnote: View {
 
 struct GeneralSettingsView: View {
     @Bindable var settings: AppSettings
+    @State private var confirmsOtherApps = false
 
     var body: some View {
         Form {
@@ -36,7 +40,7 @@ struct GeneralSettingsView: View {
                 Picker("Key", selection: $settings.activationKey) {
                     ForEach(ModifierKey.allCases) { Text($0.label).tag($0) }
                 }
-                .disabled(settings.activation == .always)
+                .disabled(!settings.usesActivationKey)
                 LabeledContent("Hover delay") {
                     HStack {
                         Slider(value: $settings.hoverDelay, in: 0...600, step: 25)
@@ -49,6 +53,24 @@ struct GeneralSettingsView: View {
                 Footnote("How long the cursor rests on something before its preview starts. Shorter feels quicker; longer avoids previews while you sweep across a page.")
             }
             Section {
+                Toggle(isOn: Binding(
+                    get: { settings.previewsInOtherApps },
+                    // Turning it on goes through the safety options first.
+                    set: { on in if on { confirmsOtherApps = true } else { settings.previewsInOtherApps = false } }
+                )) {
+                    Text("Preview links in other apps")
+                    Text("Apps that aren't browsers, such as Messages, Slack, or Notes")
+                }
+                if settings.previewsInOtherApps {
+                    OtherAppsOptions(skipsEmail: $settings.otherAppsSkipEmail, knownSitesOnly: $settings.otherAppsKnownSitesOnly,
+                                     needsKey: $settings.otherAppsNeedKey, settings: settings)
+                }
+            } header: {
+                Text("Other apps")
+            } footer: {
+                Footnote(OtherAppsOptions.explanation + " Finder's file cards don't use the network and always appear.")
+            }
+            Section {
                 ExcludedAppsEditor(apps: $settings.excludedApps)
             } header: {
                 Text("Excluded apps")
@@ -57,7 +79,93 @@ struct GeneralSettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: settingsWidth, height: 540)
+        .frame(width: settingsWidth, height: settingsHeight)
+        .sheet(isPresented: $confirmsOtherApps) {
+            OtherAppsSheet(settings: settings)
+        }
+    }
+}
+
+/// The safety options for previews outside browsers, in Settings and in the sheet that turns them on.
+private struct OtherAppsOptions: View {
+    @Binding var skipsEmail: Bool
+    @Binding var knownSitesOnly: Bool
+    @Binding var needsKey: Bool
+    let settings: AppSettings
+
+    static let explanation = "In a browser, a preview loads only what the page could load itself. In other apps it can give something away: an email can carry a link that tells its sender you read the message, and where you are."
+
+    var body: some View {
+        Toggle(isOn: $skipsEmail) {
+            Text("Skip email apps")
+            Text("Mail, Outlook, and other apps that handle email links")
+        }
+        Toggle(isOn: $knownSitesOnly) {
+            Text("Only links to known sites")
+            Text("Reddit, X, YouTube, and the others under Sites, but not images from anywhere, which is how tracking pixels work")
+        }
+        Toggle(isOn: $needsKey) {
+            Text("Only while holding \(settings.activationKey.label)")
+            Text(settings.activation == .unlessHoldingKey
+                 ? "Not available while previews appear except while holding a key"
+                 : "Nothing loads until you ask for it. The key is set under Activation.")
+        }
+        .disabled(settings.activation == .unlessHoldingKey)
+    }
+}
+
+/// Asks how careful to be before previews start loading links outside browsers.
+struct OtherAppsSheet: View {
+    let settings: AppSettings
+    @Environment(\.dismiss) private var dismiss
+    @State private var skipsEmail: Bool
+    @State private var knownSitesOnly: Bool
+    @State private var needsKey: Bool
+
+    init(settings: AppSettings) {
+        self.settings = settings
+        _skipsEmail = State(initialValue: settings.otherAppsSkipEmail)
+        _knownSitesOnly = State(initialValue: settings.otherAppsKnownSitesOnly)
+        _needsKey = State(initialValue: settings.otherAppsNeedKey)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .top, spacing: 14) {
+                Image(systemName: "hand.raised.fill")
+                    .font(.system(size: 28))
+                    .foregroundStyle(.orange)
+                    .frame(width: 36)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Preview links in other apps?").font(.headline)
+                    Text("To preview a link, HoverEnhance loads what it points to, from your Mac. " + OtherAppsOptions.explanation)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .padding([.horizontal, .top], 20)
+            Form {
+                OtherAppsOptions(skipsEmail: $skipsEmail, knownSitesOnly: $knownSitesOnly, needsKey: $needsKey, settings: settings)
+            }
+            .formStyle(.grouped)
+            .scrollDisabled(true)
+            HStack {
+                Spacer()
+                Button("Cancel", role: .cancel) { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+                Button("Turn On") {
+                    settings.otherAppsSkipEmail = skipsEmail
+                    settings.otherAppsKnownSitesOnly = knownSitesOnly
+                    settings.otherAppsNeedKey = needsKey
+                    settings.previewsInOtherApps = true
+                    dismiss()
+                }
+                .keyboardShortcut(.defaultAction)
+            }
+            .padding([.horizontal, .bottom], 20)
+        }
+        .frame(width: 460)
+        .fixedSize(horizontal: false, vertical: true)
     }
 }
 
@@ -154,6 +262,8 @@ private struct ExcludedAppsEditor: View {
 struct PreviewsSettingsView: View {
     @Bindable var settings: AppSettings
 
+    static let imageLimits = [5, 10, 25, 50, 100]
+
     var body: some View {
         Form {
             Section("Show") {
@@ -191,10 +301,13 @@ struct PreviewsSettingsView: View {
                         Text(String(format: "%.1f×", settings.minimumEnlargement)).monospacedDigit().frame(width: 44, alignment: .trailing)
                     }
                 }
+                Picker("Largest image to download", selection: $settings.largestImageMegabytes) {
+                    ForEach(PreviewsSettingsView.imageLimits, id: \.self) { Text("\($0) MB").tag($0) }
+                }
             } header: {
                 Text("Size")
             } footer: {
-                Footnote("Previews take up to this share of the space beside the cursor. An image isn't previewed unless it would appear at least this much bigger than it does on the page.")
+                Footnote("Previews take up to this share of the space beside the cursor. An image isn't previewed unless it would appear at least this much bigger than it does on the page. A larger image than the download limit shows its size instead, with Load Anyway.")
             }
             Section {
                 Toggle("Show the notch under the cursor", isOn: $settings.showsNotch)
@@ -208,7 +321,7 @@ struct PreviewsSettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: settingsWidth, height: 780)
+        .frame(width: settingsWidth, height: settingsHeight)
     }
 }
 
@@ -251,7 +364,7 @@ struct VideoSettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: settingsWidth, height: 430)
+        .frame(width: settingsWidth, height: settingsHeight)
     }
 }
 
@@ -279,7 +392,7 @@ struct SitesSettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: settingsWidth, height: 730)
+        .frame(width: settingsWidth, height: settingsHeight)
     }
 }
 
@@ -351,7 +464,7 @@ struct FinderSettingsView: View {
             .disabled(!settings.finderCards)
         }
         .formStyle(.grouped)
-        .frame(width: settingsWidth, height: 860)
+        .frame(width: settingsWidth, height: settingsHeight)
     }
 
     private func shows(_ field: FileCardField) -> Binding<Bool> {
@@ -407,7 +520,16 @@ struct FinderSettingsView: View {
 
 struct AdvancedSettingsView: View {
     @Bindable var settings: AppSettings
-    @State private var accessibilityGranted = AccessibilityPermission.isGranted
+    let access: AccessibilityWatcher
+    @Bindable var updates: Updates
+
+    /// "0.2.0 (14)".
+    static var version: String {
+        let info = Bundle.main.infoDictionary ?? [:]
+        let short = info["CFBundleShortVersionString"] as? String
+        let build = info["CFBundleVersion"] as? String
+        return [short, build.map { "(\($0))" }].compactMap { $0 }.joined(separator: " ").nilIfEmpty ?? "–"
+    }
     @State private var cacheBytes = Maintenance.imageCacheBytes
     @State private var websiteDataCleared = false
 
@@ -416,13 +538,12 @@ struct AdvancedSettingsView: View {
             Section("Permissions") {
                 LabeledContent("Accessibility") {
                     HStack {
-                        Label(accessibilityGranted ? "Allowed" : "Not allowed",
-                              systemImage: accessibilityGranted ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
-                            .foregroundStyle(accessibilityGranted ? .green : .orange)
-                        if !accessibilityGranted {
-                            Button("Open System Settings…") {
-                                AccessibilityPermission.request()
-                                AccessibilityPermission.openSettings()
+                        Label(access.isGranted ? "Allowed" : "Not allowed",
+                              systemImage: access.isGranted ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                            .foregroundStyle(access.isGranted ? .green : .orange)
+                        if !access.isGranted {
+                            Button("Show Setup Guide…") {
+                                NotificationCenter.default.post(name: .showAccessibilityGuide, object: nil)
                             }
                         }
                     }
@@ -443,6 +564,9 @@ struct AdvancedSettingsView: View {
                         Task {
                             await Maintenance.clearWebsiteData()
                             websiteDataCleared = true
+                            // Sites set cookies again as they're used, so it can be cleared again.
+                            try? await Task.sleep(for: .seconds(2))
+                            websiteDataCleared = false
                         }
                     }
                     .disabled(websiteDataCleared)
@@ -458,14 +582,41 @@ struct AdvancedSettingsView: View {
                     Text("A panel in the corner listing what's under the cursor: role, labels, and URLs")
                 }
             }
+            Section {
+                if updates.isAvailable {
+                    Toggle("Check for updates automatically", isOn: $updates.checksAutomatically)
+                    HStack {
+                        if let version = updates.waitingVersion {
+                            Text("Version \(version) is ready to install.").foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Button(updates.waitingVersion == nil ? "Check Now" : "Install…") { updates.checkForUpdates() }
+                    }
+                } else {
+                    Text("This copy was built from source and doesn't update itself.").foregroundStyle(.secondary)
+                }
+            } header: {
+                Text("Updates")
+            } footer: {
+                if updates.isAvailable {
+                    Footnote(Updates.checksOnlyWhenAsked
+                             ? "This is a debug build, so it checks only when you click Check Now."
+                             : "Updates are signed and checked before they're installed. Installing one restarts HoverEnhance.")
+                }
+            }
             Section("About") {
-                LabeledContent("Version", value: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "–")
+                LabeledContent("Version", value: Self.version)
+                LabeledContent("Source") {
+                    Link("github.com/jstilwell/HoverEnhance", destination: URL(string: "https://github.com/jstilwell/HoverEnhance")!)
+                }
+                if let copyright = Bundle.main.object(forInfoDictionaryKey: "NSHumanReadableCopyright") as? String {
+                    LabeledContent("Copyright", value: copyright)
+                }
             }
         }
         .formStyle(.grouped)
-        .frame(width: settingsWidth, height: 470)
+        .frame(width: settingsWidth, height: settingsHeight)
         .onAppear {
-            accessibilityGranted = AccessibilityPermission.isGranted
             cacheBytes = Maintenance.imageCacheBytes
         }
     }
@@ -525,7 +676,7 @@ struct AccountsSettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: settingsWidth, height: 560)
+        .frame(width: settingsWidth, height: settingsHeight)
         .task { await account.checkAccess() }
     }
 
@@ -562,4 +713,8 @@ struct AccountsSettingsView: View {
             }
         }
     }
+}
+
+private extension String {
+    var nilIfEmpty: String? { isEmpty ? nil : self }
 }

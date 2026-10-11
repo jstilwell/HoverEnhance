@@ -5,13 +5,13 @@ import WebKit
 
 /// A floating panel that shows media beside the cursor, joined to it by a small notch under the
 /// cursor. Images and the notch are click-through; videos take the mouse so their playback controls
-/// work.
+/// work. Both use the system's popover material, so they follow light and dark mode.
 @MainActor
 final class PreviewPanel {
     private let panel = NSPanel(
         contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: true
     )
-    private let container = NSView()
+    private let container = NSVisualEffectView()
     /// Clips a zoomed image to the preview.
     private let imageClip = NSView()
     private let imageView = NSImageView()
@@ -22,6 +22,11 @@ final class PreviewPanel {
     private let readout = NSView()
     private let readoutLabel = NSTextField(labelWithString: "")
     private var readoutGeneration = 0
+    /// Stands in for the preview while it loads.
+    private let spinner = NSProgressIndicator()
+    private let loadingView = NSView()
+    /// Bumped whenever the panel is shown or hidden, so a fade-out that's overtaken doesn't hide it.
+    private var visibility = 0
     private var content: NSView?
     /// The card on screen: its size and where it was shown, for refitting it.
     private var card: (size: CGSize, counter: String?, anchor: CGPoint)?
@@ -33,11 +38,11 @@ final class PreviewPanel {
     private let notch = NSPanel(
         contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: true
     )
-    private let notchView = NSView()
+    private let notchView = NSVisualEffectView()
 
     private let padding = PreviewGeometry.padding
     private let screenMargin: CGFloat = 8
-    private static let background = NSColor(white: 0.12, alpha: 1)
+    static let cornerRadius: CGFloat = 12
 
     init() {
         for window in [panel, notch] {
@@ -51,16 +56,25 @@ final class PreviewPanel {
         }
         panel.hasShadow = true
 
-        notchView.wantsLayer = true
-        notchView.layer?.backgroundColor = Self.background.withAlphaComponent(0.85).cgColor
-        notchView.layer?.cornerRadius = 6
+        for view in [container, notchView] {
+            view.material = .popover
+            view.blendingMode = .behindWindow
+            // The panels are never key; without this they'd draw the flat inactive look.
+            view.state = .active
+            view.wantsLayer = true
+            view.layer?.masksToBounds = true
+        }
+        notchView.layer?.cornerRadius = 7
         notch.contentView = notchView
-
-        container.wantsLayer = true
-        container.layer?.backgroundColor = Self.background.cgColor
-        container.layer?.cornerRadius = 8
-        container.layer?.masksToBounds = true
+        container.layer?.cornerRadius = Self.cornerRadius
         panel.contentView = container
+
+        spinner.style = .spinning
+        spinner.controlSize = .small
+        spinner.isDisplayedWhenStopped = false
+        spinner.sizeToFit()
+        spinner.autoresizingMask = [.minXMargin, .maxXMargin, .minYMargin, .maxYMargin]
+        loadingView.addSubview(spinner)
 
         imageView.imageScaling = .scaleProportionallyUpOrDown
         imageView.animates = true
@@ -99,6 +113,15 @@ final class PreviewPanel {
     /// Whether a global top-left-origin point is on the preview itself.
     func isOnPreview(_ point: CGPoint) -> Bool {
         panel.isVisible && ScreenSpace.flip(panel.frame).contains(point)
+    }
+
+    /// A small spinner where the preview will appear, joined to the cursor by the notch, while it loads.
+    func showLoading(anchor: CGPoint) {
+        let size = CGSize(width: 20, height: 20)
+        loadingView.frame.size = size
+        spinner.setFrameOrigin(CGPoint(x: (size.width - spinner.frame.width) / 2, y: (size.height - spinner.frame.height) / 2))
+        spinner.startAnimation(nil)
+        present(loadingView, naturalSize: size, counter: nil, interactive: false, anchor: anchor)
     }
 
     /// The notch a preview for a cursor at `anchor` (global, top-left origin) will have, for use
@@ -192,11 +215,37 @@ final class PreviewPanel {
         present(view, naturalSize: size, counter: card.counter, interactive: true, anchor: card.anchor)
     }
 
+    /// Fades the preview out. What it showed is let go once it's gone, unless it's shown again first.
     func hide() {
-        panel.orderOut(nil)
-        notch.orderOut(nil)
-        imageView.image = nil
-        playerView.player = nil
+        guard panel.isVisible || notch.isVisible else { return }
+        visibility += 1
+        let generation = visibility
+        // Nothing on a fading panel should take a click.
+        panel.ignoresMouseEvents = true
+        fade(to: 0) { [weak self] in
+            guard let self, generation == visibility else { return }
+            panel.orderOut(nil)
+            notch.orderOut(nil)
+            spinner.stopAnimation(nil)
+            imageView.image = nil
+            playerView.player = nil
+        }
+    }
+
+    /// Fades both windows, or sets them at once when the system asks for reduced motion.
+    private func fade(to alpha: CGFloat, then completion: (@MainActor () -> Void)? = nil) {
+        let windows = [panel, notch]
+        guard !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else {
+            windows.forEach { $0.alphaValue = alpha }
+            completion?()
+            return
+        }
+        NSAnimationContext.runAnimationGroup({ context in
+            context.duration = alpha > 0 ? 0.12 : 0.1
+            windows.forEach { $0.animator().alphaValue = alpha }
+        }, completionHandler: {
+            MainActor.assumeIsolated { completion?() }
+        })
     }
 
     private func visibleFrame(at point: CGPoint) -> CGRect {
@@ -213,13 +262,14 @@ final class PreviewPanel {
         let placeRight = frame.minX > anchor.x
         notch.setFrame(ScreenSpace.flip(PreviewGeometry.notchFrame(anchor: anchor, placeRight: placeRight)), display: false)
         // Hidden or not, the notch still decides when the hover ends.
-        notch.alphaValue = AppSettings.shared.showsNotch ? 1 : 0
+        notchView.isHidden = !AppSettings.shared.showsNotch
         // Round only the end under the cursor; the other end meets the preview.
         notchView.layer?.maskedCorners = placeRight
             ? [.layerMinXMinYCorner, .layerMinXMaxYCorner]
             : [.layerMaxXMinYCorner, .layerMaxXMaxYCorner]
 
         if content !== view {
+            if content === loadingView { spinner.stopAnimation(nil) }
             content?.removeFromSuperview()
             container.addSubview(view, positioned: .below, relativeTo: badge)
             content = view
@@ -229,9 +279,17 @@ final class PreviewPanel {
         layoutBadge(counter)
         panel.ignoresMouseEvents = !interactive
 
+        visibility += 1
+        let appearing = !panel.isVisible
+        if appearing {
+            panel.alphaValue = 0
+            notch.alphaValue = 0
+        }
         notch.orderFrontRegardless()
         panel.orderFrontRegardless()
         panel.invalidateShadow()
+        // Fades in when new, and back in if it was fading out.
+        if appearing || panel.alphaValue < 1 { fade(to: 1) }
     }
 
     private func layoutBadge(_ text: String?) {

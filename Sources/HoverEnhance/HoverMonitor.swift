@@ -52,6 +52,15 @@ final class HoverMonitor {
         }
     }
 
+    /// Makes the event monitors again after Accessibility access comes back: monitors that outlived
+    /// the loss aren't sure to hear key events again.
+    func restart() {
+        eventMonitors.forEach(NSEvent.removeMonitor)
+        eventMonitors = []
+        if let activationObserver { NSWorkspace.shared.notificationCenter.removeObserver(activationObserver) }
+        start()
+    }
+
     private func handle(_ event: NSEvent) {
         // Clicks and scrolls in our own windows (an interactive preview) are for that window.
         if event.window != nil, event.type != .mouseMoved { return }

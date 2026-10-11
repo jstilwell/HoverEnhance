@@ -1,4 +1,22 @@
+# macOS
 .DS_Store
+
+# Build products
 /.build
 /.swiftpm
 /build
+
+# Secrets and signing material, kept out of the repository should any land in the working tree,
+# such as an exported Sparkle key or a certificate
+.env
+.env.*
+*.p12
+*.pem
+*.key
+*.cer
+*.mobileprovision
+*.provisionprofile
+*private*key*
+
+# Local instructions for Claude Code
+CLAUDE.md

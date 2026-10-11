@@ -42,7 +42,7 @@ struct LoopbackRedirectTests {
     }
 
     @Test func catchesTheBrowsersReturn() async throws {
-        let redirect = try await LoopbackRedirect.start()
+        let redirect = try await LoopbackRedirect.start(expecting: "s1")
         defer { redirect.stop() }
         #expect(redirect.port > 0)
 
@@ -56,8 +56,21 @@ struct LoopbackRedirectTests {
         #expect(try await callback == ["code": "abc", "state": "s1"])
     }
 
+    @Test func returnsForAnotherSignInDontEndThisOne() async throws {
+        let redirect = try await LoopbackRedirect.start(expecting: "s1")
+        defer { redirect.stop() }
+        async let callback = redirect.callback(timeout: .seconds(5))
+
+        for query in ["error=access_denied&state=other", "code=forged&state=other", "code=forged"] {
+            let response = try await URLSession.shared.data(from: URL(string: "\(redirect.redirectURI)/?\(query)")!).1
+            #expect((response as? HTTPURLResponse)?.statusCode == 400)
+        }
+        _ = try await URLSession.shared.data(from: URL(string: "\(redirect.redirectURI)/?code=real&state=s1")!)
+        #expect(try await callback == ["code": "real", "state": "s1"])
+    }
+
     @Test func givesUpAfterTheTimeout() async throws {
-        let redirect = try await LoopbackRedirect.start()
+        let redirect = try await LoopbackRedirect.start(expecting: "s1")
         defer { redirect.stop() }
         await #expect(throws: GoogleOAuth.Failure.timedOut) {
             try await redirect.callback(timeout: .milliseconds(100))

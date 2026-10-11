@@ -55,7 +55,7 @@ final class VideoPlayback {
             guard !Task.isCancelled, self.player === player else { return nil }
             if item.status == .readyToPlay, item.presentationSize != .zero {
                 if settings.resumeVideos, let seconds = positions[key] {
-                    log.info("resuming \(key, privacy: .public) at \(seconds, format: .fixed(precision: 1))s")
+                    log.infoPrivateInRelease("resuming \(key) at \(String(format: "%.1f", seconds))s")
                     await player.seek(to: CMTime(seconds: seconds, preferredTimescale: 600))
                 }
                 guard self.player === player else { return nil }

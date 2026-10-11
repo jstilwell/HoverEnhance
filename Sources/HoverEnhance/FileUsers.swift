@@ -21,6 +21,9 @@ struct FileUser: Sendable, Equatable, Identifiable {
     }
 
     let pid: pid_t
+    /// When it started, in microseconds since 1970. With the pid, this tells it apart from a later
+    /// process that's given the same pid after this one ends.
+    let started: UInt64?
     let name: String
     /// The executable's path.
     let executable: String?
@@ -41,7 +44,8 @@ enum FileUsers {
         for (pid, use) in await windows { uses[pid] = min(uses[pid] ?? use, use) }
         for app in runningApps(at: path) { uses[app] = .running }
         uses[ownPID] = nil
-        return uses.map { FileUser(pid: $0.key, name: name(of: $0.key), executable: executable(of: $0.key), use: $0.value) }
+        return uses.map { FileUser(pid: $0.key, started: startTime(of: $0.key), name: name(of: $0.key), executable: executable(of: $0.key),
+                                   use: $0.value) }
             .sorted { ($0.use, $0.name.lowercased(), $0.pid) < ($1.use, $1.name.lowercased(), $1.pid) }
     }
 
@@ -157,16 +161,33 @@ enum FileUsers {
 
     // MARK: - Quitting
 
-    /// Asks it to quit, as ⌘Q or `kill` would: apps can still ask to save. `force` doesn't ask.
+    /// Asks it to quit, as ⌘Q or `kill` would: apps can still ask to save. `force` doesn't ask. A
+    /// process that has already ended counts as quit, and its pid, which may be another's by now, is
+    /// left alone.
     @MainActor
-    static func quit(_ pid: pid_t, force: Bool) -> Bool {
-        if !force, let app = NSRunningApplication(processIdentifier: pid), app.activationPolicy != .prohibited {
+    static func quit(_ user: FileUser, force: Bool) -> Bool {
+        guard isRunning(user) else { return true }
+        if !force, let app = NSRunningApplication(processIdentifier: user.pid), app.activationPolicy != .prohibited {
             return app.terminate()
         }
-        return kill(pid, force ? SIGKILL : SIGTERM) == 0
+        return kill(user.pid, force ? SIGKILL : SIGTERM) == 0
     }
 
-    static func isRunning(_ pid: pid_t) -> Bool {
-        kill(pid, 0) == 0 || errno == EPERM
+    /// Whether the process that was found is still running, rather than ended or replaced by a new
+    /// process with its pid.
+    static func isRunning(_ user: FileUser) -> Bool {
+        user.started != nil && startTime(of: user.pid) == user.started
+    }
+
+    /// When a running process started, in microseconds since 1970, as `ps` reads it. Nil once it has
+    /// ended, including while it waits for its parent to collect it.
+    static func startTime(of pid: pid_t) -> UInt64? {
+        var info = kinfo_proc()
+        var size = MemoryLayout<kinfo_proc>.stride
+        var request = [CTL_KERN, KERN_PROC, KERN_PROC_PID, pid]
+        guard sysctl(&request, 4, &info, &size, nil, 0) == 0, size > 0, info.kp_proc.p_pid == pid,
+              info.kp_proc.p_stat != SZOMB else { return nil }
+        let start = info.kp_proc.p_un.__p_starttime
+        return UInt64(start.tv_sec) * 1_000_000 + UInt64(start.tv_usec)
     }
 }

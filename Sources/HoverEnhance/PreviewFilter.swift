@@ -129,3 +129,24 @@ struct PreviewFilter: Sendable, Equatable {
         return items.isEmpty ? nil : Media(items: items)
     }
 }
+
+/// Whether previews that load from the network may happen in apps other than browsers. In a browser,
+/// loading what a link points at does no more than the page itself could. Elsewhere it can give
+/// something away: in Mail, a request to a sender's link tells them the message was read, and from where.
+struct OtherAppsPolicy: Sendable, Equatable {
+    /// Off, only browsers (and Finder's file cards, which don't touch the network) show previews.
+    var enabled = false
+    var skipsEmail = true
+    /// Only links to the sites in Settings → Sites, not images and videos from anywhere.
+    var knownSitesOnly = true
+    /// Only while holding the activation key, so a preview is always asked for.
+    var needsKey = false
+
+    func allows(_ source: MediaSource, in app: AppKind, keyHeld: Bool) -> Bool {
+        if case .file = source { return true }
+        if app == .browser { return true }
+        guard enabled, !(skipsEmail && app == .email) else { return false }
+        if knownSitesOnly, source.site == nil { return false }
+        return !needsKey || keyHeld
+    }
+}

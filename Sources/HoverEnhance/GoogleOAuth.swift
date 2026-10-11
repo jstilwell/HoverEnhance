@@ -131,9 +131,11 @@ enum GoogleOAuth {
 }
 
 /// A one-shot HTTP listener on 127.0.0.1 that catches the browser's return from Google's sign-in
-/// page and answers with a page saying it's done. Loopback only, so nothing on the network can reach it.
+/// page and answers with a page saying it's done. Loopback only, so nothing on the network can reach it,
+/// and only a return carrying this sign-in's `state` counts, so nothing else on this Mac can end it.
 final class LoopbackRedirect: @unchecked Sendable {
     private let listener: NWListener
+    private let state: String
     /// All state below is touched only on this queue.
     private let queue = DispatchQueue(label: "HoverEnhance.oauth-redirect")
     private var readyContinuation: CheckedContinuation<UInt16, Error>?
@@ -143,14 +145,16 @@ final class LoopbackRedirect: @unchecked Sendable {
     private(set) var port: UInt16 = 0
     var redirectURI: String { "http://127.0.0.1:\(port)" }
 
-    private init() throws {
+    private init(state: String) throws {
+        self.state = state
         let parameters = NWParameters.tcp
         parameters.requiredLocalEndpoint = .hostPort(host: .ipv4(.loopback), port: .any)
         listener = try NWListener(using: parameters)
     }
 
-    static func start() async throws -> LoopbackRedirect {
-        let redirect = try LoopbackRedirect()
+    /// Listens for the return of the sign-in whose authorization request carries `state`.
+    static func start(expecting state: String) async throws -> LoopbackRedirect {
+        let redirect = try LoopbackRedirect(state: state)
         redirect.port = try await withCheckedThrowingContinuation { continuation in
             redirect.queue.async { redirect.begin(continuation) }
         }
@@ -209,6 +213,10 @@ final class LoopbackRedirect: @unchecked Sendable {
             // Browsers also ask for /favicon.ico; only the sign-in response counts.
             guard let query, query["code"] != nil || query["error"] != nil else {
                 Self.respond(on: connection, status: "404 Not Found", body: "")
+                return
+            }
+            guard query["state"] == state else {
+                Self.respond(on: connection, status: "400 Bad Request", body: Self.page(succeeded: false))
                 return
             }
             let succeeded = query["code"] != nil
