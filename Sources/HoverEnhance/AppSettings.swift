@@ -83,6 +83,21 @@ enum VideoScroll: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
+/// How a file card writes a path, which is also how it's copied.
+enum PathStyle: String, CaseIterable, Identifiable, Sendable {
+    case full, tilde, quoted
+
+    var id: Self { self }
+
+    var label: String {
+        switch self {
+        case .full: "Full path"
+        case .tilde: "Starting with ~"
+        case .quoted: "Quoted for the shell"
+        }
+    }
+}
+
 struct ExcludedApp: Codable, Hashable, Identifiable, Sendable {
     let bundleID: String
     let name: String
@@ -118,6 +133,10 @@ final class AppSettings {
         static let loopVideos = "loopVideos"
         static let resumeVideos = "resumeVideos"
         static let showsInspector = "showsInspector"
+        static let finderCards = "finderCards"
+        static let finderDelay = "finderDelay"
+        static let finderShowsPath = "finderShowsPath"
+        static let finderPathStyle = "finderPathStyle"
     }
 
     @ObservationIgnored private let defaults: UserDefaults
@@ -157,6 +176,13 @@ final class AppSettings {
     var resumeVideos: Bool { didSet { defaults.set(resumeVideos, forKey: Key.resumeVideos) } }
     var videoScroll: VideoScroll { didSet { defaults.set(videoScroll.rawValue, forKey: Key.videoScroll) } }
 
+    // Finder
+    var finderCards: Bool { didSet { defaults.set(finderCards, forKey: Key.finderCards) } }
+    /// Milliseconds the cursor rests on a file before its card appears; never less than `hoverDelay`.
+    var finderDelay: Double { didSet { defaults.set(finderDelay, forKey: Key.finderDelay) } }
+    var finderShowsPath: Bool { didSet { defaults.set(finderShowsPath, forKey: Key.finderShowsPath) } }
+    var finderPathStyle: PathStyle { didSet { defaults.set(finderPathStyle.rawValue, forKey: Key.finderPathStyle) } }
+
     // Advanced
     var showsInspector: Bool { didSet { defaults.set(showsInspector, forKey: Key.showsInspector) } }
 
@@ -182,6 +208,10 @@ final class AppSettings {
             Key.loopVideos: true,
             Key.resumeVideos: true,
             Key.showsInspector: false,
+            Key.finderCards: true,
+            Key.finderDelay: 600.0,
+            Key.finderShowsPath: true,
+            Key.finderPathStyle: PathStyle.full.rawValue,
         ])
         self.defaults = defaults
         previewsEnabled = defaults.bool(forKey: Key.previewsEnabled)
@@ -206,11 +236,19 @@ final class AppSettings {
         loopVideos = defaults.bool(forKey: Key.loopVideos)
         resumeVideos = defaults.bool(forKey: Key.resumeVideos)
         showsInspector = defaults.bool(forKey: Key.showsInspector)
+        finderCards = defaults.bool(forKey: Key.finderCards)
+        finderDelay = defaults.double(forKey: Key.finderDelay)
+        finderShowsPath = defaults.bool(forKey: Key.finderShowsPath)
+        finderPathStyle = defaults.string(forKey: Key.finderPathStyle).flatMap(PathStyle.init(rawValue:)) ?? .full
     }
 
     var filter: PreviewFilter {
         PreviewFilter(images: showImages, albums: showAlbums, videos: showVideos, embeds: showEmbeds, cards: showCards,
-                      disabledSites: disabledSites)
+                      files: finderCards, disabledSites: disabledSites)
+    }
+
+    var fileCard: FileCardOptions {
+        FileCardOptions(path: finderShowsPath, pathStyle: finderPathStyle)
     }
 
     func previewsAllowed(holding flags: NSEvent.ModifierFlags) -> Bool {

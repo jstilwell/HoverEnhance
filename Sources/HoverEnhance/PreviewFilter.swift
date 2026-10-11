@@ -71,6 +71,7 @@ extension MediaSource {
         case .blueskyPost: .bluesky
         case .instagram: .instagram
         case .youtubeChannel: .youtube
+        case .file: nil
         case .embed(let embed):
             switch embed.site {
             case .youtube: .youtube
@@ -90,6 +91,8 @@ struct PreviewFilter: Sendable, Equatable {
     var videos = true
     var embeds = true
     var cards = true
+    /// File cards in Finder.
+    var files = true
     var disabledSites: Set<MediaSite> = []
 
     /// Whether to look this source up at all.
@@ -100,6 +103,7 @@ struct PreviewFilter: Sendable, Equatable {
         case .video, .streamable: return videos
         case .embed: return embeds
         case .youtubeChannel: return cards
+        case .file: return files
         // Posts can hold photos or videos; what's turned off is dropped once they're looked up.
         case .tweet, .blueskyPost, .instagram: return images || videos
         }
@@ -113,6 +117,7 @@ struct PreviewFilter: Sendable, Equatable {
             case .video: videos
             case .embed: embeds
             case .channel: cards
+            case .file: files
             }
         }
         if !albums { items = Array(items.prefix(1)) }

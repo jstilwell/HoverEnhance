@@ -24,7 +24,7 @@ scrolling passes through to Finder; a Finder tab turns cards on and off, sets th
 how the path is copied (full, with ~, quoted for the shell).
 **Tests**: Path styles (home prefix only at a folder boundary, quoting only when needed, embedded
 quotes); Finder settings defaults and persistence; resolver and filter for file sources.
-**Status**: In Progress
+**Status**: Complete
 
 ## Stage 3: Details
 **Goal**: Kind, size, dates, image dimensions, audio and video length, and where a download came from.
@@ -32,7 +32,7 @@ quotes); Finder settings defaults and persistence; resolver and filter for file 
 are left out rather than shown empty.
 **Tests**: Details of temp files (size, dates, kind), a generated PNG's dimensions, and a where-from
 attribute written to a temp file; parsing where-from lists (prefers the page over the file URL).
-**Status**: Not Started
+**Status**: In Progress
 
 ## Stage 4: Apps using it, and quitting them
 **Goal**: The card lists apps with it open in a window, processes holding it open or working in the

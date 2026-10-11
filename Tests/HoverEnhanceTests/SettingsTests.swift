@@ -25,6 +25,27 @@ struct AppSettingsTests {
         #expect(settings.filter == PreviewFilter())
     }
 
+    @Test func finderDefaultsShowEverything() {
+        let settings = AppSettings(defaults: freshDefaults())
+        #expect(settings.finderCards)
+        #expect(settings.finderDelay == 600)
+        #expect(settings.fileCard == FileCardOptions())
+    }
+
+    @Test func finderChangesPersist() {
+        let defaults = freshDefaults()
+        let settings = AppSettings(defaults: defaults)
+        settings.finderCards = false
+        settings.finderDelay = 900
+        settings.finderShowsPath = false
+        settings.finderPathStyle = .quoted
+
+        let reloaded = AppSettings(defaults: defaults)
+        #expect(!reloaded.filter.files)
+        #expect(reloaded.finderDelay == 900)
+        #expect(reloaded.fileCard == FileCardOptions(path: false, pathStyle: .quoted))
+    }
+
     @Test func changesPersist() {
         let defaults = freshDefaults()
         let settings = AppSettings(defaults: defaults)
