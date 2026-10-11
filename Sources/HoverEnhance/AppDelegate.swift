@@ -31,6 +31,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         monitor.onScroll = { [weak self] in self?.preview.scrolled() }
         monitor.onClick = { [weak self] in self?.preview.dismiss() }
         monitor.onModifiersChanged = { [weak self] flags in self?.modifiersChanged(flags) }
+        monitor.onKeyDown = { [weak self] in self?.preview.keyPressed() }
         monitor.start()
 
         NotificationCenter.default.addObserver(forName: .showSettingsTab, object: nil, queue: .main) { [weak self] note in

@@ -121,6 +121,8 @@ final class HoverInspector: @unchecked Sendable {
         }
         if info.bundleID == FinderItem.bundleID {
             info.fileURL = FinderItem.url(at: element)
+            // The desktop is Finder's too, but isn't in a window.
+            info.fileIsOnDesktop = info.fileURL != nil && !info.ancestry.contains(kAXWindowRole)
         }
         return info
     }

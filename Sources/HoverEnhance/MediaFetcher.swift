@@ -20,7 +20,7 @@ actor MediaFetcher {
             return Media(items: [.video(url, size: nil)])
         case .embed(let embed):
             return Media(items: [.embed(embed)])
-        case .file(let url):
+        case .file(let url, _):
             return Media(items: [.file(url)])
         case .redditGallery(let id):
             media = await redditGallery(id: id)

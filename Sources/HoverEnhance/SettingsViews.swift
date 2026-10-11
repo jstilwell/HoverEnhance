@@ -293,72 +293,113 @@ struct FinderSettingsView: View {
             Section {
                 Toggle(isOn: $settings.finderCards) {
                     Text("Show file cards")
-                    Text("Resting on a file or folder in Finder or on the desktop shows a card about it")
+                    Text("Resting on a file or folder in Finder shows a card about it")
                 }
-                LabeledContent("Show after") {
-                    HStack {
-                        // Never sooner than the hover delay, which the cursor has already waited out.
-                        Slider(value: $settings.finderDelay, in: settings.hoverDelay...max(settings.hoverDelay, 2000), step: 50)
-                        Text("\(Int(max(settings.finderDelay, settings.hoverDelay))) ms").monospacedDigit().frame(width: 64, alignment: .trailing)
+                Group {
+                    LabeledContent("Show after") {
+                        HStack {
+                            // Never sooner than the hover delay, which the cursor has already waited out.
+                            Slider(value: $settings.finderDelay, in: settings.hoverDelay...max(settings.hoverDelay, 2000), step: 50)
+                            Text("\(Int(max(settings.finderDelay, settings.hoverDelay))) ms").monospacedDigit().frame(width: 64, alignment: .trailing)
+                        }
+                    }
+                    Toggle("On the desktop", isOn: $settings.finderOnDesktop)
+                    Toggle(isOn: $settings.finderForFolders) {
+                        Text("For folders")
+                        Text("Off, cards show only for files, and for apps and other packages")
                     }
                 }
                 .disabled(!settings.finderCards)
+            } header: {
+                Text("When")
             } footer: {
                 Footnote("Cards wait longer than other previews, so sweeping across a folder doesn't flash them. Clicking a file or moving off it closes its card.")
             }
-            Section {
-                Toggle(isOn: $settings.finderShowsPath) {
-                    Text("Path")
-                    Text("Click it to copy it")
+            Group {
+                Section("Behavior") {
+                    Toggle(isOn: $settings.finderClosesOnKeyPress) {
+                        Text("Close when a key is pressed")
+                        Text("Space for Quick Look, Return to rename, or typing to find a file")
+                    }
+                    Toggle(isOn: $settings.finderCopiesDetails) {
+                        Text("Click a detail to copy it")
+                        Text("Dates are copied in full; the path can always be copied")
+                    }
                 }
+                ForEach(FileCardField.Group.allCases) { group in
+                    Section {
+                        ForEach(group.fields) { field in
+                            Toggle(isOn: shows(field)) {
+                                Text(field.name)
+                                if let detail = field.detail { Text(detail) }
+                            }
+                        }
+                        extras(for: group)
+                    } header: {
+                        Text(group.title)
+                    } footer: {
+                        if let note = footnote(for: group) { Footnote(note) }
+                    }
+                }
+                Section {
+                    HStack {
+                        Spacer()
+                        Button("Restore Defaults") { settings.restoreFinderDefaults() }
+                    }
+                }
+            }
+            .disabled(!settings.finderCards)
+        }
+        .formStyle(.grouped)
+        .frame(width: settingsWidth, height: 860)
+    }
+
+    private func shows(_ field: FileCardField) -> Binding<Bool> {
+        Binding(
+            get: { !settings.finderHiddenFields.contains(field) },
+            set: { on in
+                if on { settings.finderHiddenFields.remove(field) } else { settings.finderHiddenFields.insert(field) }
+            }
+        )
+    }
+
+    /// Settings that belong with a group's details.
+    @ViewBuilder
+    private func extras(for group: FileCardField.Group) -> some View {
+        switch group {
+        case .path:
+            Group {
                 Picker("Copy path as", selection: $settings.finderPathStyle) {
                     ForEach(PathStyle.allCases) { Text($0.label).tag($0) }
                 }
-                .disabled(!settings.finderShowsPath)
                 LabeledContent("Example") {
                     Text(settings.finderPathStyle.format(NSHomeDirectory() + "/Downloads/Project Notes (v2).txt"))
                         .font(.system(.callout, design: .monospaced))
                         .foregroundStyle(.secondary)
                         .textSelection(.enabled)
                 }
-                Toggle("Kind and size", isOn: $settings.finderShowsKindAndSize)
-                Toggle(isOn: $settings.finderShowsDates) {
-                    Text("Dates")
-                    Text("Created, modified, and last opened")
-                }
-                Toggle(isOn: $settings.finderShowsMediaInfo) {
-                    Text("Dimensions, length, and pages")
-                    Text("Image and video size, audio and video length, pages of documents")
-                }
-                Toggle(isOn: $settings.finderShowsWhereFrom) {
-                    Text("Where it came from")
-                    Text("The website a download came from; click it to open it")
-                }
-            } header: {
-                Text("Show")
-            } footer: {
-                Footnote("Details come from Spotlight where it has them. Files it hasn't indexed are read directly, so macOS may ask once before HoverEnhance reads files in Desktop, Documents, or Downloads.")
             }
-            .disabled(!settings.finderCards)
-            Section {
-                Toggle(isOn: $settings.finderShowsUsers) {
-                    Text("Apps using it")
-                    Text("Apps with it open in a window, and processes holding it open or working in the folder")
-                }
-                Toggle(isOn: $settings.finderOffersQuit) {
-                    Text("Offer to quit them")
-                    Text("Quit takes a second click to confirm. If something doesn't quit, Force Quit appears.")
-                }
-                .disabled(!settings.finderShowsUsers)
-            } header: {
-                Text("In use")
-            } footer: {
-                Footnote("Quitting an app is like pressing ⌘Q in it, so it can still ask to save; other processes get the polite signal the kill command sends. Only your own processes are listed.")
+            .disabled(settings.finderHiddenFields.contains(.path))
+        case .inUse:
+            Toggle(isOn: $settings.finderOffersQuit) {
+                Text("Offer to quit them")
+                Text("Quit takes a second click to confirm. If something doesn't quit, Force Quit appears.")
             }
-            .disabled(!settings.finderCards)
+            .disabled(settings.finderHiddenFields.contains(.users))
+        default:
+            EmptyView()
         }
-        .formStyle(.grouped)
-        .frame(width: settingsWidth, height: 860)
+    }
+
+    private func footnote(for group: FileCardField.Group) -> String? {
+        switch group {
+        case .media:
+            "Details come from Spotlight where it has them. Files it hasn't indexed are read directly, so macOS may ask once before HoverEnhance reads files in Desktop, Documents, or Downloads."
+        case .inUse:
+            "Quitting an app is like pressing ⌘Q in it, so it can still ask to save; other processes get the polite signal the kill command sends. Only your own processes are listed."
+        default:
+            nil
+        }
     }
 }
 

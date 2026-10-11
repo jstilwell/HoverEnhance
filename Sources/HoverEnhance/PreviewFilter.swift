@@ -93,6 +93,9 @@ struct PreviewFilter: Sendable, Equatable {
     var cards = true
     /// File cards in Finder.
     var files = true
+    var filesOnDesktop = true
+    /// Cards for folders, as opposed to files and packages such as apps.
+    var folders = true
     var disabledSites: Set<MediaSite> = []
 
     /// Whether to look this source up at all.
@@ -103,7 +106,9 @@ struct PreviewFilter: Sendable, Equatable {
         case .video, .streamable: return videos
         case .embed: return embeds
         case .youtubeChannel: return cards
-        case .file: return files
+        case .file(let url, let onDesktop):
+            // Finder writes folder URLs with a trailing slash and packages, like apps, without.
+            return files && (filesOnDesktop || !onDesktop) && (folders || !url.hasDirectoryPath)
         // Posts can hold photos or videos; what's turned off is dropped once they're looked up.
         case .tweet, .blueskyPost, .instagram: return images || videos
         }

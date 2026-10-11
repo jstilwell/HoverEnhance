@@ -90,6 +90,13 @@ final class PreviewController {
         if Date().timeIntervalSince(lastScrollHandled) > 0.3 { reset(because: "scrolled") }
     }
 
+    /// A key press in Finder (Space for Quick Look, Return to rename, typing to find a file) means
+    /// the card is in the way; it stays closed until the cursor moves to another item.
+    func keyPressed() {
+        guard case .file = target?.source, AppSettings.shared.finderClosesOnKeyPress else { return }
+        dismiss()
+    }
+
     /// Hides the preview but remembers the target, so it stays hidden until the cursor moves on.
     func dismiss() {
         if target != nil { log.debug("preview dismissed by click") }

@@ -45,6 +45,47 @@ process ends it; cards rendered offscreen with the list loaded and Quit confirmi
 live check in Finder (the list filling in and the card growing; Quit on a real app).
 **Status**: In Progress
 
+Stages 5–8 borrow ideas from FinderHover (MIT), written fresh with in-process APIs rather than
+spawning a tool per hover. Its file detection, long tail of formats, file notes, layout editor, and
+appearance settings are left out.
+
+## Stage 5: Settings per detail, and when cards appear
+**Goal**: Every detail is its own switch, grouped like the card; cards can skip the desktop and
+folders; a key press closes the card (Quick Look, renaming, typing); clicking a detail copies it.
+**Success Criteria**: Turning off a detail hides it and skips reading it; Restore Defaults brings back
+the defaults; Space or Return over a card closes it until the cursor moves to another item.
+**Tests**: Field settings defaults and persistence; filter for desktop items and folders (Finder writes
+folder URLs with a trailing slash, packages without); offscreen render of the settings tab.
+**Status**: Complete
+
+## Stage 6: Thumbnail and system facts
+**Goal**: A Quick Look thumbnail in place of the icon; Finder tags with their colors; iCloud status;
+who downloaded a file and when; where an alias or symlink points, copyable like the path.
+**Success Criteria**: The thumbnail replaces the icon without moving anything; each fact appears only
+when the file has it.
+**Tests**: Tags with colors from the tags attribute; quarantine record parsed from the attribute;
+symlink and alias targets, including a missing one; offscreen render.
+**Status**: In Progress
+
+## Stage 7: Media details and zip contents
+**Goal**: Camera, lens, and exposure for photos; codecs and bit rate for audio and video; artist and
+album for music (all from Spotlight); file count, unpacked size, and encryption for zip files.
+**Success Criteria**: Values are formatted as photographers read them (ƒ/1.8, 1/120 s, ISO 50,
+26 mm); zip summaries handle Zip64 and skip `__MACOSX`; large central directories are left alone.
+**Tests**: Exposure and bit-rate formatting; zip summaries of archives made with `zip` (files,
+folders, `__MACOSX`, encrypted), Zip64 fields, and truncated files.
+**Status**: Not Started
+
+## Stage 8: Apps and Git
+**Goal**: For app bundles, version, bundle ID, architectures, minimum macOS, and code signature;
+for Git repositories, branch, remote, and uncommitted changes.
+**Success Criteria**: Signature and changes fill in after the card appears; Git runs the real binary
+(never the `/usr/bin/git` stub, which offers to install developer tools), with a timeout and without
+taking Git's locks; repos without a remote or on a detached HEAD read sensibly.
+**Tests**: Info of a system app; signatures of a system app, an ad-hoc signed and an unsigned binary;
+HEAD and config parsing (branch, detached, worktree `.git` file, remotes); changes in a temp repo.
+**Status**: Not Started
+
 # YouTube creator card
 
 Previews, albums, video, embeds, the notch, settings, and scroll handling are done. On youtube.com
