@@ -217,8 +217,13 @@ final class PreviewController {
             let options = settings.fileCard
             let details = await Task.detached { FileDetails.load(url, options: options) }.value
             guard !Task.isCancelled, self.target == requested else { return }
-            let view = NSHostingView(rootView: FileCardView(card: FileCard(url: url, details: details, options: options)))
+            let view = CardHostingView(rootView: FileCardView(card: FileCard(url: url, details: details, options: options)))
             view.appearance = NSAppearance(named: .darkAqua)
+            // The list of apps using the file fills in after the card appears.
+            view.onSizeChange = { [weak self, weak view] in
+                // SwiftUI is in the middle of layout here; refit once it's done.
+                Task { @MainActor in if let self, let view { self.panel.refit(view) } }
+            }
             playback.stop()
             panel.show(view, counter: counter, anchor: requested.anchor)
             log.info("preview: file card for \(url.path(percentEncoded: false), privacy: .public)")

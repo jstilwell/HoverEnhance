@@ -141,6 +141,8 @@ final class AppSettings {
         static let finderShowsDates = "finderShowsDates"
         static let finderShowsMediaInfo = "finderShowsMediaInfo"
         static let finderShowsWhereFrom = "finderShowsWhereFrom"
+        static let finderShowsUsers = "finderShowsUsers"
+        static let finderOffersQuit = "finderOffersQuit"
     }
 
     @ObservationIgnored private let defaults: UserDefaults
@@ -191,6 +193,9 @@ final class AppSettings {
     /// Image and video dimensions, audio and video length, and document pages.
     var finderShowsMediaInfo: Bool { didSet { defaults.set(finderShowsMediaInfo, forKey: Key.finderShowsMediaInfo) } }
     var finderShowsWhereFrom: Bool { didSet { defaults.set(finderShowsWhereFrom, forKey: Key.finderShowsWhereFrom) } }
+    /// Apps and processes using the file.
+    var finderShowsUsers: Bool { didSet { defaults.set(finderShowsUsers, forKey: Key.finderShowsUsers) } }
+    var finderOffersQuit: Bool { didSet { defaults.set(finderOffersQuit, forKey: Key.finderOffersQuit) } }
 
     // Advanced
     var showsInspector: Bool { didSet { defaults.set(showsInspector, forKey: Key.showsInspector) } }
@@ -225,6 +230,8 @@ final class AppSettings {
             Key.finderShowsDates: true,
             Key.finderShowsMediaInfo: true,
             Key.finderShowsWhereFrom: true,
+            Key.finderShowsUsers: true,
+            Key.finderOffersQuit: true,
         ])
         self.defaults = defaults
         previewsEnabled = defaults.bool(forKey: Key.previewsEnabled)
@@ -257,6 +264,8 @@ final class AppSettings {
         finderShowsDates = defaults.bool(forKey: Key.finderShowsDates)
         finderShowsMediaInfo = defaults.bool(forKey: Key.finderShowsMediaInfo)
         finderShowsWhereFrom = defaults.bool(forKey: Key.finderShowsWhereFrom)
+        finderShowsUsers = defaults.bool(forKey: Key.finderShowsUsers)
+        finderOffersQuit = defaults.bool(forKey: Key.finderOffersQuit)
     }
 
     var filter: PreviewFilter {
@@ -266,7 +275,8 @@ final class AppSettings {
 
     var fileCard: FileCardOptions {
         FileCardOptions(path: finderShowsPath, pathStyle: finderPathStyle, kindAndSize: finderShowsKindAndSize, dates: finderShowsDates,
-                        mediaInfo: finderShowsMediaInfo, whereFrom: finderShowsWhereFrom)
+                        mediaInfo: finderShowsMediaInfo, whereFrom: finderShowsWhereFrom, users: finderShowsUsers,
+                        offersQuit: finderOffersQuit)
     }
 
     func previewsAllowed(holding flags: NSEvent.ModifierFlags) -> Bool {
