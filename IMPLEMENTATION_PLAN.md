@@ -6,8 +6,8 @@ with the user's own OAuth client.
 
 Still to check live (none of it can be seen offscreen): the welcome window with access removed from
 the list and dragged back in; the panel's material, fades, and spinner; Load Anyway; a link clicked
-in an embedded player; the other-apps sheet; and, once the R2 bucket and domain exist, a first
-release and an update installing over it.
+in an embedded player; the other-apps sheet; and, once the repository is public, a first release
+and an update installing over it.
 
 ## Stage 1: Privacy and security
 **Goal**: Hovering can't leak what's on screen or reach places a web page shouldn't.
@@ -59,4 +59,5 @@ an app icon; Info.plist has copyright and category; `make release` signs with th
 notarizes; README matches.
 **Tests**: Settings tests; `make app` and the release signing step run; `codesign --verify`.
 **Status**: Complete. Also added: the app icon (concept B, "Notch, sharpened") with a matching menu
-bar icon, and Sparkle updates, published to Cloudflare R2 by `bin/build-release.sh`.
+bar icon; Sparkle updates, published as GitHub releases by `bin/build-release.sh`; and an MIT license
+for open-sourcing the repository.

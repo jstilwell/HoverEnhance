@@ -2,13 +2,11 @@
 set -e
 
 # Builds a release: a universal app signed with Developer ID and the hardened runtime, in a signed,
-# notarized, and stapled DMG, plus a signed Sparkle appcast pointing at it. With --upload it also
-# publishes them: the DMG to Cloudflare R2, a GitHub release for the record, and the appcast last.
+# notarized, and stapled DMG, plus a signed Sparkle appcast pointing at it. With --upload it publishes
+# both as a GitHub release. The app reads the appcast from the latest release, so publishing the
+# release is what ships the update.
 #
 #   ./bin/build-release.sh [--upload]
-#
-# Needs a .env (cp .env.example .env), or with a 1Password-managed .env:
-#   op run --env-file=.env -- ./bin/build-release.sh --upload
 
 UPLOAD=false
 while [[ $# -gt 0 ]]; do
@@ -29,6 +27,8 @@ PLIST_PATH="Resources/Info.plist"
 RELEASE_DIR="build/release"
 APP="$RELEASE_DIR/$APP_NAME.app"
 APPCAST="$RELEASE_DIR/appcast.xml"
+# The feed the app reads (SUFeedURL): the appcast attached to whichever release is latest.
+FEED_URL="https://github.com/${REPO}/releases/latest/download/appcast.xml"
 # The keychain account holding HoverEnhance's update signing key (see `generate_keys --account`).
 SPARKLE_ACCOUNT="HoverEnhance"
 NOTARY_PROFILE="${NOTARY_PROFILE:-notarytool-profile}"
@@ -36,23 +36,19 @@ NOTARY_PROFILE="${NOTARY_PROFILE:-notarytool-profile}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 cd "$PROJECT_DIR"
-ENV_FILE="$PROJECT_DIR/.env"
 
-# Variables already in the environment (op run) win; otherwise a regular .env is sourced.
-if [ -z "$R2_ACCOUNT_ID" ] && [ -e "$ENV_FILE" ]; then
-    # shellcheck source=/dev/null
-    source "$ENV_FILE"
-fi
-for var in R2_ACCOUNT_ID R2_BUCKET R2_APPCAST_PATH APPCAST_BASE_URL; do
-    if [ -z "${!var}" ] || [ "${!var}" = "your_account_id_here" ]; then
-        echo -e "${RED}Error: $var is not set.${NC}"
-        echo "Either create a regular .env (cp .env.example .env) or, with a 1Password-managed .env, run:"
-        echo "  op run --env-file=.env -- $0 $*"
+# Release assets download only from a public repository, and publishing needs the GitHub CLI.
+if [ "$UPLOAD" = true ]; then
+    if ! command -v gh &> /dev/null || ! gh auth status &> /dev/null; then
+        echo -e "${RED}Error: the GitHub CLI must be installed and signed in (brew install gh; gh auth login).${NC}"
         exit 1
     fi
-done
-R2_ENDPOINT="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
-APPCAST_PUBLIC_URL="${APPCAST_BASE_URL}/${R2_APPCAST_PATH}"
+    if [ "$(gh repo view "$REPO" --json visibility --jq .visibility)" != "PUBLIC" ]; then
+        echo -e "${RED}Error: ${REPO} is private, so installed copies couldn't download its releases.${NC}"
+        echo "Make it public first: gh repo edit ${REPO} --visibility public --accept-visibility-change-consequences"
+        exit 1
+    fi
+fi
 
 # Preflight: notarization credentials and Apple's agreements, before spending time building.
 echo -e "${YELLOW}Checking notarization credentials...${NC}"
@@ -131,9 +127,9 @@ if [ "$BUILD_VERSION" != "$VERSION" ]; then
     /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $VERSION" "$PLIST_PATH"
 fi
 CURRENT_FEED_URL=$(/usr/libexec/PlistBuddy -c "Print SUFeedURL" "$PLIST_PATH")
-if [ "$CURRENT_FEED_URL" != "$APPCAST_PUBLIC_URL" ]; then
-    echo -e "${YELLOW}Setting SUFeedURL to $APPCAST_PUBLIC_URL${NC}"
-    /usr/libexec/PlistBuddy -c "Set :SUFeedURL $APPCAST_PUBLIC_URL" "$PLIST_PATH"
+if [ "$CURRENT_FEED_URL" != "$FEED_URL" ]; then
+    echo -e "${YELLOW}Setting SUFeedURL to $FEED_URL${NC}"
+    /usr/libexec/PlistBuddy -c "Set :SUFeedURL $FEED_URL" "$PLIST_PATH"
 fi
 
 # A release is cut from committed code, so the tag holds exactly what was built (including any
@@ -144,8 +140,14 @@ if [ "$UPLOAD" = true ] && [ -n "$(git status --porcelain)" ]; then
     echo "Commit them (including any Info.plist sync made just now) and run this again."
     exit 1
 fi
-if git rev-parse -q --verify "refs/tags/v${VERSION}" > /dev/null; then
-    echo -e "${RED}Error: v${VERSION} is already tagged. Raise CFBundleShortVersionString in $PLIST_PATH.${NC}"
+# The release is tagged at the commit that was built, which GitHub must already have.
+if [ "$UPLOAD" = true ] && [ -z "$(git branch -r --contains HEAD 2>/dev/null)" ]; then
+    echo -e "${RED}Error: the commit to release isn't on GitHub yet. Push it, then run this again.${NC}"
+    exit 1
+fi
+if git rev-parse -q --verify "refs/tags/v${VERSION}" > /dev/null \
+    || { command -v gh &> /dev/null && gh release view "v${VERSION}" --repo "$REPO" &> /dev/null; }; then
+    echo -e "${RED}Error: v${VERSION} is already released. Raise CFBundleShortVersionString in $PLIST_PATH.${NC}"
     exit 1
 fi
 
@@ -159,7 +161,7 @@ MIN_SYSTEM_VERSION=$(/usr/libexec/PlistBuddy -c "Print LSMinimumSystemVersion" "
 
 DMG_NAME="${APP_NAME}-${VERSION}.dmg"
 DMG_PATH="$RELEASE_DIR/$DMG_NAME"
-DOWNLOAD_URL="${APPCAST_BASE_URL}/releases/${DMG_NAME}"
+DOWNLOAD_URL="https://github.com/${REPO}/releases/download/v${VERSION}/${DMG_NAME}"
 echo -e "${YELLOW}Creating ${DMG_NAME}${NC}"
 DMG_TEMP=$(mktemp -d)
 trap 'rm -rf "$DMG_TEMP"' EXIT
@@ -213,12 +215,13 @@ cat > "$APPCAST" << EOF
 <rss version="2.0" xmlns:sparkle="http://www.sparkleproject.org/xml/sparkle" xmlns:dc="http://purl.org/dc/elements/1.1/">
   <channel>
     <title>${APP_NAME}</title>
-    <link>${APPCAST_PUBLIC_URL}</link>
+    <link>https://github.com/${REPO}</link>
     <description>Most recent updates to ${APP_NAME}</description>
     <language>en</language>
 
     <item>
       <title>Version ${VERSION}</title>
+      <link>https://github.com/${REPO}/releases/tag/v${VERSION}</link>
       <sparkle:version>${VERSION}</sparkle:version>
       <sparkle:shortVersionString>${VERSION}</sparkle:shortVersionString>
       <description><![CDATA[
@@ -248,34 +251,17 @@ if ! "$SIGN_UPDATE" --account "$SPARKLE_ACCOUNT" --verify "$APPCAST"; then
 fi
 echo -e "${GREEN}Built ${DMG_PATH} and a signed ${APPCAST}${NC}"
 
-r2_upload() { # <file> <key> <content type>
-    aws s3 cp "$1" "s3://${R2_BUCKET}/$2" --endpoint-url "$R2_ENDPOINT" --profile r2 --content-type "$3"
-}
-
 if [ "$UPLOAD" = true ]; then
-    if ! command -v aws &> /dev/null || ! aws configure list --profile r2 &> /dev/null; then
-        echo -e "${RED}Error: the AWS CLI with an 'r2' profile is needed (brew install awscli; aws configure --profile r2).${NC}"
-        exit 1
-    fi
-    # Order matters: the appcast points at the DMG, so the DMG goes up first and the appcast last.
-    echo -e "${YELLOW}Uploading the DMG to R2...${NC}"
-    r2_upload "$DMG_PATH" "releases/${DMG_NAME}" "application/x-apple-diskimage"
-    echo -e "${GREEN}DMG at ${DOWNLOAD_URL}${NC}"
-
-    if command -v gh &> /dev/null && gh auth status &> /dev/null; then
-        # Tags the commit that was built, even on a branch not yet merged.
-        gh release create "v${VERSION}" "$DMG_PATH" --title "Version ${VERSION}" --notes "$GITHUB_NOTES" \
-            --target "$(git rev-parse HEAD)" --repo "$REPO"
-    else
-        echo -e "${YELLOW}GitHub CLI not signed in; skipped the GitHub release. Tag v${VERSION} by hand.${NC}"
-    fi
-
-    echo -e "${YELLOW}Publishing the appcast...${NC}"
-    r2_upload "$APPCAST" "$R2_APPCAST_PATH" "application/xml"
-    echo -e "${GREEN}Appcast at ${APPCAST_PUBLIC_URL}${NC}"
+    # A draft first, holding both files, then published in one step: the latest release never lacks
+    # its appcast or DMG. The tag is made on publishing, at the commit that was built.
+    echo -e "${YELLOW}Creating the GitHub release...${NC}"
+    gh release create "v${VERSION}" "$DMG_PATH" "$APPCAST" --draft --title "Version ${VERSION}" \
+        --notes "$GITHUB_NOTES" --target "$(git rev-parse HEAD)" --repo "$REPO"
+    gh release edit "v${VERSION}" --draft=false --latest --repo "$REPO"
+    echo -e "${GREEN}Released: https://github.com/${REPO}/releases/tag/v${VERSION}${NC}"
 else
-    echo -e "${YELLOW}Next:${NC} ./bin/build-release.sh --upload publishes it, or by hand:"
-    echo "  1. upload ${DMG_PATH} to ${DOWNLOAD_URL}"
-    echo "  2. then publish the appcast with ./bin/copy-appcast.sh"
+    echo -e "${YELLOW}Next:${NC} ./bin/build-release.sh --upload builds and publishes it as a GitHub release."
+    echo "Or publish these by hand, with the appcast attached as appcast.xml:"
+    echo "  gh release create v${VERSION} ${DMG_PATH} ${APPCAST} --title \"Version ${VERSION}\" --latest --repo ${REPO}"
 fi
 echo -e "${GREEN}Done!${NC}"

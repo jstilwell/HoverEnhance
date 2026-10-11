@@ -32,6 +32,8 @@ app: build
 	rm -rf "$(SPARKLE)/XPCServices" "$(SPARKLE)/Versions/B/XPCServices"
 	cp Resources/Info.plist "$(APP)/Contents/"
 	find Resources -maxdepth 1 -type f ! -name Info.plist -exec cp {} "$(APP)/Contents/Resources/" \;
+	# Sparkle's MIT license asks for its notice in every copy.
+	cp .build/artifacts/sparkle/Sparkle/LICENSE "$(APP)/Contents/Resources/Sparkle License.txt"
 	# Inside out, as Sparkle's documentation describes: its helpers, the framework, then the app.
 	for code in Versions/B/Autoupdate Versions/B/Updater.app .; do \
 		codesign --force $(SIGN_FLAGS) --sign "$(or $(SIGN_ID),-)" "$(SPARKLE)/$$code" || exit 1; \
@@ -57,7 +59,7 @@ release-app:
 		SIGN_ID="$(DEVELOPER_ID)" SIGN_FLAGS="--options runtime --timestamp"
 	codesign --verify --strict --verbose=2 "$(RELEASE_APP)"
 
-# A notarized DMG and a signed appcast; see bin/build-release.sh, which can also publish them.
+# A notarized DMG and a signed appcast; bin/build-release.sh --upload also publishes them on GitHub.
 release:
 	./bin/build-release.sh
 

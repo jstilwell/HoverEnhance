@@ -599,7 +599,9 @@ struct AdvancedSettingsView: View {
                 Text("Updates")
             } footer: {
                 if updates.isAvailable {
-                    Footnote("Updates are signed and checked before they're installed. Installing one restarts HoverEnhance.")
+                    Footnote(Updates.checksOnlyWhenAsked
+                             ? "This is a debug build, so it checks only when you click Check Now."
+                             : "Updates are signed and checked before they're installed. Installing one restarts HoverEnhance.")
                 }
             }
             Section("About") {
