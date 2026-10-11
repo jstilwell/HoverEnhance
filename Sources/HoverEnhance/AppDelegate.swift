@@ -33,7 +33,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var permissionItem: NSMenuItem!
     private var grantItem: NSMenuItem!
     private var previewsItem: NSMenuItem!
-    private var pauseItem: NSMenuItem!
     private var copyItem: NSMenuItem!
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -70,14 +69,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         whenChanged({ AppSettings.shared.previewsEnabled }) { [weak self] enabled in
             if !enabled { self?.preview.reset(because: "previews turned off") }
+            self?.updateActivity()
         }
         whenChanged({ AppSettings.shared.showsInspector }) { [weak self] shows in
             guard let self else { return }
             if shows, let lastInfo { hud.show(lastInfo.summary) } else { hud.hide() }
+            updateActivity()
         }
+        updateActivity()
         NotificationCenter.default.addObserver(forName: .showAccessibilityGuide, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.showWelcome() }
         }
+    }
+
+    /// Inspects only while something uses what's found, and dims the menu bar icon while previews are off.
+    private func updateActivity() {
+        monitor.isPaused = !settings.previewsEnabled && !settings.showsInspector
+        statusItem?.button?.appearsDisabled = !settings.previewsEnabled
     }
 
     private func accessChanged(_ granted: Bool) {
@@ -164,11 +172,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func makeMenu() -> NSMenu {
         permissionItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
         grantItem = NSMenuItem(title: "Grant Accessibility Access…", action: #selector(grantAccess), keyEquivalent: "")
-        previewsItem = NSMenuItem(title: "Enable Previews", action: #selector(togglePreviews), keyEquivalent: "e")
-        pauseItem = NSMenuItem(title: "Pause", action: #selector(togglePause), keyEquivalent: "p")
+        previewsItem = NSMenuItem(title: "Show Previews", action: #selector(togglePreviews), keyEquivalent: "e")
         copyItem = NSMenuItem(title: "Copy Inspector Result", action: #selector(copyLastResult), keyEquivalent: "c")
         let settingsItem = NSMenuItem(title: "Settings…", action: #selector(showSettings), keyEquivalent: ",")
-        for item in [grantItem, previewsItem, pauseItem, copyItem, settingsItem] {
+        for item in [grantItem, previewsItem, copyItem, settingsItem] {
             item?.target = self
         }
 
@@ -177,7 +184,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.autoenablesItems = false
         menu.items = [
             permissionItem, grantItem, .separator(),
-            previewsItem, pauseItem, copyItem, .separator(),
+            previewsItem, copyItem, .separator(),
             settingsItem, .separator(),
             NSMenuItem(title: "Quit HoverEnhance", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"),
         ]
@@ -211,7 +218,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         permissionItem.isEnabled = false
         grantItem.isHidden = granted
         previewsItem.state = settings.previewsEnabled ? .on : .off
-        pauseItem.state = monitor.isPaused ? .on : .off
         copyItem.isHidden = !settings.showsInspector
         copyItem.isEnabled = lastInfo != nil
     }
@@ -231,14 +237,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc private func togglePreviews() {
         settings.previewsEnabled.toggle()
-    }
-
-    @objc private func togglePause() {
-        monitor.isPaused.toggle()
-        if monitor.isPaused {
-            preview.reset(because: "paused")
-            hud.hide()
-        }
     }
 
     @objc private func copyLastResult() {
