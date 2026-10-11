@@ -21,6 +21,8 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 
 - No preview pops up over a video the page is already playing, as on Instagram, or over an image it already shows large.
+- Instagram albums no longer show as one photo after the cursor passes over them while they load.
+- Previews come up more reliably when the cursor stops on a page still filling in, as just after scrolling.
 - Clearing the image cache in Settings shows the new size right away.
 
 ## 0.1.1 - 10-11-2026
