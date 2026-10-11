@@ -67,6 +67,12 @@ final class PreviewController {
             reset(because: "not previewed outside browsers")
             return
         }
+        // An image the page already shows about as large as a preview could be: nothing to add.
+        if let shown = info.imageFrame?.size,
+           !PreviewGeometry.couldEnlarge(shown: shown, room: panel.room(at: cursor), by: settings.minimumEnlargement) {
+            reset(because: "already shown large")
+            return
+        }
         // Still on the same thing: it's loading, showing, or was dismissed by a click.
         if target?.source == source { return }
 
@@ -227,8 +233,9 @@ final class PreviewController {
             guard !Task.isCancelled, self.target == requested else { return false }
             switch outcome {
             case .loaded(let image):
-                let enlargement = settings.minimumEnlargement
-                if let shown, image.pixelSize.width <= shown.width * enlargement, image.pixelSize.height <= shown.height * enlargement {
+                // Compared as the preview would show it: no larger than the room beside the cursor.
+                if let shown, !PreviewGeometry.enlarges(image.pixelSize, shown: shown, room: panel.room(at: requested.anchor),
+                                                        by: settings.minimumEnlargement) {
                     return false
                 }
                 playback.stop()
