@@ -70,13 +70,31 @@ final class PreviewController {
         let elementFrame = info.imageFrame ?? info.frame
         let newTarget = Target(source: source, anchor: cursor, notch: panel.notchFrame(at: cursor), element: elementFrame, page: info.pageURL)
         target = newTarget
+        // File cards wait longer on purpose; the spinner counts only time past that.
+        var spinnerDelay = Duration.milliseconds(300)
+        if case .file = source { spinnerDelay += .milliseconds(max(settings.finderDelay - settings.hoverDelay, 0)) }
         task = Task {
-            guard let fetched = await fetcher.media(for: source), let media = AppSettings.shared.filter.apply(to: fetched),
-                  !Task.isCancelled, target == newTarget else { return }
-            self.media = media
-            // A lone image isn't worth showing unless it's meaningfully bigger than it already appears.
-            await display(0, unlessSmallerThan: media.items.count == 1 ? elementFrame?.size : nil)
+            let shown = await withLoadingIndicator(after: spinnerDelay, for: newTarget) {
+                guard let fetched = await fetcher.media(for: source), let media = AppSettings.shared.filter.apply(to: fetched),
+                      !Task.isCancelled, target == newTarget else { return false }
+                self.media = media
+                // A lone image isn't worth showing unless it's meaningfully bigger than it already appears.
+                return await display(0, unlessSmallerThan: media.items.count == 1 ? elementFrame?.size : nil)
+            }
+            // Nothing to show after all: take the spinner down.
+            if !shown, target == newTarget { panel.hide() }
         }
+    }
+
+    /// Runs `load`, with a spinner in place of the preview if nothing has appeared after `delay`.
+    private func withLoadingIndicator(after delay: Duration, for target: Target, _ load: () async -> Bool) async -> Bool {
+        let indicator = Task { [weak self] in
+            try? await Task.sleep(for: delay)
+            guard !Task.isCancelled, let self, self.target == target, showing == nil else { return }
+            panel.showLoading(anchor: target.anchor)
+        }
+        defer { indicator.cancel() }
+        return await load()
     }
 
     /// Ends the hover the moment the cursor leaves the notch, unless it moves onto the preview.
@@ -210,7 +228,6 @@ final class PreviewController {
                 let card = NSHostingView(rootView: TooLargeCardView(url: url, bytes: bytes, limit: settings.largestImageBytes) { [weak self] in
                     await self?.loadAnyway(position) ?? false
                 })
-                card.appearance = NSAppearance(named: .darkAqua)
                 playback.stop()
                 panel.show(card, counter: counter, anchor: requested.anchor)
                 log.infoPrivateInRelease("preview \(position + 1)/\(media.items.count): over the size limit, \(url.absoluteString)")
@@ -235,7 +252,6 @@ final class PreviewController {
 
         case .channel(let channel):
             let card = NSHostingView(rootView: CreatorCardView(channel: channel))
-            card.appearance = NSAppearance(named: .darkAqua)
             playback.stop()
             panel.show(card, counter: counter, anchor: requested.anchor)
             log.infoPrivateInRelease("preview: creator card for \(channel.title)")
@@ -249,7 +265,6 @@ final class PreviewController {
             let details = await Task.detached { FileDetails.load(url, options: options) }.value
             guard !Task.isCancelled, self.target == requested else { return false }
             let view = CardHostingView(rootView: FileCardView(card: FileCard(url: url, details: details, options: options)))
-            view.appearance = NSAppearance(named: .darkAqua)
             // The list of apps using the file fills in after the card appears.
             view.onSizeChange = { [weak self, weak view] in
                 // SwiftUI is in the middle of layout here; refit once it's done.

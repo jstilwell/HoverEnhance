@@ -44,7 +44,7 @@ with Reduce Motion); panels use a system material and follow light and dark mode
 players open in the browser; the menu bar icon dims while previews are off; Pause and Enable Previews
 become one Show Previews item, and nothing is inspected while previews and the inspector are both off.
 **Tests**: Existing geometry and scroll tests; visual checks rendered offscreen.
-**Status**: Not Started
+**Status**: Complete
 
 ## Stage 5: Settings and packaging
 **Goal**: The app looks and ships like a finished one.
