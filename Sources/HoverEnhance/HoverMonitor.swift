@@ -16,6 +16,8 @@ final class HoverMonitor {
     var onClick: (() -> Void)?
     /// A modifier key went down or up (for the activation key setting).
     var onModifiersChanged: ((NSEvent.ModifierFlags) -> Void)?
+    /// Any other key went down. Only that a key was pressed is passed on, never which.
+    var onKeyDown: (() -> Void)?
 
     private let inspector = HoverInspector()
     private var eventMonitors: [Any] = []
@@ -26,7 +28,7 @@ final class HoverMonitor {
 
     func start() {
         // Global monitors don't see events while our own app is active, so add a local one too.
-        let events: NSEvent.EventTypeMask = [.mouseMoved, .scrollWheel, .leftMouseDown, .rightMouseDown, .otherMouseDown, .flagsChanged]
+        let events: NSEvent.EventTypeMask = [.mouseMoved, .scrollWheel, .leftMouseDown, .rightMouseDown, .otherMouseDown, .flagsChanged, .keyDown]
         eventMonitors = [
             NSEvent.addGlobalMonitorForEvents(matching: events) { [weak self] event in
                 self?.handle(event)
@@ -63,6 +65,8 @@ final class HoverMonitor {
             restartDwell()
         case .flagsChanged:
             onModifiersChanged?(event.modifierFlags)
+        case .keyDown:
+            onKeyDown?()
         default:
             onClick?()
         }

@@ -75,7 +75,7 @@ struct FileUsersTests {
 
     @MainActor
     @Test func usersAreLeftAloneWhenTurnedOff() async throws {
-        let card = FileCard(url: try tempFile(), details: FileDetails(), options: FileCardOptions(users: false))
+        let card = FileCard(url: try tempFile(), details: FileDetails(), options: FileCardOptions(hidden: [.users]))
         defer { try? FileManager.default.removeItem(at: card.url) }
         await card.loadUsers()
         #expect(card.users == nil)

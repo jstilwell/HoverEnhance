@@ -135,13 +135,12 @@ final class AppSettings {
         static let showsInspector = "showsInspector"
         static let finderCards = "finderCards"
         static let finderDelay = "finderDelay"
-        static let finderShowsPath = "finderShowsPath"
         static let finderPathStyle = "finderPathStyle"
-        static let finderShowsKindAndSize = "finderShowsKindAndSize"
-        static let finderShowsDates = "finderShowsDates"
-        static let finderShowsMediaInfo = "finderShowsMediaInfo"
-        static let finderShowsWhereFrom = "finderShowsWhereFrom"
-        static let finderShowsUsers = "finderShowsUsers"
+        static let finderHiddenFields = "finderHiddenFields"
+        static let finderOnDesktop = "finderOnDesktop"
+        static let finderForFolders = "finderForFolders"
+        static let finderClosesOnKeyPress = "finderClosesOnKeyPress"
+        static let finderCopiesDetails = "finderCopiesDetails"
         static let finderOffersQuit = "finderOffersQuit"
     }
 
@@ -186,15 +185,16 @@ final class AppSettings {
     var finderCards: Bool { didSet { defaults.set(finderCards, forKey: Key.finderCards) } }
     /// Milliseconds the cursor rests on a file before its card appears; never less than `hoverDelay`.
     var finderDelay: Double { didSet { defaults.set(finderDelay, forKey: Key.finderDelay) } }
-    var finderShowsPath: Bool { didSet { defaults.set(finderShowsPath, forKey: Key.finderShowsPath) } }
     var finderPathStyle: PathStyle { didSet { defaults.set(finderPathStyle.rawValue, forKey: Key.finderPathStyle) } }
-    var finderShowsKindAndSize: Bool { didSet { defaults.set(finderShowsKindAndSize, forKey: Key.finderShowsKindAndSize) } }
-    var finderShowsDates: Bool { didSet { defaults.set(finderShowsDates, forKey: Key.finderShowsDates) } }
-    /// Image and video dimensions, audio and video length, and document pages.
-    var finderShowsMediaInfo: Bool { didSet { defaults.set(finderShowsMediaInfo, forKey: Key.finderShowsMediaInfo) } }
-    var finderShowsWhereFrom: Bool { didSet { defaults.set(finderShowsWhereFrom, forKey: Key.finderShowsWhereFrom) } }
-    /// Apps and processes using the file.
-    var finderShowsUsers: Bool { didSet { defaults.set(finderShowsUsers, forKey: Key.finderShowsUsers) } }
+    /// Details the card leaves out.
+    var finderHiddenFields: Set<FileCardField> {
+        didSet { defaults.set(finderHiddenFields.map(\.rawValue).sorted(), forKey: Key.finderHiddenFields) }
+    }
+    var finderOnDesktop: Bool { didSet { defaults.set(finderOnDesktop, forKey: Key.finderOnDesktop) } }
+    var finderForFolders: Bool { didSet { defaults.set(finderForFolders, forKey: Key.finderForFolders) } }
+    /// Any key (Space for Quick Look, Return to rename, typing to select) closes the card.
+    var finderClosesOnKeyPress: Bool { didSet { defaults.set(finderClosesOnKeyPress, forKey: Key.finderClosesOnKeyPress) } }
+    var finderCopiesDetails: Bool { didSet { defaults.set(finderCopiesDetails, forKey: Key.finderCopiesDetails) } }
     var finderOffersQuit: Bool { didSet { defaults.set(finderOffersQuit, forKey: Key.finderOffersQuit) } }
 
     // Advanced
@@ -224,13 +224,11 @@ final class AppSettings {
             Key.showsInspector: false,
             Key.finderCards: true,
             Key.finderDelay: 600.0,
-            Key.finderShowsPath: true,
             Key.finderPathStyle: PathStyle.full.rawValue,
-            Key.finderShowsKindAndSize: true,
-            Key.finderShowsDates: true,
-            Key.finderShowsMediaInfo: true,
-            Key.finderShowsWhereFrom: true,
-            Key.finderShowsUsers: true,
+            Key.finderOnDesktop: true,
+            Key.finderForFolders: true,
+            Key.finderClosesOnKeyPress: true,
+            Key.finderCopiesDetails: true,
             Key.finderOffersQuit: true,
         ])
         self.defaults = defaults
@@ -258,25 +256,36 @@ final class AppSettings {
         showsInspector = defaults.bool(forKey: Key.showsInspector)
         finderCards = defaults.bool(forKey: Key.finderCards)
         finderDelay = defaults.double(forKey: Key.finderDelay)
-        finderShowsPath = defaults.bool(forKey: Key.finderShowsPath)
         finderPathStyle = defaults.string(forKey: Key.finderPathStyle).flatMap(PathStyle.init(rawValue:)) ?? .full
-        finderShowsKindAndSize = defaults.bool(forKey: Key.finderShowsKindAndSize)
-        finderShowsDates = defaults.bool(forKey: Key.finderShowsDates)
-        finderShowsMediaInfo = defaults.bool(forKey: Key.finderShowsMediaInfo)
-        finderShowsWhereFrom = defaults.bool(forKey: Key.finderShowsWhereFrom)
-        finderShowsUsers = defaults.bool(forKey: Key.finderShowsUsers)
+        finderHiddenFields = Set((defaults.stringArray(forKey: Key.finderHiddenFields) ?? []).compactMap(FileCardField.init(rawValue:)))
+        finderOnDesktop = defaults.bool(forKey: Key.finderOnDesktop)
+        finderForFolders = defaults.bool(forKey: Key.finderForFolders)
+        finderClosesOnKeyPress = defaults.bool(forKey: Key.finderClosesOnKeyPress)
+        finderCopiesDetails = defaults.bool(forKey: Key.finderCopiesDetails)
         finderOffersQuit = defaults.bool(forKey: Key.finderOffersQuit)
     }
 
     var filter: PreviewFilter {
         PreviewFilter(images: showImages, albums: showAlbums, videos: showVideos, embeds: showEmbeds, cards: showCards,
-                      files: finderCards, disabledSites: disabledSites)
+                      files: finderCards, filesOnDesktop: finderOnDesktop, folders: finderForFolders, disabledSites: disabledSites)
     }
 
     var fileCard: FileCardOptions {
-        FileCardOptions(path: finderShowsPath, pathStyle: finderPathStyle, kindAndSize: finderShowsKindAndSize, dates: finderShowsDates,
-                        mediaInfo: finderShowsMediaInfo, whereFrom: finderShowsWhereFrom, users: finderShowsUsers,
-                        offersQuit: finderOffersQuit)
+        FileCardOptions(hidden: finderHiddenFields, pathStyle: finderPathStyle, offersQuit: finderOffersQuit,
+                        copiesDetails: finderCopiesDetails)
+    }
+
+    /// Puts every Finder setting back as it first was. Tests check these match the registered defaults.
+    func restoreFinderDefaults() {
+        finderCards = true
+        finderDelay = 600
+        finderPathStyle = .full
+        finderHiddenFields = []
+        finderOnDesktop = true
+        finderForFolders = true
+        finderClosesOnKeyPress = true
+        finderCopiesDetails = true
+        finderOffersQuit = true
     }
 
     func previewsAllowed(holding flags: NSEvent.ModifierFlags) -> Bool {

@@ -20,8 +20,8 @@ enum MediaSource: Sendable, Hashable {
     case embed(Embed)
     /// On YouTube itself: the creator behind a video or channel link.
     case youtubeChannel(YouTubeChannelRef)
-    /// In Finder: a file or folder.
-    case file(URL)
+    /// In Finder: a file or folder, in a window or on the desktop.
+    case file(URL, onDesktop: Bool)
 }
 
 /// One thing a preview can show.
@@ -45,7 +45,7 @@ struct Media: Sendable, Equatable {
 /// Works out what to preview for a hover result.
 enum MediaResolver {
     static func source(for info: HoverInfo) -> MediaSource? {
-        if let file = info.fileURL { return .file(file) }
+        if let file = info.fileURL { return .file(file, onDesktop: info.fileIsOnDesktop) }
         // On YouTube itself, its thumbnails and hover previews are left alone. Text links to its
         // videos and channels get a card about the creator; text links elsewhere preview as usual.
         if YouTube.isYouTube(info.pageURL) {

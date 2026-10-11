@@ -61,14 +61,21 @@ struct FileDetailsTests {
 
         let details = FileDetails.load(url, options: FileCardOptions())
         #expect(details.whereFrom == URL(string: "https://www.example.com/reports"))
-        #expect(FileDetails.load(url, options: FileCardOptions(whereFrom: false)).whereFrom == nil)
+        #expect(FileDetails.load(url, options: FileCardOptions(hidden: [.whereFrom])).whereFrom == nil)
+        #expect(details.rows(pathStyle: .full).last == DetailRow(
+            field: .whereFrom, label: "From", value: .link("example.com/reports", URL(string: "https://www.example.com/reports")!),
+            copyText: "https://www.example.com/reports"))
     }
 
     @Test func turnedOffDetailsAreLeftOut() throws {
         let scratch = try Scratch()
         let url = try scratch.file("notes.txt")
-        let details = FileDetails.load(url, options: FileCardOptions(kindAndSize: false, dates: false, mediaInfo: false, whereFrom: false))
+        let details = FileDetails.load(url, options: FileCardOptions(hidden: Set(FileCardField.allCases)))
         #expect(details == FileDetails())
+        #expect(details.rows(pathStyle: .full).isEmpty)
+
+        let datesOnly = FileDetails.load(url, options: FileCardOptions(hidden: [.kind, .size]))
+        #expect(datesOnly.kind == nil && datesOnly.size == nil && datesOnly.created != nil)
     }
 
     @Test func sourcesPreferThePageAndSkipMail() {
@@ -76,6 +83,18 @@ struct FileDetailsTests {
         #expect(FileDetails.source(fromWhereFroms: ["https://example.com/a.zip"]) == URL(string: "https://example.com/a.zip"))
         #expect(FileDetails.source(fromWhereFroms: ["Jane <jane@example.com>", "Re: lunch", "message:%3C123@example.com%3E"]) == nil)
         #expect(FileDetails.source(fromWhereFroms: []) == nil)
+    }
+
+    @Test func rowsFollowTheFieldOrderAndCopyDatesInFull() {
+        let created = Date(timeIntervalSince1970: 1_760_000_000)
+        let details = FileDetails(created: created, dimensions: .init(width: 1920, height: 1080), pages: 12)
+        let rows = details.rows(pathStyle: .full)
+        #expect(rows.map(\.label) == ["Created", "Dimensions", "Pages"])
+        #expect(rows[0].copyText == FileDetails.formatFullDate(created))
+        // The row shows a short date; copying gives it in full, with seconds.
+        #expect(rows[0].value == .text(FileDetails.formatDate(created)))
+        #expect(rows[0].value != .text(FileDetails.formatFullDate(created)))
+        #expect(rows[1].value == .text("1920 × 1080"))
     }
 
     @Test func formatting() {

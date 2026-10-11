@@ -30,6 +30,8 @@ struct AppSettingsTests {
         #expect(settings.finderCards)
         #expect(settings.finderDelay == 600)
         #expect(settings.fileCard == FileCardOptions())
+        #expect(settings.finderOnDesktop && settings.finderForFolders)
+        #expect(settings.finderClosesOnKeyPress)
     }
 
     @Test func finderChangesPersist() {
@@ -37,16 +39,45 @@ struct AppSettingsTests {
         let settings = AppSettings(defaults: defaults)
         settings.finderCards = false
         settings.finderDelay = 900
-        settings.finderShowsPath = false
         settings.finderPathStyle = .quoted
-        settings.finderShowsDates = false
-        settings.finderShowsWhereFrom = false
+        settings.finderHiddenFields = [.path, .opened, .whereFrom]
         settings.finderOffersQuit = false
+        settings.finderCopiesDetails = false
+        settings.finderOnDesktop = false
+        settings.finderForFolders = false
+        settings.finderClosesOnKeyPress = false
 
         let reloaded = AppSettings(defaults: defaults)
         #expect(!reloaded.filter.files)
+        #expect(!reloaded.filter.filesOnDesktop && !reloaded.filter.folders)
         #expect(reloaded.finderDelay == 900)
-        #expect(reloaded.fileCard == FileCardOptions(path: false, pathStyle: .quoted, dates: false, whereFrom: false, offersQuit: false))
+        #expect(!reloaded.finderClosesOnKeyPress)
+        #expect(reloaded.fileCard == FileCardOptions(hidden: [.path, .opened, .whereFrom], pathStyle: .quoted, offersQuit: false, copiesDetails: false))
+    }
+
+    @Test func unknownHiddenFieldsAreIgnored() {
+        let defaults = freshDefaults()
+        defaults.set(["opened", "somethingRemoved"], forKey: "finderHiddenFields")
+        #expect(AppSettings(defaults: defaults).finderHiddenFields == [.opened])
+    }
+
+    @Test func restoringFinderDefaultsMatchesAFreshStart() {
+        let settings = AppSettings(defaults: freshDefaults())
+        settings.finderCards = false
+        settings.finderDelay = 1500
+        settings.finderPathStyle = .tilde
+        settings.finderHiddenFields = Set(FileCardField.allCases)
+        settings.finderOnDesktop = false
+        settings.finderCopiesDetails = false
+        settings.finderOffersQuit = false
+        settings.restoreFinderDefaults()
+
+        let fresh = AppSettings(defaults: freshDefaults())
+        #expect(settings.finderCards == fresh.finderCards)
+        #expect(settings.finderDelay == fresh.finderDelay)
+        #expect(settings.fileCard == fresh.fileCard)
+        #expect(settings.filter == fresh.filter)
+        #expect(settings.finderClosesOnKeyPress == fresh.finderClosesOnKeyPress)
     }
 
     @Test func changesPersist() {

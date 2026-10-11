@@ -34,13 +34,31 @@ struct FileSourceTests {
     @Test func finderItemsGetFileCards() {
         var info = HoverInfo(pid: 1, appName: "Finder", bundleID: FinderItem.bundleID)
         info.fileURL = URL(filePath: "/Applications/Safari.app")
-        #expect(MediaResolver.source(for: info) == .file(URL(filePath: "/Applications/Safari.app")))
-        #expect(MediaSource.file(URL(filePath: "/a")).site == nil)
+        #expect(MediaResolver.source(for: info) == .file(URL(filePath: "/Applications/Safari.app"), onDesktop: false))
+        info.fileIsOnDesktop = true
+        #expect(MediaResolver.source(for: info) == .file(URL(filePath: "/Applications/Safari.app"), onDesktop: true))
+        #expect(MediaSource.file(URL(filePath: "/a"), onDesktop: false).site == nil)
     }
 
     @Test func fileCardsCanBeTurnedOff() {
-        #expect(PreviewFilter().allows(.file(URL(filePath: "/a"))))
-        #expect(!PreviewFilter(files: false).allows(.file(URL(filePath: "/a"))))
+        #expect(PreviewFilter().allows(.file(URL(filePath: "/a"), onDesktop: false)))
+        #expect(!PreviewFilter(files: false).allows(.file(URL(filePath: "/a"), onDesktop: false)))
         #expect(PreviewFilter(files: false).apply(to: Media(items: [.file(URL(filePath: "/a"))])) == nil)
+    }
+
+    @Test func desktopAndFoldersCanBeLeftOut() {
+        let file = URL(filePath: "/Users/me/Desktop/notes.txt")
+        // Finder's folder URLs end in a slash; packages such as apps don't.
+        let folder = URL(filePath: "/Users/me/Desktop/Projects/", directoryHint: .isDirectory)
+        let app = URL(string: "file:///Applications/Safari.app")!
+
+        let noDesktop = PreviewFilter(filesOnDesktop: false)
+        #expect(!noDesktop.allows(.file(file, onDesktop: true)))
+        #expect(noDesktop.allows(.file(file, onDesktop: false)))
+
+        let noFolders = PreviewFilter(folders: false)
+        #expect(!noFolders.allows(.file(folder, onDesktop: false)))
+        #expect(noFolders.allows(.file(file, onDesktop: false)))
+        #expect(noFolders.allows(.file(app, onDesktop: false)))
     }
 }

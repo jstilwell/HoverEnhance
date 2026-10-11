@@ -25,6 +25,8 @@ struct HoverInfo: Sendable, Equatable {
     var isOnText = false
     /// In Finder: the file or folder under the cursor.
     var fileURL: URL?
+    /// The file is an icon on the desktop rather than an item in a Finder window.
+    var fileIsOnDesktop = false
     /// Frame in global display coordinates (top-left origin).
     var frame: CGRect?
     /// Roles from the element up to its web area or window, innermost first.
