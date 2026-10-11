@@ -123,6 +123,56 @@ enum SiteAPIs {
         return items.isEmpty ? nil : Media(items: items)
     }
 
+    // MARK: - Instagram
+
+    static func instagramEmbedURL(code: String) -> URL {
+        URL(string: "https://www.instagram.com/p/\(code)/embed/")!
+    }
+
+    /// The post's full-size image (for a reel, its cover), served without the embed page. Works
+    /// even when the owner has turned embedding off.
+    static func instagramImageURL(code: String) -> URL {
+        URL(string: "https://www.instagram.com/p/\(code)/media/?size=l")!
+    }
+
+    /// Instagram's embed page carries the post as JSON inside a JSON string ("contextJSON"). When
+    /// the owner has turned embedding off the page holds an error instead, and this returns nil.
+    static func instagram(embedPage html: String) -> Media? {
+        guard let key = html.range(of: "\"contextJSON\":"),
+              let json = jsonString(atStartOf: html[key.upperBound...]),
+              let context = try? JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any],
+              let post = (context["gql_data"] as? [String: Any])?["shortcode_media"] as? [String: Any] else { return nil }
+
+        // Posts with several photos or videos list them as children.
+        let children = ((post["edge_sidecar_to_children"] as? [String: Any])?["edges"] as? [[String: Any]])?
+            .compactMap { $0["node"] as? [String: Any] }
+        let items = (children ?? [post]).compactMap { node -> MediaItem? in
+            if node["is_video"] as? Bool == true, let video = (node["video_url"] as? String).flatMap(URL.init(string:)) {
+                return .video(video, size: nil)
+            }
+            return (node["display_url"] as? String).flatMap(URL.init(string:)).map { .image([$0]) }
+        }
+        return items.isEmpty ? nil : Media(items: items)
+    }
+
+    /// Decodes the JSON string literal that `text` starts with (after optional whitespace).
+    private static func jsonString(atStartOf text: Substring) -> String? {
+        let bytes = text.utf8.drop { $0 == UInt8(ascii: " ") }
+        guard bytes.first == UInt8(ascii: "\"") else { return nil }
+        var escaped = false
+        for index in bytes.indices.dropFirst() {
+            let byte = bytes[index]
+            if escaped {
+                escaped = false
+            } else if byte == UInt8(ascii: "\\") {
+                escaped = true
+            } else if byte == UInt8(ascii: "\"") {
+                return try? JSONDecoder().decode(String.self, from: Data(bytes[bytes.startIndex...index]))
+            }
+        }
+        return nil
+    }
+
     private static func size(_ width: Double?, _ height: Double?) -> CGSize? {
         guard let width, let height, width > 0, height > 0 else { return nil }
         return CGSize(width: width, height: height)

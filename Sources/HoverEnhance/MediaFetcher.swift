@@ -24,6 +24,8 @@ actor MediaFetcher {
             media = await data(at: SiteAPIs.tweetURL(id: id)).flatMap(SiteAPIs.tweet)
         case .blueskyPost(let actor, let rkey):
             media = await blueskyPost(actor: actor, rkey: rkey)
+        case .instagram(let code):
+            media = await instagram(code: code)
         }
         if let media { looked[source] = media }
         return media
@@ -50,6 +52,15 @@ actor MediaFetcher {
         }
         guard let did, let url = SiteAPIs.blueskyPostURL(did: did, rkey: rkey) else { return nil }
         return await data(at: url).flatMap(SiteAPIs.blueskyPost)
+    }
+
+    private func instagram(code: String) async -> Media? {
+        if let page = await data(at: SiteAPIs.instagramEmbedURL(code: code)),
+           let media = SiteAPIs.instagram(embedPage: String(decoding: page, as: UTF8.self)) {
+            return media
+        }
+        // Embedding is off for this post: show its image (a reel's cover) instead.
+        return Media(items: [.image([SiteAPIs.instagramImageURL(code: code)])])
     }
 
     private func data(at url: URL) async -> Data? {

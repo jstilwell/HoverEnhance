@@ -14,6 +14,8 @@ enum MediaSource: Sendable, Hashable {
     case tweet(id: String)
     /// A Bluesky post; `actor` is a handle or DID.
     case blueskyPost(actor: String, rkey: String)
+    /// An Instagram post or reel, by shortcode.
+    case instagram(code: String)
     /// A video played through its site's embeddable player.
     case embed(Embed)
 }

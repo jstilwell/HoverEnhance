@@ -6,12 +6,12 @@ other apps' UI through the Accessibility API, so it works in browsers without an
 - **Image previews** (HoverZoom-style): rest the cursor on an image or a link to one and the
   full-size image appears beside it. Site rules swap thumbnails for full-size versions on Bluesky,
   Reddit, Imgur, Wikimedia, YouTube, and Letterboxd.
-- **Albums**: Reddit galleries and multi-photo posts on X and Bluesky show an n/total badge; scroll
+- **Albums**: Reddit galleries and multi-photo posts on X, Bluesky, and Instagram show an n/total badge; scroll
   while hovering to step through them (the page underneath stays put).
-- **Video**: Streamable, Reddit, X, Bluesky, Imgur gifv, and direct .mp4/.m3u8 links play in the
+- **Video**: Streamable, Reddit, X, Bluesky, Instagram, Imgur gifv, and direct .mp4/.m3u8 links play in the
   preview. Move onto the video for playback and volume controls; it resumes where you left off if it
   closes, and remembers mute/volume.
-- **Embedded players**: YouTube, Vimeo, TikTok, Twitch clips, and Instagram links play through each
+- **Embedded players**: YouTube, Vimeo, TikTok, and Twitch clip links play through each
   site's own player (skipped on the site itself, which has its own hover previews). The last one
   stays paused in the background, so hovering it again resumes.
 - **Inspector** (menu → Show Inspector): a HUD showing the hovered element's role, labels, and URLs.
