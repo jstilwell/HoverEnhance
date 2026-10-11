@@ -27,6 +27,8 @@ struct HoverInfo: Sendable, Equatable {
     var isOnText = false
     /// A video the page itself shows under the cursor, playing or not.
     var videoFrame: CGRect?
+    /// For a photo outside any link, as in Instagram's feed: the post it's from.
+    var postURL: URL?
     /// In Finder: the file or folder under the cursor.
     var fileURL: URL?
     /// The file is an icon on the desktop rather than an item in a Finder window.
@@ -52,6 +54,7 @@ struct HoverInfo: Sendable, Equatable {
         add("url", url?.absoluteString)
         add("image", imageURL == url ? nil : imageURL?.absoluteString)
         add("link", linkURL?.absoluteString)
+        add("post", postURL?.absoluteString)
         add("page", pageURL?.absoluteString)
         add("text", isOnText ? "yes" : nil)
         add("video", videoFrame.map { "on the page, \(Int($0.width))×\(Int($0.height))" })

@@ -24,6 +24,16 @@ enum MediaSource: Sendable, Hashable {
     case file(URL, onDesktop: Bool)
 }
 
+extension MediaSource {
+    /// A post or gallery, which can hold several photos and videos.
+    var isPost: Bool {
+        switch self {
+        case .redditGallery, .tweet, .blueskyPost, .instagram: true
+        case .images, .video, .streamable, .embed, .youtubeChannel, .file: false
+        }
+    }
+}
+
 /// One thing a preview can show.
 enum MediaItem: Sendable, Equatable {
     /// Image URLs, best first; the first that loads wins.
@@ -40,6 +50,17 @@ enum MediaItem: Sendable, Equatable {
 /// Resolved media: a single item, or an album.
 struct Media: Sendable, Equatable {
     var items: [MediaItem]
+
+    /// The item showing `image`, matched by file name: sites serve one image at many sizes and
+    /// addresses. Names too short to be an image's own, like "media", match nothing.
+    func index(showing image: URL) -> Int? {
+        let name = image.deletingPathExtension().lastPathComponent
+        guard name.count >= 8 else { return nil }
+        return items.firstIndex { item in
+            guard case .image(let urls) = item else { return false }
+            return urls.contains { $0.deletingPathExtension().lastPathComponent == name }
+        }
+    }
 
     /// Without images and videos anywhere but the web, or nil if nothing is left. Lookups read what
     /// sites answer, and an answer mustn't point HoverEnhance at local files.
@@ -89,6 +110,10 @@ enum MediaResolver {
         }
         // A link to a post or video outranks the thumbnail inside it.
         if let link = info.linkURL, let source = SiteLinks.source(forLink: link) {
+            return source
+        }
+        // A photo outside any link, as in Instagram's feed: its post, which may hold more photos.
+        if info.linkURL == nil, let post = info.postURL, let source = SiteLinks.source(forLink: post) {
             return source
         }
         // Sites with their own players have their own hover previews; don't stack another on top.

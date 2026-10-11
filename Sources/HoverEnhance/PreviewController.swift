@@ -67,9 +67,12 @@ final class PreviewController {
             reset(because: "not previewed outside browsers")
             return
         }
-        // An image the page already shows about as large as a preview could be: nothing to add.
-        if let shown = info.imageFrame?.size,
-           !PreviewGeometry.couldEnlarge(shown: shown, room: panel.room(at: cursor), by: settings.minimumEnlargement) {
+        // An image the page already shows about as large as a preview could be has nothing to add,
+        // unless it's from a post with more to step through.
+        let shownLarge = info.imageFrame.map {
+            !PreviewGeometry.couldEnlarge(shown: $0.size, room: panel.room(at: cursor), by: settings.minimumEnlargement)
+        } ?? false
+        if shownLarge, !source.isPost {
             reset(because: "already shown large")
             return
         }
@@ -80,16 +83,21 @@ final class PreviewController {
         let elementFrame = info.imageFrame ?? info.frame
         let newTarget = Target(source: source, anchor: cursor, notch: panel.notchFrame(at: cursor), element: elementFrame, page: info.pageURL)
         target = newTarget
-        // File cards wait longer on purpose; the spinner counts only time past that.
-        var spinnerDelay = Duration.milliseconds(300)
-        if case .file = source { spinnerDelay += .milliseconds(max(settings.finderDelay - settings.hoverDelay, 0)) }
+        // File cards wait longer on purpose; the spinner counts only time past that. A post shown large
+        // may turn out to hold nothing more, so it gets no spinner.
+        var spinnerDelay: Duration? = shownLarge ? nil : .milliseconds(300)
+        if case .file = source, let delay = spinnerDelay {
+            spinnerDelay = delay + .milliseconds(max(settings.finderDelay - settings.hoverDelay, 0))
+        }
         task = Task {
             let shown = await withLoadingIndicator(after: spinnerDelay, for: newTarget) {
                 guard let fetched = await fetcher.media(for: source), let media = AppSettings.shared.filter.apply(to: fetched),
-                      !Task.isCancelled, target == newTarget else { return false }
+                      !Task.isCancelled, target == newTarget, !shownLarge || media.items.count > 1 else { return false }
                 self.media = media
+                // An album opens at the photo the page shows, as in a carousel stepped partway through.
+                let start = info.imageURL.flatMap(media.index(showing:)) ?? 0
                 // A lone image isn't worth showing unless it's meaningfully bigger than it already appears.
-                return await display(0, unlessSmallerThan: media.items.count == 1 ? elementFrame?.size : nil)
+                return await display(start, unlessSmallerThan: media.items.count == 1 ? elementFrame?.size : nil)
             }
             // Nothing to show after all: take the spinner down.
             if !shown, target == newTarget { panel.hide() }
@@ -97,7 +105,8 @@ final class PreviewController {
     }
 
     /// Runs `load`, with a spinner in place of the preview if nothing has appeared after `delay`.
-    private func withLoadingIndicator(after delay: Duration, for target: Target, _ load: () async -> Bool) async -> Bool {
+    private func withLoadingIndicator(after delay: Duration?, for target: Target, _ load: () async -> Bool) async -> Bool {
+        guard let delay else { return await load() }
         let indicator = Task { [weak self] in
             try? await Task.sleep(for: delay)
             guard !Task.isCancelled, let self, self.target == target, showing == nil else { return }
