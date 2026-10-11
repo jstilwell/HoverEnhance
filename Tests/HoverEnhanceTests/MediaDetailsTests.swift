@@ -110,6 +110,58 @@ struct ZipSummaryTests {
         #expect(summary.label == "3 items")
     }
 
+    /// Little-endian bytes for hand-built archives.
+    private struct Bytes {
+        var data = Data()
+        mutating func add<Value: FixedWidthInteger>(_ value: Value) { withUnsafeBytes(of: value.littleEndian) { data.append(contentsOf: $0) } }
+        mutating func add(_ bytes: [UInt8]) { data.append(contentsOf: bytes) }
+    }
+
+    /// A central directory entry for "a" whose sizes are in a Zip64 extra field.
+    private func zip64Entry(unpacked: UInt64) -> Data {
+        var entry = Bytes()
+        entry.add(UInt32(0x0201_4B50))
+        entry.add(UInt16(45)); entry.add(UInt16(45)); entry.add(UInt16(0)); entry.add(UInt16(0))
+        entry.add(UInt16(0)); entry.add(UInt16(0)); entry.add(UInt32(0))
+        entry.add(UInt32.max); entry.add(UInt32.max)
+        entry.add(UInt16(1)); entry.add(UInt16(20)); entry.add(UInt16(0))
+        entry.add(UInt16(0)); entry.add(UInt16(0)); entry.add(UInt32(0)); entry.add(UInt32(0))
+        entry.add(Array("a".utf8))
+        entry.add(UInt16(1)); entry.add(UInt16(16)); entry.add(unpacked); entry.add(UInt64(0))
+        return entry.data
+    }
+
+    private func write(_ data: Data) throws -> URL {
+        let url = FileManager.default.temporaryDirectory.appending(path: "HoverEnhanceTests-\(UUID().uuidString).zip")
+        try data.write(to: url)
+        return url
+    }
+
+    @Test func craftedSizesDontOverflow() throws {
+        var archive = Bytes()
+        let directory = zip64Entry(unpacked: UInt64(Int64.max)) + zip64Entry(unpacked: UInt64(Int64.max))
+        archive.add(Array(directory))
+        archive.add(UInt32(0x0605_4B50)); archive.add(UInt16(0)); archive.add(UInt16(0))
+        archive.add(UInt16(2)); archive.add(UInt16(2)); archive.add(UInt32(directory.count)); archive.add(UInt32(0)); archive.add(UInt16(0))
+        let url = try write(archive.data)
+        defer { try? FileManager.default.removeItem(at: url) }
+        #expect(ZipSummary.read(url) == ZipSummary(files: 2, folders: 0, unpackedSize: .max, isEncrypted: false))
+    }
+
+    @Test func craftedOffsetsDontOverflow() throws {
+        var archive = Bytes()
+        // A Zip64 end record claiming the directory starts just short of the largest offset there is.
+        archive.add(UInt32(0x0606_4B50)); archive.add(UInt64(44)); archive.add(UInt16(45)); archive.add(UInt16(45))
+        archive.add(UInt32(0)); archive.add(UInt32(0)); archive.add(UInt64(1)); archive.add(UInt64(1))
+        archive.add(UInt64(100)); archive.add(UInt64.max - 5)
+        archive.add(UInt32(0x0706_4B50)); archive.add(UInt32(0)); archive.add(UInt64(0)); archive.add(UInt32(1))
+        archive.add(UInt32(0x0605_4B50)); archive.add(UInt16(0)); archive.add(UInt16(0))
+        archive.add(UInt16.max); archive.add(UInt16.max); archive.add(UInt32.max); archive.add(UInt32.max); archive.add(UInt16(0))
+        let url = try write(archive.data)
+        defer { try? FileManager.default.removeItem(at: url) }
+        #expect(ZipSummary.read(url) == nil)
+    }
+
     @Test func damagedFilesGiveNothing() throws {
         let archive = try Archive(["a.txt": 5000])
         let data = try Data(contentsOf: archive.zip)

@@ -1,7 +1,8 @@
 import Foundation
 
 /// What's inside a zip file, read from the list at its end (the central directory) without
-/// unpacking anything.
+/// unpacking anything. Archives come from anywhere, so every number in one is checked before use:
+/// a crafted size or offset must give nothing, not a crash.
 struct ZipSummary: Sendable, Equatable {
     /// Files and folders, not counting the `__MACOSX` resource forks macOS adds to archives it makes.
     var files: Int
@@ -41,7 +42,8 @@ struct ZipSummary: Sendable, Equatable {
         guard directorySize <= UInt64(maximumDirectorySize) else {
             return ZipSummary(files: Int(clamping: entries), folders: 0, unpackedSize: nil, isEncrypted: false)
         }
-        guard directoryOffset + directorySize <= size,
+        // Written as a subtraction so a crafted offset near the top of the range can't overflow.
+        guard directorySize <= size, directoryOffset <= size - directorySize,
               let directory = read(at: directoryOffset, count: Int(directorySize)) else { return nil }
         return summarize(directory: directory, entries: entries)
     }
@@ -83,7 +85,9 @@ struct ZipSummary: Sendable, Equatable {
                 summary.folders += 1
             } else {
                 summary.files += 1
-                summary.unpackedSize? += Int64(clamping: unpacked)
+                // Claimed sizes can be anything; the total stops at the largest number rather than overflowing.
+                let (total, overflowed) = (summary.unpackedSize ?? 0).addingReportingOverflow(Int64(clamping: unpacked))
+                summary.unpackedSize = overflowed ? .max : total
             }
         }
         return summary
