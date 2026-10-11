@@ -606,11 +606,11 @@ struct AdvancedSettingsView: View {
             }
             Section("About") {
                 LabeledContent("Version", value: Self.version)
-                LabeledContent("Source") {
-                    Link("github.com/jstilwell/HoverEnhance", destination: URL(string: "https://github.com/jstilwell/HoverEnhance")!)
+                LabeledContent("Website") {
+                    Link("hoverenhance.com", destination: AboutView.website)
                 }
-                if let copyright = Bundle.main.object(forInfoDictionaryKey: "NSHumanReadableCopyright") as? String {
-                    LabeledContent("Copyright", value: copyright)
+                LabeledContent("Source") {
+                    Link("github.com/jstilwell/HoverEnhance", destination: AboutView.repository)
                 }
             }
         }

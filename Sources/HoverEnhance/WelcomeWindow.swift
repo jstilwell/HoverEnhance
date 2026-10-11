@@ -34,11 +34,7 @@ final class WelcomeWindowController: NSWindowController, NSWindowDelegate {
     required init?(coder: NSCoder) { fatalError("not used") }
 
     func show() {
-        guard let window else { return }
-        // A menu bar app isn't frontmost on its own.
-        NSApp.activate()
-        if !window.isVisible { window.center() }
-        window.makeKeyAndOrderFront(nil)
+        window?.showFromMenuBar()
     }
 
     /// Floats over System Settings while access is off, so the icon can be dragged into its list; comes
