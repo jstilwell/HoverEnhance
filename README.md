@@ -11,6 +11,9 @@ other apps' UI through the Accessibility API, so it works in browsers without an
 - **Video**: Streamable, Reddit, X, Bluesky, Imgur gifv, and direct .mp4/.m3u8 links play in the
   preview. Move onto the video for playback and volume controls; it resumes where you left off if it
   closes, and remembers mute/volume.
+- **Embedded players**: YouTube, Vimeo, TikTok, Twitch clips, and Instagram links play through each
+  site's own player (skipped on the site itself, which has its own hover previews). The last one
+  stays paused in the background, so hovering it again resumes.
 - **Inspector** (menu → Show Inspector): a HUD showing the hovered element's role, labels, and URLs.
 
 ## Build and run
@@ -42,6 +45,8 @@ the grant survives rebuilds. With ad-hoc signing you'd have to re-grant after ev
   main thread), videos via `VideoPlayback` (AVPlayer). It hides the preview when the cursor leaves
   the element (or the video, for videos), on scroll or click, or on app switch. `ScrollTap`
   swallows scroll events while an album is up.
+- `EmbedPlayer` hosts players in a web view loaded under an HTTPS origin (YouTube needs a
+  Referer), with AirPlay and WebRTC off so nothing asks for local network access.
 - Reddit answers scripted requests with a JavaScript check; `WebPageLoader` passes it in an
   offscreen WebKit view and shares the cookie with URLSession.
 - Chromium browsers and Electron apps only expose web content to accessibility on request, so the

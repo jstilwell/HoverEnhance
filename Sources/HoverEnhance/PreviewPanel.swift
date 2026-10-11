@@ -1,5 +1,6 @@
 import AVKit
 import AppKit
+import WebKit
 
 /// A floating panel that shows media beside the cursor. Images are click-through; videos take
 /// the mouse so their playback controls work.
@@ -73,6 +74,13 @@ final class PreviewPanel {
         let scale = max(1, 720 / max(videoSize.width, videoSize.height))
         present(playerView, naturalSize: CGSize(width: videoSize.width * scale, height: videoSize.height * scale),
                 counter: counter, interactive: true)
+    }
+
+    /// A site's own player; it takes the mouse for its controls.
+    func show(_ webView: WKWebView, size: CGSize, counter: String?) {
+        imageView.image = nil
+        playerView.player = nil
+        present(webView, naturalSize: size, counter: counter, interactive: true)
     }
 
     func hide() {

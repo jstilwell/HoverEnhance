@@ -1,4 +1,5 @@
 import AppKit
+import WebKit
 
 /// Decides when to show a preview for what the cursor is resting on, and when to hide it.
 @MainActor
@@ -10,6 +11,7 @@ final class PreviewController {
     private let fetcher = MediaFetcher()
     private let loader = ImageLoader()
     private let playback = VideoPlayback()
+    private let embeds = EmbedPlayer()
     private let panel = PreviewPanel()
     private let scrollTap = ScrollTap()
     private var activationObserver: NSObjectProtocol?
@@ -34,20 +36,20 @@ final class PreviewController {
         activationObserver = NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main
         ) { [weak self] _ in
-            MainActor.assumeIsolated { self?.reset() }
+            MainActor.assumeIsolated { self?.reset(because: "app switched") }
         }
     }
 
     func hovered(_ info: HoverInfo) {
         guard isEnabled else { return }
         guard let source = MediaResolver.source(for: info), let cursor = CGEvent(source: nil)?.location else {
-            reset()
+            reset(because: "nothing to preview")
             return
         }
         // Still on the same thing: it's loading, showing, or was dismissed by a click.
         if target?.source == source { return }
 
-        reset()
+        reset(because: "new target")
         let elementFrame = info.imageFrame ?? info.frame
         let newTarget = Target(
             source: source,
@@ -68,21 +70,23 @@ final class PreviewController {
         var area = target.area
         // The bounding box of element and video covers the gap between them, so the cursor can cross over.
         if isShowingVideo, let panelFrame = panel.globalFrame { area = area.union(panelFrame) }
-        if !area.contains(point) { reset() }
+        if !area.contains(point) { reset(because: "cursor left") }
     }
 
     /// Content moved under the cursor. While an album is up, the scroll tap has the wheel instead.
     func scrolled() {
-        if !scrollTap.isEnabled { reset() }
+        if !scrollTap.isEnabled { reset(because: "scrolled") }
     }
 
     /// Hides the preview but remembers the target, so it stays hidden until the cursor moves on.
     func dismiss() {
+        if target != nil { log.debug("preview dismissed by click") }
         task?.cancel()
         hidePanel()
     }
 
-    func reset() {
+    func reset(because reason: String = "reset") {
+        if target != nil { log.debug("preview hidden: \(reason, privacy: .public)") }
         task?.cancel()
         task = nil
         target = nil
@@ -93,6 +97,7 @@ final class PreviewController {
 
     private func hidePanel() {
         playback.stop()
+        embeds.suspend()
         isShowingVideo = false
         scrollTap.isEnabled = false
         panel.hide()
@@ -131,10 +136,33 @@ final class PreviewController {
             isShowingVideo = true
             panel.show(player, videoSize: reportedSize ?? size, counter: counter)
             log.info("preview \(position + 1)/\(media.items.count): video \(url.absoluteString, privacy: .public)")
+
+        case .embed(let embed):
+            guard let view = embeds.view(for: embed) else { return }
+            playback.stop()
+            isShowingVideo = true
+            panel.show(view, size: embed.size, counter: counter)
+            log.info("preview \(position + 1)/\(media.items.count): embed \(String(describing: embed), privacy: .public)")
+            logPlaybackState(of: view, after: .seconds(5))
         }
         index = position
         scrollTap.isEnabled = media.items.count > 1
         prefetch(position + 1)
+    }
+
+    /// Embeds give no load or error callbacks we can use, so record whether media is actually playing.
+    private func logPlaybackState(of view: WKWebView, after delay: Duration) {
+        Task {
+            try? await Task.sleep(for: delay)
+            let state = await view.requestMediaPlaybackState()
+            let name = switch state {
+            case .playing: "playing"
+            case .paused: "paused"
+            case .suspended: "suspended"
+            default: "no media"
+            }
+            log.info("embed media after \(delay, privacy: .public): \(name, privacy: .public)")
+        }
     }
 
     /// Warms the loader's cache so stepping forward to an image is instant.
