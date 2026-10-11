@@ -25,6 +25,8 @@ struct HoverInfo: Sendable, Equatable {
     var imageFrame: CGRect?
     /// The cursor is on a link's text, as opposed to its image or video.
     var isOnText = false
+    /// A video the page itself shows under the cursor, playing or not.
+    var videoFrame: CGRect?
     /// In Finder: the file or folder under the cursor.
     var fileURL: URL?
     /// The file is an icon on the desktop rather than an item in a Finder window.
@@ -52,6 +54,7 @@ struct HoverInfo: Sendable, Equatable {
         add("link", linkURL?.absoluteString)
         add("page", pageURL?.absoluteString)
         add("text", isOnText ? "yes" : nil)
+        add("video", videoFrame.map { "on the page, \(Int($0.width))×\(Int($0.height))" })
         add("file", fileURL?.path(percentEncoded: false))
         add("finder", finderIsBusy ? "busy (Quick Look or renaming)" : nil)
         add("frame", frame.map { "\(Int($0.minX)),\(Int($0.minY))  \(Int($0.width))×\(Int($0.height))" })

@@ -31,6 +31,35 @@ struct SiteLinksTests {
     }
 }
 
+/// A video the page already shows under the cursor, as in Instagram's feed.
+struct VideoOnThePageTests {
+    private func info(link: String? = nil, image: String? = nil, video: CGSize?) -> HoverInfo {
+        var info = HoverInfo(pid: 1, appKind: .browser)
+        info.pageURL = URL(string: "https://www.instagram.com/")
+        info.linkURL = link.flatMap(URL.init(string:))
+        info.imageURL = image.flatMap(URL.init(string:))
+        info.videoFrame = video.map { CGRect(origin: .zero, size: $0) }
+        return info
+    }
+
+    @Test func getsNoPreviewOfItself() {
+        #expect(MediaResolver.source(for: info(link: "https://www.instagram.com/reel/AbC123/", video: CGSize(width: 470, height: 585))) == nil)
+    }
+
+    @Test func getsNoPreviewOfAStillOfItself() {
+        #expect(MediaResolver.source(for: info(image: "https://example.com/poster.jpg", video: CGSize(width: 470, height: 585))) == nil)
+    }
+
+    @Test func smallLoopingThumbnailsStillPreview() {
+        #expect(MediaResolver.source(for: info(link: "https://www.instagram.com/reel/AbC123/", video: CGSize(width: 80, height: 80))) == .instagram(code: "AbC123"))
+    }
+
+    @Test func withoutAVideoNothingChanges() {
+        #expect(MediaResolver.source(for: info(link: "https://www.instagram.com/reel/AbC123/", video: nil)) == .instagram(code: "AbC123"))
+        #expect(MediaResolver.source(for: info(image: "https://example.com/photo.jpg", video: nil)) == .images([URL(string: "https://example.com/photo.jpg")!]))
+    }
+}
+
 /// Fixtures are trimmed copies of real responses.
 struct SiteAPIsTests {
     @Test func streamablePrefersTheFullQualityMP4() {

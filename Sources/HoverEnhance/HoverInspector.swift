@@ -128,6 +128,10 @@ final class HoverInspector: @unchecked Sendable {
         if info.pageURL != nil, info.linkURL != nil, info.imageURL == nil {
             info.isOnText = isText(at: point, element: element)
         }
+        // Only worth the look where there'd be a preview of a link or an image.
+        if info.pageURL != nil, !info.isOnText, info.linkURL != nil || info.imageURL != nil {
+            info.videoFrame = video(at: point, near: element)
+        }
         if info.bundleID == FinderItem.bundleID {
             info.fileURL = FinderItem.url(at: element)
             // The desktop is Finder's too, but isn't in a window.
@@ -179,6 +183,29 @@ final class HoverInspector: @unchecked Sendable {
                 }
             }
             searched = current
+            root = current.parent
+        }
+        return nil
+    }
+
+    /// The frame of a video the page shows under the point. Sites cover videos with their controls as
+    /// they do images, so look among the element, its parent, and its grandparent. Chromium shows a
+    /// video as a plain group, told apart only by its search for graphics (images and videos); WebKit
+    /// gives it the video's URL, and the AXVideo subrole when it has controls. The search is capped.
+    private func video(at point: CGPoint, near element: AXElement) -> CGRect? {
+        var budget = 24
+        var root: AXElement? = element
+        for _ in 0..<3 {
+            guard let current = root, current.role != "AXWebArea" else { return nil }
+            for graphic in current.graphics(limit: 8) where budget > 0 {
+                budget -= 1
+                if graphic.role == kAXGroupRole, let frame = graphic.frame, frame.contains(point) { return frame }
+            }
+            for node in [current] + current.children where budget > 0 {
+                budget -= 1
+                guard node.role == kAXGroupRole, let frame = node.frame, frame.contains(point) else { continue }
+                if node.subrole == "AXVideo" || (node.subrole != "AXAudio" && node.url != nil) { return frame }
+            }
             root = current.parent
         }
         return nil
