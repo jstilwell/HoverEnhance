@@ -15,8 +15,8 @@ non-image links produce nothing; candidates are de-duplicated. Manual page: `Tes
 **Goal**: Fetch candidates in order and decode the first that works, off the main thread.
 **Success Criteria**: Falls through 404s; downsamples to screen size; animated GIFs stay animated;
 repeat hovers hit the cache; cross-origin requests send only the page's origin as Referer.
-**Tests**: Smoke test against live URLs (fallback chain, cache hit timing).
-**Status**: In Progress
+**Tests**: Smoke test against live URLs (fallback chain, cache hit timing); decoder and Referer unit tests.
+**Status**: Complete
 
 ## Stage 3: Preview panel
 **Goal**: Show the image beside the cursor and hide it at the right times.
@@ -24,7 +24,7 @@ repeat hovers hit the cache; cross-origin requests send only the page's origin a
 than they already appear; hides when the cursor leaves the element, on scroll, and on click;
 menu toggle for previews.
 **Tests**: Manual: hover thumbnails in Safari/Chromium, scroll, click, move between images.
-**Status**: Not Started
+**Status**: In Progress
 
 ## Stage 4: More sites and polish
 **Goal**: Broader coverage and nicer feel.
