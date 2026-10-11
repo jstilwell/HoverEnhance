@@ -359,118 +359,47 @@ struct AccountsSettingsView: View {
     var body: some View {
         Form {
             Section {
-                Picker("Subscribe using", selection: $account.method) {
-                    ForEach(YouTubeAccount.Method.allCases) { Text($0.label).tag($0) }
+                if account.status == .signedIn {
+                    LabeledContent("Signed in as") {
+                        HStack {
+                            Text(account.accountName ?? "Your YouTube account")
+                            Button("Sign Out") { Task { await account.signOut() } }
+                        }
+                    }
+                } else {
+                    TextField("Client ID", text: $account.clientID, prompt: Text("…apps.googleusercontent.com"))
+                    SecureField("Client secret", text: $account.clientSecret, prompt: Text("GOCSPX-…"))
+                    HStack {
+                        Spacer()
+                        Button(account.status == .signingIn ? "Waiting for the Browser…" : "Sign In with Google…") {
+                            Task { await account.signIn() }
+                        }
+                        .disabled(!account.canSignIn)
+                    }
                 }
-                .pickerStyle(.radioGroup)
+                if let error = account.lastError {
+                    Text(error).foregroundStyle(.red)
+                }
             } header: {
                 Text("YouTube")
             } footer: {
-                Footnote(account.method == .api
-                    ? "Creator cards check and change your subscriptions through YouTube's official API. It's the dependable choice; it needs a free Google Cloud client, set up once."
-                    : "Creator cards use the YouTube login in the browser you're hovering in, by running YouTube's own requests in your YouTube tab. It's quicker to set up, but YouTube can change those requests without notice, so subscribing may stop working until HoverEnhance is updated.")
+                Footnote("Lets creator cards show whether you're subscribed, and subscribe or unsubscribe. Sign-in goes through your own Google Cloud OAuth client; its secret and your sign-in are kept in the Keychain.")
             }
-            switch account.method {
-            case .api: apiSections
-            case .browser: BrowserSetupSections()
+            if account.status != .signedIn {
+                Section("Getting a client ID") {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("1. In Google Cloud Console, create a project and enable the **YouTube Data API v3**.")
+                        Text("2. Under **Google Auth Platform**, fill in Branding (an app name and your email). In Audience, choose External and **Publish app**, so sign-in doesn't expire every week.")
+                        Text("3. Under **Clients**, create a client of type **Desktop app**, then copy its ID and secret here.")
+                        Text("4. Sign in. Google warns that the app isn't verified, since it's your own: choose Advanced, then Go to the app.")
+                    }
+                    .font(.callout)
+                    .fixedSize(horizontal: false, vertical: true)
+                    Link("Open Google Cloud Console", destination: URL(string: "https://console.cloud.google.com/apis/library/youtube.googleapis.com")!)
+                }
             }
         }
         .formStyle(.grouped)
-        .frame(width: settingsWidth, height: 640)
-    }
-
-    @ViewBuilder
-    private var apiSections: some View {
-        Section {
-            if account.status == .signedIn {
-                LabeledContent("Signed in as") {
-                    HStack {
-                        Text(account.accountName ?? "Your YouTube account")
-                        Button("Sign Out") { Task { await account.signOut() } }
-                    }
-                }
-            } else {
-                TextField("Client ID", text: $account.clientID, prompt: Text("…apps.googleusercontent.com"))
-                SecureField("Client secret", text: $account.clientSecret, prompt: Text("GOCSPX-…"))
-                HStack {
-                    Spacer()
-                    Button(account.status == .signingIn ? "Waiting for the Browser…" : "Sign In with Google…") {
-                        Task { await account.signIn() }
-                    }
-                    .disabled(!account.canSignIn)
-                }
-            }
-            if let error = account.lastError {
-                Text(error).foregroundStyle(.red)
-            }
-        } footer: {
-            Footnote("The client secret and your sign-in are kept in the Keychain.")
-        }
-        if account.status != .signedIn {
-            Section("Getting a client ID") {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("1. In Google Cloud Console, create a project and enable the **YouTube Data API v3**.")
-                    Text("2. Under **Google Auth Platform**, fill in Branding (an app name and your email). In Audience, choose External and **Publish app**, so sign-in doesn't expire every week.")
-                    Text("3. Under **Clients**, create a client of type **Desktop app**, then copy its ID and secret here.")
-                    Text("4. Sign in. Google warns that the app isn't verified, since it's your own: choose Advanced, then Go to the app.")
-                }
-                .font(.callout)
-                .fixedSize(horizontal: false, vertical: true)
-                Link("Open Google Cloud Console", destination: URL(string: "https://console.cloud.google.com/apis/library/youtube.googleapis.com")!)
-            }
-        }
-    }
-}
-
-/// Setup for browser mode: the browser setting to turn on, and a test that it all works.
-private struct BrowserSetupSections: View {
-    @State private var browser = BrowserSetupSections.browsers.first?.bundleID ?? ""
-    @State private var testing = false
-    @State private var result: (ok: Bool, message: String)?
-
-    /// Browsers that can run YouTube's requests, the default browser first.
-    static let browsers: [(bundleID: String, name: String)] = {
-        let defaultBrowser = NSWorkspace.shared.urlForApplication(toOpen: URL(string: "https://www.youtube.com")!)
-            .flatMap { Bundle(url: $0)?.bundleIdentifier }
-        let installed = ["com.apple.Safari", "com.google.Chrome", "net.imput.helium", "com.vivaldi.Vivaldi", "com.brave.Browser",
-                         "com.microsoft.edgemac", "company.thebrowser.Browser", "org.chromium.Chromium"]
-        let candidates = ([defaultBrowser].compactMap { $0 } + installed).uniqued()
-        return candidates.filter { BrowserYouTube.Kind(bundleID: $0) != nil }.map { ($0, BrowserYouTube.name(of: $0)) }
-    }()
-
-    var body: some View {
-        Section("Setting up your browser") {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("1. Turn on **Allow JavaScript from Apple Events**. In Helium, Chrome, and other Chromium browsers it's under View → Developer. In Safari, first turn on Settings → Advanced → Show features for web developers, then it's in the Develop menu.")
-                Text("2. Open YouTube in that browser, signed in.")
-                Text("3. Click Test. The first time, macOS asks whether HoverEnhance may control the browser: choose Allow.")
-            }
-            .font(.callout)
-            .fixedSize(horizontal: false, vertical: true)
-            Picker("Browser", selection: $browser) {
-                ForEach(Self.browsers, id: \.bundleID) { Text($0.name).tag($0.bundleID) }
-            }
-            HStack {
-                if let result {
-                    Label(result.message, systemImage: result.ok ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
-                        .foregroundStyle(result.ok ? .green : .orange)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                Spacer()
-                Button(testing ? "Testing…" : "Test") { Task { await test() } }
-                    .disabled(testing || browser.isEmpty)
-            }
-        }
-    }
-
-    private func test() async {
-        testing = true
-        defer { testing = false }
-        do {
-            try await BrowserYouTube.check(browser)
-            result = (true, "Ready: signed in to YouTube in \(BrowserYouTube.name(of: browser)).")
-        } catch {
-            result = (false, error.localizedDescription)
-        }
+        .frame(width: settingsWidth, height: 520)
     }
 }

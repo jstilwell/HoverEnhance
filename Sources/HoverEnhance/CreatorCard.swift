@@ -6,10 +6,9 @@ struct CreatorCardView: View {
     let channel: YouTubeChannel
     @State private var subscription: Subscription
 
-    /// `browser` is the bundle ID of the browser the card was opened from.
-    init(channel: YouTubeChannel, browser: String?) {
+    init(channel: YouTubeChannel) {
         self.channel = channel
-        _subscription = State(initialValue: Subscription(channelID: channel.id, browser: browser))
+        _subscription = State(initialValue: Subscription(channelID: channel.id))
     }
 
     var body: some View {
@@ -60,8 +59,8 @@ private struct SubscribeButton: View {
 
     var body: some View {
         switch subscription.status {
-        case .needsSetup:
-            Button(subscription.method == .api ? "Sign In to Subscribe…" : "Set Up Subscribing…") {
+        case .signedOut:
+            Button("Sign In to Subscribe…") {
                 NotificationCenter.default.post(name: .showSettingsTab, object: "Accounts")
             }
         case .checking, .changing:
