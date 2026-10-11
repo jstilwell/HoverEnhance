@@ -65,7 +65,7 @@ who downloaded a file and when; where an alias or symlink points, copyable like 
 when the file has it.
 **Tests**: Tags with colors from the tags attribute; quarantine record parsed from the attribute;
 symlink and alias targets, including a missing one; offscreen render.
-**Status**: In Progress
+**Status**: Complete
 
 ## Stage 7: Media details and zip contents
 **Goal**: Camera, lens, and exposure for photos; codecs and bit rate for audio and video; artist and
@@ -74,7 +74,7 @@ album for music (all from Spotlight); file count, unpacked size, and encryption 
 26 mm); zip summaries handle Zip64 and skip `__MACOSX`; large central directories are left alone.
 **Tests**: Exposure and bit-rate formatting; zip summaries of archives made with `zip` (files,
 folders, `__MACOSX`, encrypted), Zip64 fields, and truncated files.
-**Status**: Not Started
+**Status**: In Progress
 
 ## Stage 8: Apps and Git
 **Goal**: For app bundles, version, bundle ID, architectures, minimum macOS, and code signature;

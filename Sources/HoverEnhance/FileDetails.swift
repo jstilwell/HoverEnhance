@@ -24,6 +24,10 @@ struct FileDetails: Sendable, Equatable {
     var pages: Int?
     /// The page a download came from, or the download's own URL.
     var whereFrom: URL?
+    var download: Download?
+    var tags: [Tag] = []
+    var cloud: CloudStatus?
+    var linkTarget: LinkTarget?
 
     /// Reads what `options` asks for. This touches the disk and Spotlight, so call it off the main thread.
     ///
@@ -39,6 +43,10 @@ struct FileDetails: Sendable, Equatable {
         if options.shows(.size), values?.isDirectory != true { details.size = values?.fileSize.map(Int64.init) }
         if options.shows(.created) { details.created = values?.creationDate }
         if options.shows(.modified) { details.modified = values?.contentModificationDate }
+        if options.shows(.linkTarget) { details.linkTarget = linkTarget(of: url) }
+        if options.shows(.downloadedBy) { details.download = download(of: url) }
+        if options.shows(.tags) { details.tags = tags(of: url) ?? [] }
+        if options.shows(.cloud) { details.cloud = cloudStatus(of: url) }
 
         let spotlightFields: [FileCardField] = [.opened, .dimensions, .duration, .pages, .whereFrom]
         guard spotlightFields.contains(where: options.shows) else { return details }
@@ -83,6 +91,14 @@ struct FileDetails: Sendable, Equatable {
             rows.append(DetailRow(field: .whereFrom, label: "From", value: .link(Self.formatSource(whereFrom), whereFrom),
                                   copyText: whereFrom.absoluteString))
         }
+        if let download {
+            add(.downloadedBy, "Downloaded", [download.agent, download.date.map(Self.formatDate)].compactMap { $0 }.joined(separator: " · "),
+                copy: [download.agent, download.date.map(Self.formatFullDate)].compactMap { $0 }.joined(separator: ", "))
+        }
+        if !tags.isEmpty {
+            rows.append(DetailRow(field: .tags, label: "Tags", value: .tags(tags), copyText: tags.map(\.name).joined(separator: ", ")))
+        }
+        add(.cloud, "iCloud", cloud?.label)
         add(.dimensions, "Dimensions", dimensions.map { "\($0.width) × \($0.height)" })
         add(.duration, "Length", duration.map(Self.formatDuration))
         add(.pages, "Pages", pages.map(String.init))
@@ -97,14 +113,8 @@ struct FileDetails: Sendable, Equatable {
 
     /// The list browsers write to a download, read from the file itself for when Spotlight hasn't indexed it.
     static func whereFroms(attributeOf url: URL) -> [String]? {
-        let name = "com.apple.metadata:kMDItemWhereFroms"
-        let path = url.path(percentEncoded: false)
-        let size = getxattr(path, name, nil, 0, 0, 0)
-        guard size > 0 else { return nil }
-        var data = Data(count: size)
-        let read = data.withUnsafeMutableBytes { getxattr(path, name, $0.baseAddress, size, 0, 0) }
-        guard read == size else { return nil }
-        return try? PropertyListSerialization.propertyList(from: data, format: nil) as? [String]
+        attribute("com.apple.metadata:kMDItemWhereFroms", of: url)
+            .flatMap { try? PropertyListSerialization.propertyList(from: $0, format: nil) as? [String] }
     }
 
     /// Reads only the image's header.
@@ -158,6 +168,7 @@ struct DetailRow: Sendable, Equatable, Identifiable {
         case text(String)
         /// Text with an arrow that opens the URL.
         case link(String, URL)
+        case tags([FileDetails.Tag])
         /// Still being looked up.
         case loading
     }

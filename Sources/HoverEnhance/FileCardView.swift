@@ -8,7 +8,12 @@ struct FileCardView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 10) {
-                Image(nsImage: card.icon).resizable().frame(width: 44, height: 44)
+                // The same box for icon and thumbnail, so nothing moves when the thumbnail arrives.
+                Image(nsImage: card.thumbnail ?? card.icon)
+                    .resizable()
+                    .scaledToFit()
+                    .clipShape(RoundedRectangle(cornerRadius: card.thumbnail == nil ? 0 : 4))
+                    .frame(width: FileCard.imageSize, height: FileCard.imageSize)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(card.name).font(.headline).lineLimit(2)
                     if !card.kindAndSize.isEmpty {
@@ -19,6 +24,14 @@ struct FileCardView: View {
             if card.options.shows(.path) {
                 PathButton(card: card, text: card.formattedPath, id: FileCard.pathID, help: "Copy the path")
             }
+            if let target = card.details.linkTarget {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(Self.linkCaption(target)).font(.callout).foregroundStyle(.secondary)
+                    if let text = card.formattedLinkTarget {
+                        PathButton(card: card, text: text, id: FileCard.linkTargetID, help: "Copy where it points")
+                    }
+                }
+            }
             DetailsGrid(card: card)
             if card.options.shows(.users) {
                 UsersSection(card: card)
@@ -27,6 +40,15 @@ struct FileCardView: View {
         .padding(14)
         .frame(width: 400, alignment: .leading)
         .task { await card.loadUsers() }
+        .task { await card.loadThumbnail() }
+    }
+
+    private static func linkCaption(_ target: FileDetails.LinkTarget) -> String {
+        switch target {
+        case .found: "Points to"
+        case .missing(.some): "Points to an original that can't be found"
+        case .missing(.none): "Its original can't be found"
+        }
     }
 }
 
@@ -80,6 +102,20 @@ private struct DetailValue: View {
         }
     }
 
+    /// Finder's tag colors, by label number.
+    private static func color(of tag: FileDetails.Tag) -> Color {
+        switch tag.color {
+        case 1: .gray
+        case 2: .green
+        case 3: .purple
+        case 4: .blue
+        case 5: .yellow
+        case 6: .red
+        case 7: .orange
+        default: Color(white: 0.5).opacity(0.5)
+        }
+    }
+
     @ViewBuilder
     private var text: some View {
         switch row.value {
@@ -87,6 +123,16 @@ private struct DetailValue: View {
             Text(string).lineLimit(1).truncationMode(.middle)
         case .link(let string, _):
             Text(string).lineLimit(1).truncationMode(.middle).foregroundStyle(.link)
+        case .tags(let tags):
+            HStack(spacing: 8) {
+                ForEach(tags, id: \.name) { tag in
+                    HStack(spacing: 4) {
+                        Circle().fill(Self.color(of: tag)).frame(width: 9, height: 9)
+                        Text(tag.name)
+                    }
+                }
+            }
+            .lineLimit(1)
         case .loading:
             HStack(spacing: 6) {
                 ProgressView().controlSize(.mini)
