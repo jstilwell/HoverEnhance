@@ -8,7 +8,7 @@ enum FileCardField: String, CaseIterable, Identifiable, Sendable {
     case created, modified, opened
     case whereFrom, downloadedBy
     case tags, cloud
-    case dimensions, duration, pages, camera, exposure, recording, codecs, mediaFormat, music
+    case music, recording, dimensions, duration, pages, camera, exposure, codecs, mediaFormat
     case archive
     case appVersion, bundleID, architectures, minimumSystem, signature
     case gitBranch, gitChanges

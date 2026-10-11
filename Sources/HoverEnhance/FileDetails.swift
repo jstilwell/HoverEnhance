@@ -151,9 +151,10 @@ struct FileDetails: Sendable, Equatable {
 
     /// Adds what an audio or video file's own tags and tracks say, for the details that are on. Reads
     /// the file, so call it after `load`, off the main thread.
-    mutating func addMedia(from url: URL, options: FileCardOptions) async {
+    /// `forPreview` reads it even with those details off, since a large preview needs the tracks and artwork.
+    mutating func addMedia(from url: URL, options: FileCardOptions, forPreview: Bool = false) async {
         let fields: [FileCardField] = [.music, .recording, .mediaFormat, .dimensions, .duration, .thumbnail]
-        guard contentType?.conforms(to: .audiovisualContent) == true, fields.contains(where: options.shows),
+        guard contentType?.conforms(to: .audiovisualContent) == true, forPreview || fields.contains(where: options.shows),
               var media = await MediaMetadata.read(url) else { return }
         if !options.shows(.music) {
             if !media.hasVideo { media.title = nil }
@@ -165,7 +166,7 @@ struct FileDetails: Sendable, Equatable {
             (media.recorded, media.device) = (nil, nil)
         }
         if !options.shows(.mediaFormat) { (media.frameRate, media.isHDR, media.audio) = (nil, false, nil) }
-        if !options.shows(.thumbnail) { media.artwork = nil }
+        if !options.shows(.thumbnail), !forPreview { media.artwork = nil }
         if !options.shows(.dimensions) { media.pixelSize = nil }
         if !options.shows(.duration) { media.duration = nil }
         self.media = media
@@ -195,6 +196,16 @@ struct FileDetails: Sendable, Equatable {
         }
         add(.cloud, "iCloud", cloud?.label)
         let isVideo = media?.hasVideo == true
+        // What a song or video is comes first: the file's own tags, then Spotlight's artist and album.
+        add(.music, "Title", isVideo ? nil : media?.title)
+        add(.music, "Artist", media?.artist ?? artist)
+        add(.music, "Album", media?.album ?? album)
+        add(.music, "Album artist", media?.albumArtist)
+        add(.music, "Composer", media?.composer)
+        add(.music, "Genre", media?.genre)
+        add(.music, "Year", media?.year)
+        add(.music, "Track", media?.track)
+        add(.music, "Disc", media?.disc)
         add(.recording, "Title", isVideo ? media?.title : nil)
         add(.recording, "Recorded", media?.recorded.map(Self.formatDate), copy: media?.recorded.map(Self.formatFullDate))
         add(.recording, "Recorded with", media?.device)
@@ -211,16 +222,6 @@ struct FileDetails: Sendable, Equatable {
         let frameRate = media?.frameRate.map { Self.formatFrameRate($0) + (media?.isHDR == true ? " · HDR" : "") }
         add(.mediaFormat, "Frame rate", frameRate)
         add(.mediaFormat, "Audio", media?.audio)
-        // The file's own tags first; Spotlight's artist and album when the file has none.
-        add(.music, "Title", isVideo ? nil : media?.title)
-        add(.music, "Artist", media?.artist ?? artist)
-        add(.music, "Album", media?.album ?? album)
-        add(.music, "Album artist", media?.albumArtist)
-        add(.music, "Composer", media?.composer)
-        add(.music, "Genre", media?.genre)
-        add(.music, "Year", media?.year)
-        add(.music, "Track", media?.track)
-        add(.music, "Disc", media?.disc)
         add(.archive, "Contents", archive?.label)
         func addLookup<Value>(_ field: FileCardField, _ label: String, _ lookup: Lookup<Value>?, _ text: (Value) -> String) {
             switch lookup {

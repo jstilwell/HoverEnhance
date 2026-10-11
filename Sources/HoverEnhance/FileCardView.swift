@@ -4,16 +4,21 @@ import SwiftUI
 /// The card shown beside a file or folder in Finder.
 struct FileCardView: View {
     let card: FileCard
+    /// Off beside a large preview of the file itself, which makes the thumbnail redundant.
+    var showsImage = true
+    var width: CGFloat = 400
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 10) {
                 // The same box for icon and thumbnail, so nothing moves when the thumbnail arrives.
-                Image(nsImage: card.thumbnail ?? card.icon)
-                    .resizable()
-                    .scaledToFit()
-                    .clipShape(RoundedRectangle(cornerRadius: card.thumbnail == nil ? 0 : 4))
-                    .frame(width: FileCard.imageSize, height: FileCard.imageSize)
+                if showsImage {
+                    Image(nsImage: card.thumbnail ?? card.icon)
+                        .resizable()
+                        .scaledToFit()
+                        .clipShape(RoundedRectangle(cornerRadius: card.thumbnail == nil ? 0 : 4))
+                        .frame(width: FileCard.imageSize, height: FileCard.imageSize)
+                }
                 VStack(alignment: .leading, spacing: 2) {
                     Text(card.name).font(.headline).lineLimit(2)
                     if !card.kindAndSize.isEmpty {
@@ -38,9 +43,9 @@ struct FileCardView: View {
             }
         }
         .padding(14)
-        .frame(width: 400, alignment: .leading)
+        .frame(width: width, alignment: .leading)
         .task { await card.loadUsers() }
-        .task { await card.loadThumbnail() }
+        .task { if showsImage { await card.loadThumbnail() } }
         .task { await card.loadSlowDetails() }
     }
 

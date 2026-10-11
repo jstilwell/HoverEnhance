@@ -22,8 +22,7 @@ enum PreviewGeometry {
     static func panelFrame(anchor: CGPoint, naturalSize: CGSize, visible: CGRect, maxFraction: CGFloat = 1) -> CGRect? {
         guard naturalSize.width > 0, naturalSize.height > 0 else { return nil }
         let placeRight = placesRight(anchor: anchor, visible: visible)
-        let sideRoom = placeRight ? visible.maxX - (anchor.x + gap) : (anchor.x - gap) - visible.minX
-        let room = CGSize(width: sideRoom * maxFraction - 2 * padding, height: visible.height * maxFraction - 2 * padding)
+        let room = room(anchor: anchor, visible: visible, maxFraction: maxFraction)
         let scale = min(1, room.width / naturalSize.width, room.height / naturalSize.height)
         guard scale > 0 else { return nil }
 
@@ -34,6 +33,12 @@ enum PreviewGeometry {
         let x = placeRight ? anchor.x + gap : anchor.x - gap - size.width
         let y = min(max(anchor.y - size.height / 2, visible.minY), visible.maxY - size.height)
         return CGRect(x: x, y: y, width: size.width, height: size.height)
+    }
+
+    /// The most a preview's content can measure beside the cursor at `anchor`, inside its padding.
+    static func room(anchor: CGPoint, visible: CGRect, maxFraction: CGFloat = 1) -> CGSize {
+        let sideRoom = placesRight(anchor: anchor, visible: visible) ? visible.maxX - (anchor.x + gap) : (anchor.x - gap) - visible.minX
+        return CGSize(width: sideRoom * maxFraction - 2 * padding, height: visible.height * maxFraction - 2 * padding)
     }
 
     /// Where to put an image zoomed by `zoom` inside `bounds` (AppKit view coordinates, origin bottom
@@ -77,6 +82,24 @@ extension PreviewGeometry {
     /// other without ending the hover.
     static func rockerReach(rocker: CGRect, notch: CGRect) -> CGRect {
         rocker.union(CGRect(x: rocker.minX, y: notch.minY, width: rocker.width, height: notch.height))
+    }
+}
+
+/// Where a Finder preview's details go: beside the image, video, or artwork, or below it.
+enum FileMediaLayout: Equatable, Sendable {
+    case beside, below
+
+    /// Whichever leaves the media larger in `room`, with the media's size there. Media isn't enlarged
+    /// past `media`, its natural size; details that don't fit beside it in height go below.
+    static func choose(media: CGSize, details: CGSize, room: CGSize) -> (layout: FileMediaLayout, mediaSize: CGSize) {
+        func fit(_ box: CGSize) -> CGSize {
+            guard media.width > 0, media.height > 0, box.width > 0, box.height > 0 else { return .zero }
+            let scale = min(1, box.width / media.width, box.height / media.height)
+            return CGSize(width: (media.width * scale).rounded(.down), height: (media.height * scale).rounded(.down))
+        }
+        let beside = details.height <= room.height ? fit(CGSize(width: room.width - details.width, height: room.height)) : .zero
+        let below = fit(CGSize(width: room.width, height: room.height - details.height))
+        return beside.width * beside.height >= below.width * below.height ? (.beside, beside) : (.below, below)
     }
 }
 

@@ -36,7 +36,7 @@ details go beside the media or below it, whichever leaves the media larger. Othe
 keep the card. A switch in Settings → Finder turns large previews off.
 **Tests**: Layout choice (beside or below) for wide, tall, and square media in various rooms; the new
 settings; visual checks rendered offscreen.
-**Status**: Not Started
+**Status**: Complete
 
 ## Stage 4: Docs and release
 **Goal**: README, CHANGELOG, and docs describe the new behavior.
