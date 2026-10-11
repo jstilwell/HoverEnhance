@@ -31,3 +31,15 @@ offers to sign in; API errors (quota, expired sign-in) show plainly.
 **Tests**: API request building and response parsing; signed-out card checked live (the Sign In
 button opens Settings → Accounts). Still to do: a signed-in check with the user's OAuth client.
 **Status**: In Progress
+
+## Stage 4: Browser sign-in option
+**Goal**: An easier alternative to the Google API: subscribe through the user's signed-in YouTube tab.
+**Success Criteria**: Settings → Accounts offers Google API (recommended) or Your browser, with setup
+steps and a Test button; in browser mode the card checks and changes subscriptions by running
+YouTube's own web requests in the YouTube tab via AppleScript (Safari, and Chromium browsers with a
+scripting dictionary); setup problems (JavaScript from Apple Events off, Automation denied, no YouTube
+tab, signed out) explain the fix.
+**Tests**: AppleScript and JavaScript generation (escaping, JS parsed by JavaScriptCore, AppleScript
+compiled against Helium and Safari); osascript error mapping; result parsing. Still to do: a live
+check in the user's browser (needs the browser setting and the Automation prompt answered).
+**Status**: In Progress

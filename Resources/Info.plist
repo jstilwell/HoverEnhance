@@ -20,6 +20,8 @@
 	<string>1</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>14.0</string>
+	<key>NSAppleEventsUsageDescription</key>
+	<string>When you choose to subscribe on YouTube through your browser, HoverEnhance runs YouTube's subscribe action in your signed-in YouTube tab.</string>
 	<key>LSUIElement</key>
 	<true/>
 </dict>
