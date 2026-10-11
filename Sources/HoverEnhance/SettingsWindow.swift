@@ -1,28 +1,53 @@
 import AppKit
 import SwiftUI
 
+/// The Settings window's tabs, in order.
+enum SettingsTab: String, CaseIterable, Sendable {
+    case general, previews, video, sites, finder, accounts, advanced
+
+    var title: String { rawValue.capitalized }
+
+    var symbol: String {
+        switch self {
+        case .general: "gearshape"
+        case .previews: "photo.on.rectangle"
+        case .video: "play.rectangle"
+        case .sites: "globe"
+        case .finder: "folder"
+        case .accounts: "person.crop.circle"
+        case .advanced: "wrench.and.screwdriver"
+        }
+    }
+}
+
 /// The Settings window: a toolbar of tabs, each a SwiftUI form bound to `AppSettings`.
 @MainActor
 final class SettingsWindowController: NSWindowController {
     init(settings: AppSettings, access: AccessibilityWatcher) {
         let tabs = NSTabViewController()
         tabs.tabStyle = .toolbar
-        func add<Content: View>(_ title: String, _ symbol: String, _ view: Content) {
+        func host<Content: View>(_ view: Content) -> NSViewController {
             let host = NSHostingController(rootView: view)
             host.sizingOptions = .preferredContentSize
-            host.title = title
+            return host
+        }
+        for tab in SettingsTab.allCases {
+            let host = switch tab {
+            case .general: host(GeneralSettingsView(settings: settings))
+            case .previews: host(PreviewsSettingsView(settings: settings))
+            case .video: host(VideoSettingsView(settings: settings))
+            case .sites: host(SitesSettingsView(settings: settings))
+            case .finder: host(FinderSettingsView(settings: settings))
+            case .accounts: host(AccountsSettingsView(account: YouTubeAccount.shared))
+            case .advanced: host(AdvancedSettingsView(settings: settings, access: access))
+            }
+            host.title = tab.title
             let item = NSTabViewItem(viewController: host)
-            item.label = title
-            item.image = NSImage(systemSymbolName: symbol, accessibilityDescription: title)
+            item.label = tab.title
+            item.image = NSImage(systemSymbolName: tab.symbol, accessibilityDescription: tab.title)
+            item.identifier = tab.rawValue
             tabs.addTabViewItem(item)
         }
-        add("General", "gearshape", GeneralSettingsView(settings: settings))
-        add("Previews", "photo.on.rectangle", PreviewsSettingsView(settings: settings))
-        add("Video", "play.rectangle", VideoSettingsView(settings: settings))
-        add("Sites", "globe", SitesSettingsView(settings: settings))
-        add("Finder", "folder", FinderSettingsView(settings: settings))
-        add("Accounts", "person.crop.circle", AccountsSettingsView(account: YouTubeAccount.shared))
-        add("Advanced", "wrench.and.screwdriver", AdvancedSettingsView(settings: settings, access: access))
 
         let window = NSWindow(contentViewController: tabs)
         window.styleMask = [.titled, .closable]
@@ -33,10 +58,10 @@ final class SettingsWindowController: NSWindowController {
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError("not used") }
 
-    /// Shows the window with the tab titled `tab` selected, if there is one.
-    func show(tab: String?) {
+    /// Shows the window with `tab` selected, if given.
+    func show(tab: SettingsTab?) {
         if let tab, let tabs = contentViewController as? NSTabViewController,
-           let index = tabs.tabViewItems.firstIndex(where: { $0.label == tab }) {
+           let index = tabs.tabViewItems.firstIndex(where: { $0.identifier as? String == tab.rawValue }) {
             tabs.selectedTabViewItemIndex = index
         }
         show()

@@ -61,7 +61,7 @@ private struct SubscribeButton: View {
         switch subscription.status {
         case .signedOut:
             Button("Sign In to Subscribe…") {
-                NotificationCenter.default.post(name: .showSettingsTab, object: "Accounts")
+                NotificationCenter.default.post(name: .showSettingsTab, object: SettingsTab.accounts)
             }
         case .apiOff(let fix):
             Button("Turn On YouTube API…") { NSWorkspace.shared.open(fix) }

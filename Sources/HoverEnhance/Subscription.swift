@@ -2,7 +2,7 @@ import Foundation
 import Observation
 
 extension Notification.Name {
-    /// Asks the app to show Settings; the object is the tab's title.
+    /// Asks the app to show Settings; the object is the `SettingsTab` to select.
     static let showSettingsTab = Notification.Name("HoverEnhance.showSettingsTab")
     /// Asks the app to show the welcome window's guide to Accessibility access.
     static let showAccessibilityGuide = Notification.Name("HoverEnhance.showAccessibilityGuide")

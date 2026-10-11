@@ -177,3 +177,9 @@ struct PreviewSizeLimitTests {
         #expect(half.minX == full.minX)
     }
 }
+
+struct SettingsTabTests {
+    @Test func tabsKeepTheirOrderAndTitles() {
+        #expect(SettingsTab.allCases.map(\.title) == ["General", "Previews", "Video", "Sites", "Finder", "Accounts", "Advanced"])
+    }
+}

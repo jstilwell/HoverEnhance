@@ -3,6 +3,9 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 private let settingsWidth: CGFloat = 540
+/// Every tab is the same size, so the window doesn't jump between tabs, and short enough for a
+/// 1280 × 800 screen; longer tabs scroll.
+private let settingsHeight: CGFloat = 600
 
 /// Section footers in grouped forms trail-align by default; settings text reads better leading.
 private struct Footnote: View {
@@ -76,7 +79,7 @@ struct GeneralSettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: settingsWidth, height: 540)
+        .frame(width: settingsWidth, height: settingsHeight)
         .sheet(isPresented: $confirmsOtherApps) {
             OtherAppsSheet(settings: settings)
         }
@@ -318,7 +321,7 @@ struct PreviewsSettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: settingsWidth, height: 780)
+        .frame(width: settingsWidth, height: settingsHeight)
     }
 }
 
@@ -361,7 +364,7 @@ struct VideoSettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: settingsWidth, height: 430)
+        .frame(width: settingsWidth, height: settingsHeight)
     }
 }
 
@@ -389,7 +392,7 @@ struct SitesSettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: settingsWidth, height: 730)
+        .frame(width: settingsWidth, height: settingsHeight)
     }
 }
 
@@ -461,7 +464,7 @@ struct FinderSettingsView: View {
             .disabled(!settings.finderCards)
         }
         .formStyle(.grouped)
-        .frame(width: settingsWidth, height: 860)
+        .frame(width: settingsWidth, height: settingsHeight)
     }
 
     private func shows(_ field: FileCardField) -> Binding<Bool> {
@@ -518,6 +521,14 @@ struct FinderSettingsView: View {
 struct AdvancedSettingsView: View {
     @Bindable var settings: AppSettings
     let access: AccessibilityWatcher
+
+    /// "0.2.0 (14)".
+    static var version: String {
+        let info = Bundle.main.infoDictionary ?? [:]
+        let short = info["CFBundleShortVersionString"] as? String
+        let build = info["CFBundleVersion"] as? String
+        return [short, build.map { "(\($0))" }].compactMap { $0 }.joined(separator: " ").nilIfEmpty ?? "–"
+    }
     @State private var cacheBytes = Maintenance.imageCacheBytes
     @State private var websiteDataCleared = false
 
@@ -571,11 +582,17 @@ struct AdvancedSettingsView: View {
                 }
             }
             Section("About") {
-                LabeledContent("Version", value: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "–")
+                LabeledContent("Version", value: Self.version)
+                LabeledContent("Source") {
+                    Link("github.com/jstilwell/HoverEnhance", destination: URL(string: "https://github.com/jstilwell/HoverEnhance")!)
+                }
+                if let copyright = Bundle.main.object(forInfoDictionaryKey: "NSHumanReadableCopyright") as? String {
+                    LabeledContent("Copyright", value: copyright)
+                }
             }
         }
         .formStyle(.grouped)
-        .frame(width: settingsWidth, height: 470)
+        .frame(width: settingsWidth, height: settingsHeight)
         .onAppear {
             cacheBytes = Maintenance.imageCacheBytes
         }
@@ -636,7 +653,7 @@ struct AccountsSettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: settingsWidth, height: 560)
+        .frame(width: settingsWidth, height: settingsHeight)
         .task { await account.checkAccess() }
     }
 
@@ -673,4 +690,8 @@ struct AccountsSettingsView: View {
             }
         }
     }
+}
+
+private extension String {
+    var nilIfEmpty: String? { isEmpty ? nil : self }
 }

@@ -61,7 +61,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         monitor.start()
 
         NotificationCenter.default.addObserver(forName: .showSettingsTab, object: nil, queue: .main) { [weak self] note in
-            let tab = note.object as? String
+            let tab = note.object as? SettingsTab
             MainActor.assumeIsolated {
                 self?.preview.reset(because: "opening settings")
                 self?.openSettings(tab: tab)
@@ -226,7 +226,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         openSettings(tab: nil)
     }
 
-    private func openSettings(tab: String?) {
+    private func openSettings(tab: SettingsTab?) {
         if settingsWindow == nil { settingsWindow = SettingsWindowController(settings: settings, access: access) }
         settingsWindow?.show(tab: tab)
     }
