@@ -3,7 +3,8 @@ set -e
 
 usage() {
     cat <<'USAGE'
-Builds this copy of HoverEnhance and runs it, quitting any copy that's already running.
+Builds this copy of HoverEnhance for Apple silicon and Intel, as releases are, and runs it,
+quitting any copy that's already running.
 
   ./bin/run.sh          build and run
   ./bin/run.sh --log    then stream what it does (Ctrl-C stops the log, not the app)
@@ -33,7 +34,8 @@ if ! security find-identity -v -p codesigning | grep -qE "Apple Development|Deve
     echo "Accessibility access again after every build. An Apple Development certificate avoids that."
 fi
 
-make run
+# Both architectures, as releases are built, so a local build matches what users get.
+make run BUILD_FLAGS="--arch arm64 --arch x86_64"
 echo "HoverEnhance is running from build/HoverEnhance.app. Look for its icon in the menu bar."
 
 if [ "$LOG" = true ]; then

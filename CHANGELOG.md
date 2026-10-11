@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.1.1 - 10-11-2026
+
+### Fixed
+
+- A behind-the-scenes fix; nothing changes in how HoverEnhance works.
+
 ## 0.1.0 - 10-11-2026
 
 ### Added
