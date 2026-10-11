@@ -119,6 +119,9 @@ final class HoverInspector: @unchecked Sendable {
         if info.pageURL != nil, info.linkURL != nil, info.imageURL == nil {
             info.isOnText = isText(at: point, element: element)
         }
+        if info.bundleID == FinderItem.bundleID {
+            info.fileURL = FinderItem.url(at: element)
+        }
         return info
     }
 
