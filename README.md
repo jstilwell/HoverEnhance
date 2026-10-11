@@ -35,6 +35,9 @@ other apps' UI through the Accessibility API, so it works in browsers without an
 - **Scroll wheel**: with the cursor on the notch or the preview, scrolling acts on the preview, not
   the page. Albums step through their items; images zoom (move onto the preview to pan); videos
   move through the timeline or change the volume, as set in Settings.
+- **Updates**: release builds check for updates with Sparkle and install them on request. A version
+  found in the background is offered in the menu bar menu (with a dot on the icon) rather than in a
+  window that would open behind others.
 - **Settings** (menu bar icon → Settings…, or open the app again): when previews appear (always, or
   only/except while holding a modifier key), hover delay, other apps, excluded apps, which kinds of
   media and which sites to preview, what file cards show, preview size and download limit, video
@@ -49,12 +52,42 @@ make run     # build, bundle, sign, and launch build/HoverEnhance.app
 make log     # stream hover results from the unified log (debug builds)
 make stop
 make test    # unit tests
-make release # universal build, Developer ID signed, notarized, stapled, and zipped
+make release # a notarized DMG and a signed appcast (bin/build-release.sh)
 ```
 
-`make release` needs a Developer ID Application certificate and notary credentials saved once with
-`xcrun notarytool store-credentials HoverEnhance` (or set `NOTARY_PROFILE`). Release builds keep
-hover details out of the log; debug builds log them for `make log`.
+Release builds keep hover details out of the log; debug builds log them for `make log`.
+
+### Releases and updates
+
+Updates go through [Sparkle](https://sparkle-project.org): the app reads the appcast at `SUFeedURL`
+and installs a release only if its signature matches `SUPublicEDKey`. Both the appcast and the DMGs
+live in a Cloudflare R2 bucket behind a custom domain. To release:
+
+1. Raise `CFBundleShortVersionString` in `Resources/Info.plist` and add a dated entry for it to
+   `CHANGELOG.md` (its bullets become the release notes).
+2. Commit, then run `op run --env-file=.env -- ./bin/build-release.sh --upload` (or with a plain
+   `.env` made from `.env.example`, just `./bin/build-release.sh --upload`).
+
+The script builds a universal app signed with Developer ID and the hardened runtime, puts it in a
+signed DMG, notarizes and staples it, signs the update and the appcast, then uploads the DMG to
+`releases/` in the bucket, creates a GitHub release for the record, and publishes the appcast last.
+Without `--upload` it stops before publishing; `./bin/copy-appcast.sh` publishes the appcast later.
+
+It needs, once: a Developer ID Application certificate; notary credentials saved with
+`xcrun notarytool store-credentials notarytool-profile` (shared with LockAudio); the AWS CLI with an
+`r2` profile; and the update signing key, which lives in the login keychain under the account
+`HoverEnhance` (`generate_keys --account HoverEnhance`, from `.build/artifacts/sparkle/Sparkle/bin`).
+Back that key up (`generate_keys --account HoverEnhance -x <file>`): without it no update can ever
+be signed for installed copies again.
+
+Debug builds never check on their own, so a build from source isn't offered a release over itself;
+Check for Updates still works for testing. A build without a feed URL (before the first release)
+has no updater at all.
+
+### Icons
+
+`design/icons/appicon.svg` and `menubar.svg` are the sources; `./bin/render-icons.sh` renders them
+into `Resources/AppIcon.icns` and `Resources/MenuBarIcon.png` with headless Chrome.
 
 `Tests/Manual/preview-test.html` has one example of each preview case to hover in any browser.
 
@@ -96,6 +129,8 @@ after every build (the welcome window explains how to remove and re-add the app)
 - `EmbedPlayer` hosts players in a web view loaded under an HTTPS origin (YouTube needs a
   Referer), with AirPlay and WebRTC off so nothing asks for local network access. Links clicked in a
   player open in the browser.
+- `Updates` wraps Sparkle's updater; the Makefile bundles `Sparkle.framework` into the app (without
+  the XPC services, which only sandboxed apps use) and signs it from the inside out.
 - `AppSettings` keeps settings in UserDefaults; code reads it where it's used, so changes apply at
   once. `SettingsWindowController` shows the SwiftUI tabs in `SettingsViews`.
 - Reddit answers scripted requests with a JavaScript check; `WebPageLoader` passes it in an

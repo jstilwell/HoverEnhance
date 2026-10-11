@@ -4,6 +4,11 @@ Fixes from a review of the whole app: privacy and security, first run, preview p
 packaging. Carried over from the YouTube creator card plan: subscribing still needs a signed-in check
 with the user's own OAuth client.
 
+Still to check live (none of it can be seen offscreen): the welcome window with access removed from
+the list and dragged back in; the panel's material, fades, and spinner; Load Anyway; a link clicked
+in an embedded player; the other-apps sheet; and, once the R2 bucket and domain exist, a first
+release and an update installing over it.
+
 ## Stage 1: Privacy and security
 **Goal**: Hovering can't leak what's on screen or reach places a web page shouldn't.
 **Success Criteria**: Hover summaries reach the log only while the inspector is on, and URLs and text
@@ -53,5 +58,5 @@ website data update live; About shows version, build, and the repository; tabs a
 an app icon; Info.plist has copyright and category; `make release` signs with the hardened runtime and
 notarizes; README matches.
 **Tests**: Settings tests; `make app` and the release signing step run; `codesign --verify`.
-**Status**: In Progress. Everything but the app icon (and a menu bar glyph to match) is done; the
-user is choosing between icon concepts.
+**Status**: Complete. Also added: the app icon (concept B, "Notch, sharpened") with a matching menu
+bar icon, and Sparkle updates, published to Cloudflare R2 by `bin/build-release.sh`.

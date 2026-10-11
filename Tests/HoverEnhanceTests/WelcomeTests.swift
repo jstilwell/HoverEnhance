@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import HoverEnhance
 
@@ -32,5 +33,25 @@ struct AccessibilityWatcherTests {
 
     @Test func startsWithTheCurrentAnswer() {
         #expect(AccessibilityWatcher { true }.isGranted)
+    }
+}
+
+struct UpdatesTests {
+    private let key = "fZ4NlJ+2ZPYpX53Iiex5cAeUUpGUHzULj/JI/Y4X784="
+
+    @Test func updatesNeedAFeedAndAKey() {
+        #expect(Updates.isConfigured(["SUFeedURL": "https://updates.example.com/appcast.xml", "SUPublicEDKey": key]))
+        // Builds made before releases are set up have no feed yet.
+        #expect(!Updates.isConfigured(["SUFeedURL": "", "SUPublicEDKey": key]))
+        #expect(!Updates.isConfigured(["SUFeedURL": "https://updates.example.com/appcast.xml"]))
+        // Never over plain HTTP, even with a signed feed.
+        #expect(!Updates.isConfigured(["SUFeedURL": "http://updates.example.com/appcast.xml", "SUPublicEDKey": key]))
+    }
+
+    @Test func theShippedInfoPlistHasTheKey() throws {
+        let info = try #require(NSDictionary(contentsOfFile: "Resources/Info.plist") as? [String: Any])
+        #expect(info["SUPublicEDKey"] as? String == key)
+        #expect(info["SURequireSignedFeed"] as? Bool == true)
+        #expect(info["CFBundleIconFile"] as? String == "AppIcon")
     }
 }

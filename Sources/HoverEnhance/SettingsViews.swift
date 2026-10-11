@@ -521,6 +521,7 @@ struct FinderSettingsView: View {
 struct AdvancedSettingsView: View {
     @Bindable var settings: AppSettings
     let access: AccessibilityWatcher
+    @Bindable var updates: Updates
 
     /// "0.2.0 (14)".
     static var version: String {
@@ -579,6 +580,26 @@ struct AdvancedSettingsView: View {
                 Toggle(isOn: $settings.showsInspector) {
                     Text("Show inspector")
                     Text("A panel in the corner listing what's under the cursor: role, labels, and URLs")
+                }
+            }
+            Section {
+                if updates.isAvailable {
+                    Toggle("Check for updates automatically", isOn: $updates.checksAutomatically)
+                    HStack {
+                        if let version = updates.waitingVersion {
+                            Text("Version \(version) is ready to install.").foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Button(updates.waitingVersion == nil ? "Check Now" : "Install…") { updates.checkForUpdates() }
+                    }
+                } else {
+                    Text("This copy was built from source and doesn't update itself.").foregroundStyle(.secondary)
+                }
+            } header: {
+                Text("Updates")
+            } footer: {
+                if updates.isAvailable {
+                    Footnote("Updates are signed and checked before they're installed. Installing one restarts HoverEnhance.")
                 }
             }
             Section("About") {

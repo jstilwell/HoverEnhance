@@ -249,11 +249,30 @@ final class AppIconDragSource: NSView, NSDraggingSource {
     }
 }
 
-/// The status item's image, also shown in the welcome window.
+/// The status item's image, also shown in the welcome window. `badged` adds a dot for an update
+/// waiting to be installed.
 enum MenuBarIcon {
-    static func image() -> NSImage {
-        let image = NSImage(systemSymbolName: "cursorarrow.rays", accessibilityDescription: "HoverEnhance") ?? NSImage()
+    static func image(badged: Bool = false) -> NSImage {
+        // MenuBarIcon.png, rendered from design/icons/menubar.svg; outside the app bundle (tests,
+        // `swift run`) a system symbol stands in.
+        let symbol: NSImage
+        if let icon = NSImage(named: "MenuBarIcon")?.copy() as? NSImage {
+            icon.size = NSSize(width: 18, height: 18)
+            symbol = icon
+        } else {
+            symbol = NSImage(systemSymbolName: "cursorarrow.rays", accessibilityDescription: nil) ?? NSImage()
+        }
+        symbol.accessibilityDescription = "HoverEnhance"
+        symbol.isTemplate = true
+        guard badged else { return symbol }
+        let image = NSImage(size: symbol.size, flipped: false) { rect in
+            symbol.draw(in: rect)
+            let dot: CGFloat = 5
+            NSBezierPath(ovalIn: CGRect(x: rect.maxX - dot, y: rect.maxY - dot, width: dot, height: dot)).fill()
+            return true
+        }
         image.isTemplate = true
+        image.accessibilityDescription = "HoverEnhance, update available"
         return image
     }
 }
