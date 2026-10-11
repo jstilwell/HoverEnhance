@@ -168,7 +168,14 @@ trap 'rm -rf "$DMG_TEMP"' EXIT
 cp -R "$APP" "$DMG_TEMP/"
 # A leading space sorts the Applications link after the app.
 ln -s /Applications "$DMG_TEMP/ Applications"
-hdiutil create -volname "$APP_NAME" -srcfolder "$DMG_TEMP" -ov -format UDZO "$DMG_PATH"
+# Current macOS makes disk images with diskutil (hdiutil create is deprecated there); older systems
+# only have hdiutil. diskutil doesn't overwrite, so a stale DMG goes first.
+rm -f "$DMG_PATH"
+if diskutil image create from -h > /dev/null 2>&1; then
+    diskutil image create from --format UDZO --volumeName "$APP_NAME" "$DMG_TEMP" "$DMG_PATH"
+else
+    hdiutil create -volname "$APP_NAME" -srcfolder "$DMG_TEMP" -ov -format UDZO "$DMG_PATH"
+fi
 
 SIGNING_IDENTITY=$(codesign -dvv "$APP" 2>&1 | awk -F= '/^Authority=Developer ID Application/{print $2; exit}')
 if [ -z "$SIGNING_IDENTITY" ]; then
