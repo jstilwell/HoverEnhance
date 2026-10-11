@@ -24,8 +24,6 @@ struct EmbedTests {
         #expect(embed("https://clips.twitch.tv/FunnyClipSlug-AbC123") == Embed(site: .twitch, id: "FunnyClipSlug-AbC123"))
         #expect(embed("https://www.twitch.tv/somechannel/clip/FunnyClipSlug-AbC123") == Embed(site: .twitch, id: "FunnyClipSlug-AbC123"))
         #expect(embed("https://www.twitch.tv/somechannel") == nil)
-        #expect(embed("https://www.instagram.com/reel/C1a2b3c4d5e/") == Embed(site: .instagram, id: "C1a2b3c4d5e", isPortrait: true))
-        #expect(embed("https://www.instagram.com/someone/") == nil)
     }
 
     @Test func playerURLsCarryMuteAndStart() {

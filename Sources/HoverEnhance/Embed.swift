@@ -4,7 +4,7 @@ import Foundation
 /// own embeddable player in a web view.
 struct Embed: Sendable, Hashable {
     enum Site: Sendable, Hashable {
-        case youtube, vimeo, tiktok, twitch, instagram
+        case youtube, vimeo, tiktok, twitch
 
         /// Pages on these domains have their own hover previews, so links there are left alone.
         var domains: [String] {
@@ -13,7 +13,6 @@ struct Embed: Sendable, Hashable {
             case .vimeo: ["vimeo.com"]
             case .tiktok: ["tiktok.com"]
             case .twitch: ["twitch.tv"]
-            case .instagram: ["instagram.com"]
             }
         }
     }
@@ -24,7 +23,7 @@ struct Embed: Sendable, Hashable {
     var start: Int?
     /// Vimeo's key for unlisted videos (vimeo.com/<id>/<hash>).
     var hash: String?
-    /// YouTube Shorts, TikToks, and Instagram reels are portrait.
+    /// YouTube Shorts and TikToks are portrait.
     var isPortrait = false
 
     /// The page origin the players are embedded under. YouTube won't play without a Referer (its
@@ -32,10 +31,7 @@ struct Embed: Sendable, Hashable {
     static let origin = URL(string: "https://\((Bundle.main.bundleIdentifier ?? "hoverenhance").lowercased())/")!
 
     var size: CGSize {
-        switch site {
-        case .instagram: CGSize(width: 480, height: 760)
-        default: isPortrait ? CGSize(width: 405, height: 720) : CGSize(width: 960, height: 540)
-        }
+        isPortrait ? CGSize(width: 405, height: 720) : CGSize(width: 960, height: 540)
     }
 
     func playerURL(muted: Bool) -> URL? {
@@ -49,8 +45,6 @@ struct Embed: Sendable, Hashable {
             "https://www.tiktok.com/player/v1/\(id)?autoplay=1&loop=1&muted=\(mute)"
         case .twitch:
             "https://clips.twitch.tv/embed?clip=\(id)&parent=\(Self.origin.host() ?? "")&autoplay=true&muted=\(muted)"
-        case .instagram:
-            "https://www.instagram.com/p/\(id)/embed/"
         }
         return URL(string: string)
     }
@@ -87,10 +81,6 @@ struct Embed: Sendable, Hashable {
             // <channel>/clip/<slug>
             guard parts.count >= 3, parts[1] == "clip" else { return nil }
             return slug(parts[2]).map { Embed(site: .twitch, id: $0) }
-        case "instagram.com", "www.instagram.com":
-            // p/<code>, reel/<code>, reels/<code>, tv/<code>
-            guard parts.count >= 2, ["p", "reel", "reels", "tv"].contains(parts[0]), let code = slug(parts[1]) else { return nil }
-            return Embed(site: .instagram, id: code, isPortrait: parts[0] != "p")
         default:
             return nil
         }

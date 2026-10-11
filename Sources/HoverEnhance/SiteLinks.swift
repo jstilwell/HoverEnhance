@@ -41,6 +41,13 @@ enum SiteLinks {
             guard parts.count >= 5, parts[1] == "profile", parts[3] == "post" else { return nil }
             return .blueskyPost(actor: parts[2], rkey: parts[4])
 
+        case "instagram.com", "www.instagram.com":
+            // p/<code>, reel/<code>, reels/<code>, tv/<code>; share links may put <user>/ first.
+            let start = parts.count > 2 && ["p", "reel", "reels", "tv"].contains(parts[2]) ? 2 : 1
+            guard parts.count > start + 1, ["p", "reel", "reels", "tv"].contains(parts[start]),
+                  parts[start + 1].allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "-" || $0 == "_") }) else { return nil }
+            return .instagram(code: parts[start + 1])
+
         case "i.imgur.com":
             // .gifv is a web page around an MP4 of the same name.
             guard url.pathExtension.lowercased() == "gifv" else { return nil }
