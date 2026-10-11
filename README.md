@@ -18,11 +18,15 @@ other apps' UI through the Accessibility API, so it works in browsers without an
   creator's avatar, counts, and description, with Subscribe/Unsubscribe once you sign in under
   Settings → Accounts (your own Google Cloud OAuth client). Thumbnails and YouTube's own hover
   previews are left alone.
-- **File cards** (Finder): resting on a file or folder in any Finder view or on the desktop shows its
-  path (click to copy it in full, with ~, or quoted for the shell), kind, size, dates, image and video
-  dimensions, length, pages, and the website a download came from. It also lists the apps using it
-  (open in a window, held open, or working in the folder), each with Quit and, if that doesn't work,
-  Force Quit. Each part can be turned off under Settings → Finder.
+- **File cards** (Finder): resting on a file or folder in any Finder view or on the desktop shows a
+  card with a thumbnail and its path (click to copy it in full, with ~, or quoted for the shell), and
+  whichever of these it has: kind, size, dates, where an alias points, the website and app a download
+  came from, tags, iCloud status, dimensions, length, pages, camera, lens, exposure, codecs, artist and
+  album, a zip's contents, an app's version, bundle ID, architectures, minimum macOS, and signature, and
+  a repository's branch, remote, and uncommitted changes. Click any detail to copy it. It also lists
+  the apps using the file (open in a window, held open, or working in the folder), each with Quit and,
+  if that doesn't work, Force Quit. A key press (Space for Quick Look, Return to rename) closes the
+  card. Settings → Finder has a switch for every detail, and for cards on the desktop and for folders.
 - **Scroll wheel**: with the cursor on the notch or the preview, scrolling acts on the preview, not
   the page. Albums step through their items; images zoom (move onto the preview to pan); videos
   move through the timeline or change the volume, as set in Settings.
@@ -65,10 +69,14 @@ the grant survives rebuilds. With ad-hoc signing you'd have to re-grant after ev
   swallows scroll events while an album is up.
 - In Finder, `FinderItem` finds the hovered item: each one is an element with `AXFilename` and a file
   reference `AXURL`, reached from other cells of a list row or the label under an icon through the row
-  or the item's group. `FileDetails` reads the card's details from Spotlight first, so protected
-  folders aren't opened just to describe a file. `FileUsers` finds apps whose windows show the file
-  (`AXDocument`) and processes that hold it open, map it, or work in it (`proc_listpidspath`), and
-  quits them. The card grows as that list fills in (`CardHostingView`).
+  or the item's group. `FileDetails` reads the card's details from Spotlight and Finder's records
+  first, so protected folders aren't opened just to describe a file; `FileStatus` covers tags, iCloud,
+  quarantine, and aliases, `ZipSummary` reads a zip's central directory, `AppBundleInfo` an app's
+  Info.plist and signature, and `GitRepository` a repository's `.git`. Uncommitted changes come from
+  `git status`, with the repository's ability to run commands switched off, or not at all when its
+  config could still run one. `FileUsers` finds apps whose windows show the file (`AXDocument`) and
+  processes that hold it open, map it, or work in it (`proc_listpidspath`), and quits them. The card
+  grows as slower details fill in (`CardHostingView`).
 - `EmbedPlayer` hosts players in a web view loaded under an HTTPS origin (YouTube needs a
   Referer), with AirPlay and WebRTC off so nothing asks for local network access.
 - `AppSettings` keeps settings in UserDefaults; code reads it where it's used, so changes apply at
