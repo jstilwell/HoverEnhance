@@ -29,7 +29,7 @@
 	<key>NSHumanReadableCopyright</key>
 	<string>© 2026 Jesse Stilwell</string>
 	<key>SUFeedURL</key>
-	<string></string>
+	<string>https://github.com/jstilwell/HoverEnhance/releases/latest/download/appcast.xml</string>
 	<key>SUPublicEDKey</key>
 	<string>fZ4NlJ+2ZPYpX53Iiex5cAeUUpGUHzULj/JI/Y4X784=</string>
 	<key>SURequireSignedFeed</key>

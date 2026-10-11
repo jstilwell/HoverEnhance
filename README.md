@@ -43,6 +43,14 @@ other apps' UI through the Accessibility API, so it works in browsers without an
   media and which sites to preview, what file cards show, preview size and download limit, video
   sound/loop/resume, cache and website data, and an inspector that lists what's under the cursor.
 
+## Install
+
+Download the latest DMG from the [releases page](https://github.com/jstilwell/HoverEnhance/releases),
+open it, and drag **HoverEnhance** to Applications. It's signed and notarized, and updates itself
+from then on. A welcome window walks you through turning on Accessibility access.
+
+Requires macOS 14 (Sonoma) or later.
+
 ## Build and run
 
 Requires Xcode (the Makefile uses `xcrun swift`).
@@ -59,30 +67,28 @@ Release builds keep hover details out of the log; debug builds log them for `mak
 
 ### Releases and updates
 
-Updates go through [Sparkle](https://sparkle-project.org): the app reads the appcast at `SUFeedURL`
-and installs a release only if its signature matches `SUPublicEDKey`. Both the appcast and the DMGs
-live in a Cloudflare R2 bucket behind a custom domain. To release:
+Updates go through [Sparkle](https://sparkle-project.org). The app reads the appcast attached to the
+latest GitHub release (`SUFeedURL`, through `releases/latest/download/appcast.xml`) and installs an
+update only if it's signed with the key whose public half is `SUPublicEDKey`. To release:
 
 1. Raise `CFBundleShortVersionString` in `Resources/Info.plist` and add a dated entry for it to
    `CHANGELOG.md` (its bullets become the release notes).
-2. Commit, then run `op run --env-file=.env -- ./bin/build-release.sh --upload` (or with a plain
-   `.env` made from `.env.example`, just `./bin/build-release.sh --upload`).
+2. Commit, then run `./bin/build-release.sh --upload`.
 
 The script builds a universal app signed with Developer ID and the hardened runtime, puts it in a
-signed DMG, notarizes and staples it, signs the update and the appcast, then uploads the DMG to
-`releases/` in the bucket, creates a GitHub release for the record, and publishes the appcast last.
-Without `--upload` it stops before publishing; `./bin/copy-appcast.sh` publishes the appcast later.
+signed DMG, notarizes and staples it, signs the update and the appcast, and publishes both as a
+GitHub release tagged at the commit it built (as a draft first, so the latest release never lacks
+either file). Without `--upload` it stops before publishing and prints the command that would.
 
 It needs, once: a Developer ID Application certificate; notary credentials saved with
-`xcrun notarytool store-credentials notarytool-profile` (shared with LockAudio); the AWS CLI with an
-`r2` profile; and the update signing key, which lives in the login keychain under the account
-`HoverEnhance` (`generate_keys --account HoverEnhance`, from `.build/artifacts/sparkle/Sparkle/bin`).
-Back that key up (`generate_keys --account HoverEnhance -x <file>`): without it no update can ever
-be signed for installed copies again.
+`xcrun notarytool store-credentials notarytool-profile` (shared with LockAudio); the GitHub CLI,
+signed in; a public repository, since release downloads from a private one need a GitHub login; and
+the update signing key, in the login keychain under the account `HoverEnhance`
+(`generate_keys --account HoverEnhance`, from `.build/artifacts/sparkle/Sparkle/bin`). Back that key
+up (`generate_keys --account HoverEnhance -x <file>`): without it no update can ever be signed for
+installed copies again.
 
-Debug builds never check on their own, so a build from source isn't offered a release over itself;
-Check for Updates still works for testing. A build without a feed URL (before the first release)
-has no updater at all.
+Debug builds check only when asked, so a build from source isn't offered a release over itself.
 
 ### Icons
 
@@ -140,3 +146,9 @@ after every build (the welcome window explains how to remove and re-add the app)
   the first time it sees them. Chrome ignores `AXManualAccessibility`, so it gets the VoiceOver switch,
   which makes AppKit animate window moves made through accessibility; window managers such as
   Rectangle work around that.
+
+## License
+
+HoverEnhance is released under the [MIT License](LICENSE). It includes
+[Sparkle](https://github.com/sparkle-project/Sparkle), under its own MIT license, which ships inside
+the app.

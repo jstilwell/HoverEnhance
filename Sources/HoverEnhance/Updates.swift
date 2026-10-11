@@ -34,6 +34,16 @@ final class Updates: NSObject {
         return feed?.scheme == "https" && key?.isEmpty == false
     }
 
+    /// Debug builds come from source and check only when asked, so they're never offered a release
+    /// over themselves.
+    static var checksOnlyWhenAsked: Bool {
+        #if DEBUG
+        true
+        #else
+        false
+        #endif
+    }
+
     /// Checks now, showing Sparkle's window with the result.
     func checkForUpdates() {
         // A menu bar app isn't in front on its own, and Sparkle's window would open behind others.
@@ -43,13 +53,10 @@ final class Updates: NSObject {
 }
 
 extension Updates: SPUUpdaterDelegate {
-    /// Debug builds come from source, so only an explicit check may offer to replace one with a release.
     func updater(_ updater: SPUUpdater, mayPerform updateCheck: SPUUpdateCheck) throws {
-        #if DEBUG
-        if updateCheck == .updatesInBackground {
+        if Self.checksOnlyWhenAsked, updateCheck == .updatesInBackground {
             throw NSError(domain: "HoverEnhance.Updates", code: 1, userInfo: [NSLocalizedDescriptionKey: "Debug builds don't check on their own."])
         }
-        #endif
     }
 }
 

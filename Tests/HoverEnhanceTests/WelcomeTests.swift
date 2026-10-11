@@ -52,6 +52,7 @@ struct UpdatesTests {
         let info = try #require(NSDictionary(contentsOfFile: "Resources/Info.plist") as? [String: Any])
         #expect(info["SUPublicEDKey"] as? String == key)
         #expect(info["SURequireSignedFeed"] as? Bool == true)
+        #expect(info["SUFeedURL"] as? String == "https://github.com/jstilwell/HoverEnhance/releases/latest/download/appcast.xml")
         #expect(info["CFBundleIconFile"] as? String == "AppIcon")
     }
 }
