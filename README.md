@@ -7,8 +7,8 @@ extension needed.
 ## What it does
 
 - **Images**: rest on a thumbnail or an image link and the full-size image appears. Scroll to zoom.
-- **Albums**: Reddit galleries and multi-photo posts on X, Bluesky, and Instagram. Scroll to step
-  through. Immune to smooth-scrolling glitches.
+- **Albums**: Reddit galleries and multi-photo posts on X, Bluesky, and Instagram, in its feed too,
+  from the photo you're on. Scroll to step through. Immune to smooth-scrolling glitches.
 - **Videos**: Reddit, X, Bluesky, Instagram, Streamable, and Imgur clips play in the preview;
   YouTube, Vimeo, TikTok, and Twitch play in their own players. Scroll on the notch under the cursor
   for the volume, shown beside it, and on the video to move through it.
@@ -17,8 +17,8 @@ extension needed.
   are using it. Images, videos, and audio show large beside their details, including what songs' and
   videos' own tags say. Click any detail to copy it.
 
-Images the page already shows large, and videos it's already playing, are left alone. Move away,
-click, or switch apps, and the preview is gone.
+Images the page already shows large are left alone unless their post has more photos, as are videos
+it's already playing. Move away, click, or switch apps, and the preview is gone.
 
 ## Install
 
