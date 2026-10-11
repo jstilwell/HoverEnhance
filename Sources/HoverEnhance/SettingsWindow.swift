@@ -39,7 +39,7 @@ final class SettingsWindowController: NSWindowController {
             case .sites: host(SitesSettingsView(settings: settings))
             case .finder: host(FinderSettingsView(settings: settings))
             case .accounts: host(AccountsSettingsView(account: YouTubeAccount.shared))
-            case .advanced: host(AdvancedSettingsView(settings: settings, access: access))
+            case .advanced: host(AdvancedSettingsView(settings: settings, access: access, updates: Updates.shared))
             }
             host.title = tab.title
             let item = NSTabViewItem(viewController: host)

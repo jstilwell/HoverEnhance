@@ -10,25 +10,32 @@ BUILD_FLAGS ?=
 SIGN_ID   ?= $(shell security find-identity -v -p codesigning | awk -F'"' '/Apple Development|Developer ID Application/ { print $$2; exit }')
 SIGN_FLAGS ?=
 
-# Releases are universal, signed with Developer ID and the hardened runtime, and notarized.
+# Releases are universal and signed with Developer ID and the hardened runtime; bin/build-release.sh
+# notarizes them and publishes the update.
 RELEASE_APP    := build/release/$(APP_NAME).app
-VERSION        := $(shell /usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' Resources/Info.plist)
-RELEASE_ZIP    := build/release/$(APP_NAME)-$(VERSION).zip
 DEVELOPER_ID   ?= $(shell security find-identity -v -p codesigning | awk -F'"' '/Developer ID Application/ { print $$2; exit }')
-# Notary credentials in the keychain, saved once with `xcrun notarytool store-credentials HoverEnhance`.
-NOTARY_PROFILE ?= HoverEnhance
 
 .PHONY: build app run stop test log clean release-app release
 
 build:
 	$(SWIFT) build -c $(CONFIG) $(BUILD_FLAGS)
 
+SPARKLE := $(APP)/Contents/Frameworks/Sparkle.framework
+
 app: build
 	rm -rf "$(APP)"
-	mkdir -p "$(APP)/Contents/MacOS" "$(APP)/Contents/Resources"
-	cp "$$($(SWIFT) build -c $(CONFIG) $(BUILD_FLAGS) --show-bin-path)/$(APP_NAME)" "$(APP)/Contents/MacOS/"
+	mkdir -p "$(APP)/Contents/MacOS" "$(APP)/Contents/Resources" "$(APP)/Contents/Frameworks"
+	BIN="$$($(SWIFT) build -c $(CONFIG) $(BUILD_FLAGS) --show-bin-path)" && \
+		cp "$$BIN/$(APP_NAME)" "$(APP)/Contents/MacOS/" && \
+		ditto "$$BIN/Sparkle.framework" "$(SPARKLE)"
+	# Sparkle's XPC services are only for sandboxed apps.
+	rm -rf "$(SPARKLE)/XPCServices" "$(SPARKLE)/Versions/B/XPCServices"
 	cp Resources/Info.plist "$(APP)/Contents/"
-	if [ -f Resources/AppIcon.icns ]; then cp Resources/AppIcon.icns "$(APP)/Contents/Resources/"; fi
+	find Resources -maxdepth 1 -type f ! -name Info.plist -exec cp {} "$(APP)/Contents/Resources/" \;
+	# Inside out, as Sparkle's documentation describes: its helpers, the framework, then the app.
+	for code in Versions/B/Autoupdate Versions/B/Updater.app .; do \
+		codesign --force $(SIGN_FLAGS) --sign "$(or $(SIGN_ID),-)" "$(SPARKLE)/$$code" || exit 1; \
+	done
 	codesign --force $(SIGN_FLAGS) --sign "$(or $(SIGN_ID),-)" "$(APP)"
 
 run: app stop
@@ -50,15 +57,9 @@ release-app:
 		SIGN_ID="$(DEVELOPER_ID)" SIGN_FLAGS="--options runtime --timestamp"
 	codesign --verify --strict --verbose=2 "$(RELEASE_APP)"
 
-# Notarizes and staples the release app, then zips it for download.
-release: release-app
-	rm -f "$(RELEASE_ZIP)"
-	ditto -c -k --keepParent "$(RELEASE_APP)" "$(RELEASE_ZIP)"
-	xcrun notarytool submit "$(RELEASE_ZIP)" --keychain-profile "$(NOTARY_PROFILE)" --wait
-	xcrun stapler staple "$(RELEASE_APP)"
-	rm "$(RELEASE_ZIP)"
-	ditto -c -k --keepParent "$(RELEASE_APP)" "$(RELEASE_ZIP)"
-	@echo "Ready: $(RELEASE_ZIP)"
+# A notarized DMG and a signed appcast; see bin/build-release.sh, which can also publish them.
+release:
+	./bin/build-release.sh
 
 clean:
 	rm -rf .build build

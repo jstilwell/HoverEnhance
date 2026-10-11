@@ -34,9 +34,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var grantItem: NSMenuItem!
     private var previewsItem: NSMenuItem!
     private var copyItem: NSMenuItem!
+    private var updateItem: NSMenuItem!
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         installMainMenu()
+        // Updates don't depend on Accessibility, so a release that needs fixing can still be replaced.
+        Updates.shared.start()
         access.onChange = { [weak self] granted in self?.accessChanged(granted) }
         access.start()
         if access.isGranted { start() } else { showWelcome() }
@@ -77,6 +80,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             updateActivity()
         }
         updateActivity()
+        whenChanged({ Updates.shared.waitingVersion }) { [weak self] version in
+            self?.statusItem?.button?.image = MenuBarIcon.image(badged: version != nil)
+        }
         NotificationCenter.default.addObserver(forName: .showAccessibilityGuide, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.showWelcome() }
         }
@@ -174,8 +180,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         grantItem = NSMenuItem(title: "Grant Accessibility Access…", action: #selector(grantAccess), keyEquivalent: "")
         previewsItem = NSMenuItem(title: "Show Previews", action: #selector(togglePreviews), keyEquivalent: "e")
         copyItem = NSMenuItem(title: "Copy Inspector Result", action: #selector(copyLastResult), keyEquivalent: "c")
+        updateItem = NSMenuItem(title: "Check for Updates…", action: #selector(checkForUpdates), keyEquivalent: "")
         let settingsItem = NSMenuItem(title: "Settings…", action: #selector(showSettings), keyEquivalent: ",")
-        for item in [grantItem, previewsItem, copyItem, settingsItem] {
+        for item in [grantItem, previewsItem, copyItem, updateItem, settingsItem] {
             item?.target = self
         }
 
@@ -185,7 +192,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.items = [
             permissionItem, grantItem, .separator(),
             previewsItem, copyItem, .separator(),
-            settingsItem, .separator(),
+            updateItem, settingsItem, .separator(),
             NSMenuItem(title: "Quit HoverEnhance", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"),
         ]
         return menu
@@ -220,6 +227,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         previewsItem.state = settings.previewsEnabled ? .on : .off
         copyItem.isHidden = !settings.showsInspector
         copyItem.isEnabled = lastInfo != nil
+        let updates = Updates.shared
+        updateItem.isHidden = !updates.isAvailable
+        updateItem.title = updates.waitingVersion.map { "Update to \($0)…" } ?? "Check for Updates…"
+    }
+
+    @objc private func checkForUpdates() {
+        Updates.shared.checkForUpdates()
     }
 
     @objc private func showSettings() {
