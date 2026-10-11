@@ -115,3 +115,59 @@ struct MediaDetailsRowsTests {
         #expect(clip["Frame rate"] == "24 fps")
     }
 }
+
+struct FileMediaKindTests {
+    private func kind(_ url: URL) async -> FileMediaKind? {
+        let options = FileCardOptions()
+        var details = FileDetails.load(url, options: options)
+        await details.addMedia(from: url, options: options, forPreview: true)
+        return FileMediaKind(details: details)
+    }
+
+    private func fixture(_ name: String, _ ext: String) throws -> URL {
+        try #require(Bundle.module.url(forResource: name, withExtension: ext, subdirectory: "Fixtures"))
+    }
+
+    @Test func audioAndVideoAreToldApartByTheirTracks() async throws {
+        #expect(await kind(try fixture("tagged", "mp3")) == .audio)
+        #expect(await kind(try fixture("tagged", "m4a")) == .audio)
+        #expect(await kind(try fixture("clip", "mov")) == .video)
+    }
+
+    @Test func imagesAreImagesAndOtherFilesArentMedia() async throws {
+        let folder = FileManager.default.temporaryDirectory.appending(path: "HoverEnhanceTests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let image = folder.appending(path: "photo.png")
+        let bitmap = try #require(NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 300, pixelsHigh: 200, bitsPerSample: 8,
+                                                   samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB,
+                                                   bytesPerRow: 0, bitsPerPixel: 0))
+        try #require(bitmap.representation(using: .png, properties: [:])).write(to: image)
+        let text = folder.appending(path: "notes.txt")
+        try Data("notes".utf8).write(to: text)
+
+        #expect(await kind(image) == .image)
+        #expect(await kind(text) == nil)
+        #expect(LocalImage.pixelSize(of: image) == CGSize(width: 300, height: 200))
+        let decoded = try #require(LocalImage.load(image, maxPixelSize: 150))
+        #expect(decoded.size == CGSize(width: 150, height: 100))
+    }
+}
+
+@MainActor
+struct FinderMediaSettingsTests {
+    @Test func largePreviewsAreOnAndAudioWaitsForItsButton() {
+        let name = "HoverEnhanceTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: name)!
+        defer { defaults.removePersistentDomain(forName: name) }
+        let settings = AppSettings(defaults: defaults)
+        #expect(settings.finderMediaPreviews)
+        #expect(!settings.finderAutoplayAudio)
+        settings.finderMediaPreviews = false
+        settings.finderAutoplayAudio = true
+        let reloaded = AppSettings(defaults: defaults)
+        #expect(!reloaded.finderMediaPreviews && reloaded.finderAutoplayAudio)
+        reloaded.restoreFinderDefaults()
+        #expect(reloaded.finderMediaPreviews && !reloaded.finderAutoplayAudio)
+    }
+}

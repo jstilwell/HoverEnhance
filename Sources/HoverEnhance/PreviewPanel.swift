@@ -159,6 +159,11 @@ final class PreviewPanel {
         panel.isVisible && ScreenSpace.flip(panel.frame).contains(point)
     }
 
+    /// The most a preview's content can measure beside the cursor at `anchor`.
+    func room(at anchor: CGPoint) -> CGSize {
+        PreviewGeometry.room(anchor: anchor, visible: visibleFrame(at: anchor), maxFraction: CGFloat(AppSettings.shared.maximumSize))
+    }
+
     /// A small spinner where the preview will appear, joined to the cursor by the notch, while it loads.
     func showLoading(anchor: CGPoint) {
         let size = CGSize(width: 20, height: 20)

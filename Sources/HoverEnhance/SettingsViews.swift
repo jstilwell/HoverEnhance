@@ -419,6 +419,15 @@ struct FinderSettingsView: View {
                             Text("\(Int(max(settings.finderDelay, settings.hoverDelay))) ms").monospacedDigit().frame(width: 64, alignment: .trailing)
                         }
                     }
+                    Toggle(isOn: $settings.finderMediaPreviews) {
+                        Text("Large previews of images, videos, and audio")
+                        Text("The file itself, large, with its details beside or below. Videos play; audio shows its artwork.")
+                    }
+                    Toggle(isOn: $settings.finderAutoplayAudio) {
+                        Text("Play audio right away")
+                        Text("Otherwise its play button starts it")
+                    }
+                    .disabled(!settings.finderMediaPreviews)
                     Toggle("On the desktop", isOn: $settings.finderOnDesktop)
                     Toggle(isOn: $settings.finderForFolders) {
                         Text("For folders")
