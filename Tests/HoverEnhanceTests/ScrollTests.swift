@@ -23,6 +23,22 @@ struct ScrollInputTests {
     }
 }
 
+struct ScrubTests {
+    private func input(_ forward: CGFloat, precise: Bool) -> ScrollInput {
+        ScrollInput(dx: 0, dy: -forward, isPrecise: precise, isMomentum: false, isInverted: true, location: .zero)
+    }
+
+    @Test func aWheelNotchIsOneStep() {
+        #expect(input(3, precise: false).scrubSeconds(perStep: 2) == 2)
+        #expect(input(-1, precise: false).scrubSeconds(perStep: 5) == -5)
+    }
+
+    @Test func trackpadsAndSmoothScrollingMoveAStepPerStepOfTravel() {
+        #expect(input(40, precise: true).scrubSeconds(perStep: 2) == 2)
+        #expect(input(-20, precise: true).scrubSeconds(perStep: 2) == -1)
+    }
+}
+
 struct StepAccumulatorTests {
     @Test func wheelNotchesAreOneStepEach() {
         var steps = StepAccumulator()
@@ -77,9 +93,12 @@ struct ScrollSettingsTests {
         #expect(settings.videoScroll == .scrub)
         // On the notch, the volume; on the video itself, the position.
         #expect(settings.notchVideoScroll == .volume)
+        #expect(settings.videoScrubSeconds == 2)
         settings.videoScroll = .volume
         settings.notchVideoScroll = .scrub
+        settings.videoScrubSeconds = 5
         #expect(AppSettings(defaults: defaults).videoScroll == .volume)
         #expect(AppSettings(defaults: defaults).notchVideoScroll == .scrub)
+        #expect(AppSettings(defaults: defaults).videoScrubSeconds == 5)
     }
 }
