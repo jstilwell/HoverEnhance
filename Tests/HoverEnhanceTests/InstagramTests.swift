@@ -9,6 +9,8 @@ struct InstagramTests {
         #expect(source("https://www.instagram.com/reel/Cx7LmNpQrSt/") == .instagram(code: "Cx7LmNpQrSt"))
         #expect(source("https://www.instagram.com/exampleaccount/p/Cq4ZbRtXy2k/") == .instagram(code: "Cq4ZbRtXy2k"))
         #expect(source("https://www.instagram.com/exampleaccount/") == nil)
+        // A post's song.
+        #expect(source("https://www.instagram.com/reels/audio/1234567890123456/") == nil)
     }
 
     /// Builds an embed page the way Instagram does: the post as JSON, inside a JSON string, inside
