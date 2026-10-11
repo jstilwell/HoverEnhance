@@ -56,7 +56,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         item.menu = makeMenu()
         statusItem = item
 
-        monitor.onResult = { [weak self] result in self?.handle(result) }
+        monitor.onResult = { [weak self] result, again in self?.handle(result, again: again) }
         monitor.onMouseMoved = { [weak self] point in self?.preview.mouseMoved(to: point) }
         monitor.onScroll = { [weak self] in self?.preview.scrolled() }
         monitor.onClick = { [weak self] in self?.preview.dismiss() }
@@ -126,10 +126,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         return false
     }
 
-    private func handle(_ result: Result<HoverInfo, InspectionError>) {
+    /// `again` is a second look at the spot the cursor stopped on, which only ever adds a preview.
+    private func handle(_ result: Result<HoverInfo, InspectionError>, again: Bool = false) {
         switch result {
         case .success(let info):
-            preview.hovered(info)
+            preview.hovered(info, again: again)
             guard info != lastInfo else { return }
             lastInfo = info
             #if DEBUG
@@ -143,6 +144,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         case .failure(.notTrusted):
             // Access was turned off while running.
             access.check()
+        case .failure where again:
+            break
         case .failure(let error):
             preview.reset(because: "inspection failed: \(error)")
             lastInfo = nil
