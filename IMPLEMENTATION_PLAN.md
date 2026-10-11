@@ -28,5 +28,6 @@ against Google's endpoints. A full sign-in needs the user's own OAuth client.
 **Goal**: The card's button subscribes or unsubscribes through the YouTube Data API.
 **Success Criteria**: The card shows whether you're subscribed; the button toggles it; signed out, it
 offers to sign in; API errors (quota, expired sign-in) show plainly.
-**Tests**: API request building and response parsing; manual check once signed in.
+**Tests**: API request building and response parsing; signed-out card checked live (the Sign In
+button opens Settings → Accounts). Still to do: a signed-in check with the user's OAuth client.
 **Status**: In Progress

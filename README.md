@@ -14,6 +14,10 @@ other apps' UI through the Accessibility API, so it works in browsers without an
 - **Embedded players**: YouTube, Vimeo, TikTok, and Twitch clip links play through each
   site's own player (skipped on the site itself, which has its own hover previews). The last one
   stays paused in the background, so hovering it again resumes.
+- **Creator cards** (YouTube): on youtube.com, hovering a video title or channel name shows the
+  creator's avatar, counts, and description, with Subscribe/Unsubscribe once you sign in under
+  Settings → Accounts (your own Google Cloud OAuth client). Thumbnails and YouTube's own hover
+  previews are left alone.
 - **Scroll wheel**: with the cursor on the notch or the preview, scrolling acts on the preview, not
   the page. Albums step through their items; images zoom (move onto the preview to pan); videos
   move through the timeline or change the volume, as set in Settings.

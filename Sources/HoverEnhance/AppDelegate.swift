@@ -33,6 +33,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         monitor.onModifiersChanged = { [weak self] flags in self?.modifiersChanged(flags) }
         monitor.start()
 
+        NotificationCenter.default.addObserver(forName: .showSettingsTab, object: nil, queue: .main) { [weak self] note in
+            let tab = note.object as? String
+            MainActor.assumeIsolated {
+                self?.preview.reset(because: "opening settings")
+                self?.openSettings(tab: tab)
+            }
+        }
         whenChanged({ AppSettings.shared.previewsEnabled }) { [weak self] enabled in
             if !enabled { self?.preview.reset(because: "previews turned off") }
         }
@@ -153,8 +160,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     @objc private func showSettings() {
+        openSettings(tab: nil)
+    }
+
+    private func openSettings(tab: String?) {
         if settingsWindow == nil { settingsWindow = SettingsWindowController(settings: settings) }
-        settingsWindow?.show()
+        settingsWindow?.show(tab: tab)
     }
 
     @objc private func grantAccess() {

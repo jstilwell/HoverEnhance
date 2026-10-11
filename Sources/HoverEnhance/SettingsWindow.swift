@@ -32,6 +32,15 @@ final class SettingsWindowController: NSWindowController {
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError("not used") }
 
+    /// Shows the window with the tab titled `tab` selected, if there is one.
+    func show(tab: String?) {
+        if let tab, let tabs = contentViewController as? NSTabViewController,
+           let index = tabs.tabViewItems.firstIndex(where: { $0.label == tab }) {
+            tabs.selectedTabViewItemIndex = index
+        }
+        show()
+    }
+
     func show() {
         guard let window else { return }
         // A menu bar app isn't frontmost on its own; without this the window opens behind others.
