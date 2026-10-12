@@ -8,6 +8,14 @@ All notable changes to this project will be documented in this file.
 
 - Songs and videos in Finder previews have controls under them: play and pause, a scrubber with the time played and left, and mute.
 - Click a Finder video, or a song's artwork, to play or pause it.
+- On YouTube, resting on a video title shows the video first: its thumbnail and length, title, views, likes, upload date, category, and the start of its description, then who made it.
+- YouTube channel cards show the channel's banner and its verified check.
+
+### Changed
+
+- YouTube cards look like YouTube, in its light or dark colors, with its rounded buttons and counts like "1.64M subscribers".
+- A YouTube card's Subscribe button says Subscribe when you're signed out, as on YouTube, and opens Settings to sign in.
+- Unsubscribing from a YouTube card takes a second click, on Unsubscribe after Subscribed.
 
 ### Fixed
 

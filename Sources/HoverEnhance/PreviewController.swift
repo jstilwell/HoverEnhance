@@ -349,8 +349,8 @@ final class PreviewController {
             panel.show(view, counter: nil, anchor: requested.anchor, item: item)
             log.info("preview: weather")
 
-        case .channel(let channel):
-            let card = NSHostingView(rootView: CreatorCardView(channel: channel))
+        case .channel(let channel, let video):
+            let card = NSHostingView(rootView: CreatorCardView(channel: channel, video: video))
             playback.stop()
             panel.show(card, counter: counter, anchor: requested.anchor)
             log.infoPrivateInRelease("preview: creator card for \(channel.title)")

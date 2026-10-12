@@ -12,7 +12,8 @@ extension needed.
 - **Videos**: Reddit, X, Bluesky, Instagram, Streamable, and Imgur clips play in the preview;
   YouTube, Vimeo, TikTok, and Twitch play in their own players. Scroll on the notch under the cursor
   for the volume, shown beside it, and on the video to move through it.
-- **YouTube creators**: on YouTube, rest on a video title or channel name to see who made it.
+- **YouTube cards**: on YouTube, rest on a video title for its length, views, likes, date, and who
+  made it, or on a channel name for the channel's banner and numbers.
 - **Weather**: rest on the Weather item in the menu bar for the forecast it doesn't show: the next 24
   hours, ten days, wind, humidity, pressure, UV, air quality, sun and moon, and alerts. Open-Meteo by
   default, or OpenWeatherMap, WeatherAPI.com, Tomorrow.io, Pirate Weather, or AccuWeather with your

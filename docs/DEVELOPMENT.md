@@ -95,6 +95,12 @@ app).
   shows, so the popup's footer has it. Keys are kept in the Keychain, and `WeatherUnits` writes
   values in the units chosen.
   `Tests/HoverEnhanceTests/Fixtures/weather` holds each provider's sample answers.
+- On YouTube itself, a link gets `CreatorCardView`, in YouTube's colors (`YouTubeTheme`). For a video,
+  `MediaFetcher` reads its watch page (`YouTube.video(inPage:)`: `ytInitialPlayerResponse`, whose
+  microformat has plain views, likes, and dates), which names its channel; oEmbed names it when that
+  page can't be read. The channel's page gives the rest (`YouTube.channel(inPage:)`: `ytInitialData`,
+  with the banner and verified check in its header). Subscribing goes through `YouTubeAPI` with the
+  user's own Google client (`YouTubeAccount`). YouTube shows dislike counts only to a video's owner.
 - `EmbedPlayer` hosts players in a web view loaded under an HTTPS origin (YouTube needs a
   Referer), with AirPlay and WebRTC off so nothing asks for local network access. Links clicked in a
   player open in the browser, and nothing else can take the page around the player elsewhere. A
