@@ -185,14 +185,15 @@ struct SiteAPIsTests {
     }
 }
 
-/// Answers every request with a 503, counting them by path.
-final class UnavailableServer: URLProtocol, @unchecked Sendable {
+/// Answers every request with `status` and an empty JSON object, counting requests by path. Hosts under
+/// "nothing" answer 200; others 503.
+final class StubAPIServer: URLProtocol, @unchecked Sendable {
     private static let counts = OSAllocatedUnfairLock<[String: Int]>(initialState: [:])
     static func requests(for path: String) -> Int { counts.withLock { $0[path] ?? 0 } }
 
     static func configuration() -> URLSessionConfiguration {
         let configuration = URLSessionConfiguration.ephemeral
-        configuration.protocolClasses = [UnavailableServer.self]
+        configuration.protocolClasses = [StubAPIServer.self]
         return configuration
     }
 
@@ -203,18 +204,26 @@ final class UnavailableServer: URLProtocol, @unchecked Sendable {
     override func startLoading() {
         guard let url = request.url else { return }
         Self.counts.withLock { $0[url.path(), default: 0] += 1 }
-        client?.urlProtocol(self, didReceive: HTTPURLResponse(url: url, statusCode: 503, httpVersion: "HTTP/1.1", headerFields: nil)!,
+        let status = url.path().contains("nothing") ? 200 : 503
+        client?.urlProtocol(self, didReceive: HTTPURLResponse(url: url, statusCode: status, httpVersion: "HTTP/1.1", headerFields: nil)!,
                             cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: Data("{}".utf8))
         client?.urlProtocolDidFinishLoading(self)
     }
 }
 
 struct MediaFetcherTests {
     @Test func aFailedLookupIsntRepeatedRightAway() async {
-        let fetcher = MediaFetcher(configuration: UnavailableServer.configuration())
+        let fetcher = MediaFetcher(configuration: StubAPIServer.configuration())
         let id = "gone\(UUID().uuidString.prefix(8))"
-        #expect(await fetcher.media(for: .streamable(id: id)) == nil)
-        #expect(await fetcher.media(for: .streamable(id: id)) == nil)
-        #expect(UnavailableServer.requests(for: "/videos/\(id)") == 1)
+        #expect(await fetcher.lookUp(.streamable(id: id)) == .failed)
+        #expect(await fetcher.lookUp(.streamable(id: id)) == .failed)
+        #expect(StubAPIServer.requests(for: "/videos/\(id)") == 1)
+    }
+
+    @Test func aSiteThatAnswersWithNothingIsntAFailure() async {
+        // As for a post without photos or video: no "Couldn't load" for that.
+        let fetcher = MediaFetcher(configuration: StubAPIServer.configuration())
+        #expect(await fetcher.lookUp(.streamable(id: "nothing\(UUID().uuidString.prefix(8))")) == .nothing)
     }
 }

@@ -110,8 +110,10 @@ final class PreviewController {
         task = Task {
             loadFailed = false
             let shown = await withLoadingIndicator(after: spinnerDelay, for: newTarget) {
-                guard let fetched = await fetcher.media(for: source) else {
-                    loadFailed = true
+                let lookup = await fetcher.lookUp(source)
+                guard case .found(let fetched) = lookup else {
+                    // A cancelled load mustn't mark the next one failed.
+                    if lookup == .failed, !Task.isCancelled { loadFailed = true }
                     return false
                 }
                 guard let media = AppSettings.shared.filter.apply(to: fetched),
@@ -302,7 +304,7 @@ final class PreviewController {
             // Keyed by source and position, so the same video resumes however it was reached.
             let key = "\(requested.source)#\(position)"
             guard let size = await playback.start(url, key: key) else {
-                loadFailed = true
+                if !Task.isCancelled { loadFailed = true }
                 return false
             }
             guard !Task.isCancelled, self.target == requested, let player = playback.player else { return false }
