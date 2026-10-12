@@ -111,7 +111,7 @@ final class VideoPlayback {
     }
 
     /// "1:23", or "1:02:03" from an hour on.
-    static func clock(_ seconds: Double) -> String {
+    nonisolated static func clock(_ seconds: Double) -> String {
         let total = Int(seconds.rounded(.down))
         return total >= 3600
             ? String(format: "%d:%02d:%02d", total / 3600, total / 60 % 60, total % 60)

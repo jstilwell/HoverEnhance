@@ -66,7 +66,7 @@ actor MediaFetcher {
         case .instagram(let code):
             lookedUp = await instagram(code: code, requests)
         case .youtubeChannel(let ref):
-            lookedUp = await youtubeChannel(ref, requests).map { Media(items: [.channel($0)]) }
+            lookedUp = await youtubeCard(ref, requests).map { Media(items: [.channel($0.channel, video: $0.video)]) }
         }
         // A lookup cut short, as when the cursor moves on, is no answer to keep.
         guard !Task.isCancelled else { return .nothing }
@@ -114,16 +114,27 @@ actor MediaFetcher {
         return Media(items: [.image([SiteAPIs.instagramImageURL(code: code)])])
     }
 
-    private func youtubeChannel(_ ref: YouTubeChannelRef, _ requests: Requests) async -> YouTubeChannel? {
+    /// The creator behind a link, and the video when the link is to one.
+    private func youtubeCard(_ ref: YouTubeChannelRef, _ requests: Requests) async -> (channel: YouTubeChannel, video: YouTubeVideo?)? {
         var page = YouTube.channelPageURL(for: ref)
+        var video: YouTubeVideo?
         if case .video(let id) = ref {
-            page = await data(at: YouTube.oEmbedURL(videoID: id), requests).flatMap(YouTube.channelPageURL(fromOEmbed:))
+            // The video's page has its numbers and names its channel. When it can't be read, the card is
+            // the channel's alone, found through oEmbed.
+            if let html = await data(at: YouTube.watchPageURL(videoID: id), requests),
+               let watched = YouTube.video(inPage: String(decoding: html, as: UTF8.self)) {
+                video = watched.video
+                page = watched.channelPage
+            }
+            if page == nil {
+                page = await data(at: YouTube.oEmbedURL(videoID: id), requests).flatMap(YouTube.channelPageURL(fromOEmbed:))
+            }
         }
         guard let page else { return nil }
-        if let known = youtubeChannels[page] { return known }
+        if let known = youtubeChannels[page] { return (known, video) }
         guard let html = await data(at: page, requests), let channel = YouTube.channel(inPage: String(decoding: html, as: UTF8.self)) else { return nil }
         youtubeChannels[page] = channel
-        return channel
+        return (channel, video)
     }
 
     private func data(at url: URL, _ requests: Requests) async -> Data? {
