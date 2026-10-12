@@ -29,7 +29,7 @@ final class PreviewPanel {
     private var visibility = 0
     private var content: NSView?
     /// The card on screen: its size and where it was shown, for refitting it.
-    private var card: (size: CGSize, counter: String?, anchor: CGPoint)?
+    private var card: (size: CGSize, counter: String?, anchor: CGPoint, item: CGRect?)?
     private var zoom: CGFloat = 1
     /// The point of the image that stays put while zooming, as fractions of it from the top left.
     private var focus = CGPoint(x: 0.5, y: 0.5)
@@ -174,12 +174,20 @@ final class PreviewPanel {
     }
 
     /// A small spinner where the preview will appear, joined to the cursor by the notch, while it loads.
-    func showLoading(anchor: CGPoint) {
+    /// `item` is a menu bar item's frame, for a preview that hangs under it.
+    func showLoading(anchor: CGPoint, item: CGRect? = nil) {
         let size = CGSize(width: 20, height: 20)
         loadingView.frame.size = size
         spinner.setFrameOrigin(CGPoint(x: (size.width - spinner.frame.width) / 2, y: (size.height - spinner.frame.height) / 2))
         spinner.startAnimation(nil)
-        present(loadingView, naturalSize: size, counter: nil, interactive: false, anchor: anchor)
+        present(loadingView, naturalSize: size, counter: nil, interactive: false, anchor: anchor, item: item)
+    }
+
+    /// Where the cursor can go without ending the hover of a menu bar item at `item`, besides the
+    /// preview itself: the item, and the tab down to the preview.
+    func dropDownHoverArea(at anchor: CGPoint, item: CGRect) -> CGRect {
+        let top = max(item.maxY, visibleFrame(at: anchor).minY) + PreviewGeometry.dropGap
+        return PreviewGeometry.dropDownHoverArea(anchor: anchor, item: item, panelTop: top)
     }
 
     /// The notch a preview for a cursor at `anchor` (global, top-left origin) will have, for use
@@ -255,12 +263,13 @@ final class PreviewPanel {
         present(webView, naturalSize: size, counter: counter, interactive: true, anchor: anchor)
     }
 
-    /// Any interactive view, at its own fitting size; used for cards.
-    func show(_ view: NSView, counter: String?, anchor: CGPoint) {
+    /// Any interactive view, at its own fitting size; used for cards. `item` is a menu bar item's
+    /// frame, for a card that hangs under it.
+    func show(_ view: NSView, counter: String?, anchor: CGPoint, item: CGRect? = nil) {
         imageView.image = nil
         playerView.player = nil
-        card = (view.fittingSize, counter, anchor)
-        present(view, naturalSize: view.fittingSize, counter: counter, interactive: true, anchor: anchor)
+        card = (view.fittingSize, counter, anchor, item)
+        present(view, naturalSize: view.fittingSize, counter: counter, interactive: true, anchor: anchor, item: item)
     }
 
     /// Resizes a card on screen whose content changed size, such as a list that filled in.
@@ -270,7 +279,7 @@ final class PreviewPanel {
         // Setting the frame can make SwiftUI ask again; an unchanged size ends it there.
         guard abs(size.width - card.size.width) > 0.5 || abs(size.height - card.size.height) > 0.5 else { return }
         self.card?.size = size
-        present(view, naturalSize: size, counter: card.counter, interactive: true, anchor: card.anchor)
+        present(view, naturalSize: size, counter: card.counter, interactive: true, anchor: card.anchor, item: card.item)
     }
 
     /// Fades the preview out. What it showed is let go once it's gone, unless it's shown again first.
@@ -315,27 +324,39 @@ final class PreviewPanel {
         return ScreenSpace.flip(screen.visibleFrame).insetBy(dx: screenMargin, dy: screenMargin)
     }
 
-    private func present(_ view: NSView, naturalSize: CGSize, counter: String?, interactive: Bool, anchor: CGPoint) {
-        let maxFraction = CGFloat(AppSettings.shared.maximumSize)
-        guard let frame = PreviewGeometry.panelFrame(anchor: anchor, naturalSize: naturalSize, visible: visibleFrame(at: anchor),
-                                                     maxFraction: maxFraction) else { return }
-        panel.setFrame(ScreenSpace.flip(frame), display: false)
+    /// Beside the cursor, or under the menu bar item at `item`.
+    private func present(_ view: NSView, naturalSize: CGSize, counter: String?, interactive: Bool, anchor: CGPoint, item: CGRect? = nil) {
+        let visible = visibleFrame(at: anchor)
+        if let item {
+            guard let frame = PreviewGeometry.dropDownFrame(anchor: anchor, item: item, naturalSize: naturalSize, visible: visible) else { return }
+            panel.setFrame(ScreenSpace.flip(frame), display: false)
+            placement = nil
+            notch.setFrame(ScreenSpace.flip(PreviewGeometry.dropDownNotchFrame(anchor: anchor, item: item, panelTop: frame.minY)), display: false)
+            if rocker.isVisible { hideRocker() }
+            // The tab hangs from the menu bar: its top end is rounded, its bottom meets the preview. (Layer
+            // corners count from the bottom.)
+            notchView.layer?.maskedCorners = [.layerMinXMaxYCorner, .layerMaxXMaxYCorner]
+        } else {
+            let maxFraction = CGFloat(AppSettings.shared.maximumSize)
+            guard let frame = PreviewGeometry.panelFrame(anchor: anchor, naturalSize: naturalSize, visible: visible, maxFraction: maxFraction) else { return }
+            panel.setFrame(ScreenSpace.flip(frame), display: false)
 
-        let placeRight = frame.minX > anchor.x
-        placement = (anchor, placeRight)
-        notch.setFrame(ScreenSpace.flip(PreviewGeometry.notchFrame(anchor: anchor, placeRight: placeRight)), display: false)
-        // The rocker stays with the video it belongs to, as when its card is refitted, and goes otherwise.
-        if view === rockerOwner {
-            placeRocker(anchor: anchor, placeRight: placeRight)
-        } else if rocker.isVisible {
-            hideRocker()
+            let placeRight = frame.minX > anchor.x
+            placement = (anchor, placeRight)
+            notch.setFrame(ScreenSpace.flip(PreviewGeometry.notchFrame(anchor: anchor, placeRight: placeRight)), display: false)
+            // The rocker stays with the video it belongs to, as when its card is refitted, and goes otherwise.
+            if view === rockerOwner {
+                placeRocker(anchor: anchor, placeRight: placeRight)
+            } else if rocker.isVisible {
+                hideRocker()
+            }
+            // Round only the end under the cursor; the other end meets the preview.
+            notchView.layer?.maskedCorners = placeRight
+                ? [.layerMinXMinYCorner, .layerMinXMaxYCorner]
+                : [.layerMaxXMinYCorner, .layerMaxXMaxYCorner]
         }
         // Hidden or not, the notch still decides when the hover ends.
         notchView.isHidden = !AppSettings.shared.showsNotch
-        // Round only the end under the cursor; the other end meets the preview.
-        notchView.layer?.maskedCorners = placeRight
-            ? [.layerMinXMinYCorner, .layerMinXMaxYCorner]
-            : [.layerMaxXMinYCorner, .layerMaxXMaxYCorner]
 
         if content !== view {
             if content === loadingView { spinner.stopAnimation(nil) }

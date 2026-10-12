@@ -68,6 +68,40 @@ enum PreviewGeometry {
         )
     }
 
+    // MARK: - Under a menu bar item
+
+    /// Space between the menu bar and a preview hanging under it.
+    static let dropGap: CGFloat = 6
+
+    /// A preview for a menu bar item (`item`, the item's frame): under the menu bar, centered on the
+    /// cursor as far as the screen allows, at its natural size or scaled down to fit.
+    static func dropDownFrame(anchor: CGPoint, item: CGRect, naturalSize: CGSize, visible: CGRect) -> CGRect? {
+        guard naturalSize.width > 0, naturalSize.height > 0 else { return nil }
+        let top = max(item.maxY, visible.minY) + dropGap
+        let room = CGSize(width: visible.width - 2 * padding, height: visible.maxY - top - 2 * padding)
+        let scale = min(1, room.width / naturalSize.width, room.height / naturalSize.height)
+        guard scale > 0 else { return nil }
+        let size = CGSize(width: (naturalSize.width * scale).rounded() + 2 * padding,
+                          height: (naturalSize.height * scale).rounded() + 2 * padding)
+        let x = min(max(anchor.x - size.width / 2, visible.minX), visible.maxX - size.width)
+        return CGRect(x: x, y: top, width: size.width, height: size.height)
+    }
+
+    /// The tab that joins a menu bar item to the preview under it: from the item's bottom edge to the
+    /// preview's top, under the cursor.
+    static func dropDownNotchFrame(anchor: CGPoint, item: CGRect, panelTop: CGFloat) -> CGRect {
+        let width = min(notchHeight, max(item.width, 1))
+        let x = min(max(anchor.x - width / 2, item.minX), item.maxX - width)
+        // A point into the preview, so there's no seam.
+        return CGRect(x: x, y: item.maxY, width: width, height: max(panelTop - item.maxY, 0) + 1)
+    }
+
+    /// Where the cursor can go without ending the hover, besides the preview: the whole item, so moving
+    /// across it doesn't, and the tab down to the preview.
+    static func dropDownHoverArea(anchor: CGPoint, item: CGRect, panelTop: CGFloat) -> CGRect {
+        item.union(dropDownNotchFrame(anchor: anchor, item: item, panelTop: panelTop))
+    }
+
     /// A small tab under the cursor that reaches across the gap to the preview's edge. Leaving it
     /// any way but onto the preview ends the hover.
     static func notchFrame(anchor: CGPoint, placeRight: Bool) -> CGRect {

@@ -6,6 +6,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
+- Rest on the Weather item in the menu bar for a full forecast under it: the next 24 hours, ten days, wind, humidity, pressure, UV, air quality, sun and moon, and alerts, from Open-Meteo or a provider you choose in Settings → Weather.
 - Press Esc to close any preview.
 - Set a shortcut in Settings → General to show or hide previews from any app.
 - Skip previews on websites you choose, in Settings → Sites, or from the menu bar for the one you're on.

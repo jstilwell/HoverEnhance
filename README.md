@@ -13,6 +13,9 @@ extension needed.
   YouTube, Vimeo, TikTok, and Twitch play in their own players. Scroll on the notch under the cursor
   for the volume, shown beside it, and on the video to move through it.
 - **YouTube creators**: on YouTube, rest on a video title or channel name to see who made it.
+- **Weather**: rest on the Weather item in the menu bar for the forecast it doesn't show: the next 24
+  hours, ten days, wind, humidity, pressure, UV, air quality, sun and moon, and alerts. Open-Meteo by
+  default, or OpenWeatherMap, WeatherAPI.com, Tomorrow.io, or Pirate Weather with your own key.
 - **Finder**: rest on a file or folder for its path, size, dates, where it came from, and which apps
   are using it. Images, videos, and audio show large beside their details, including what songs' and
   videos' own tags say. Click any detail to copy it.
@@ -37,6 +40,9 @@ or later.
   updates, and Google only if you sign in to subscribe to YouTube channels.
 - **Not your network**: links and images on a web page that point at your router, printer, or anything
   else on your local network are left alone.
+- **Weather where you say**: nothing is looked up until you pick a place or allow your location, which
+  goes to the weather provider you choose rounded to about a kilometer (and, in the US, to the
+  National Weather Service for alerts, unless you turn that off).
 - **Browsers by default**: links in other apps, like Mail, load nothing unless you allow it in Settings.
 - **No surprise downloads**: images over 25 MB (adjustable) wait for you to click Load Anyway, and
   files only in iCloud stay there.
