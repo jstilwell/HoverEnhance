@@ -33,4 +33,6 @@ The keyed providers' samples come from their documentation, as no key was used t
 `owm-*.json` are OpenWeatherMap's examples (converted from Kelvin to °C, as `units=metric` answers),
 `tomorrow-*.json` are Tomorrow.io's examples verbatim, and `weatherapi-forecast.json` and
 `pirateweather-forecast.json` are built on WeatherAPI.com's and Pirate Weather's own examples, filled out
-with made-up values to their published schemas.
+with made-up values to their published schemas. `accuweather-*.json` follow AccuWeather's published
+schemas (for New York, location key 349727, its documentation's example) with made-up values, asked as
+`AccuWeather` asks: details on, forecasts in metric.

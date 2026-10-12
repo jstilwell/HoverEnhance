@@ -64,6 +64,12 @@ struct WeatherUnits: Codable, Equatable, Sendable {
         return "\(rounded)°"
     }
 
+    /// "3° warmer", "2° cooler", or "No change", from a difference in degrees Celsius.
+    func change(_ celsius: Double) -> String {
+        let degrees = Int((temperature == .fahrenheit ? celsius * 9 / 5 : celsius).rounded())
+        return degrees == 0 ? "No change" : degrees > 0 ? "\(degrees)° warmer" : "\(-degrees)° cooler"
+    }
+
     /// "8 mph", from meters per second.
     func wind(_ metersPerSecond: Double) -> String {
         let value = switch speed {

@@ -15,7 +15,9 @@ extension needed.
 - **YouTube creators**: on YouTube, rest on a video title or channel name to see who made it.
 - **Weather**: rest on the Weather item in the menu bar for the forecast it doesn't show: the next 24
   hours, ten days, wind, humidity, pressure, UV, air quality, sun and moon, and alerts. Open-Meteo by
-  default, or OpenWeatherMap, WeatherAPI.com, Tomorrow.io, or Pirate Weather with your own key.
+  default, or OpenWeatherMap, WeatherAPI.com, Tomorrow.io, Pirate Weather, or AccuWeather with your
+  own key. AccuWeather adds pollen, the temperature in the shade, the change since yesterday, and a
+  forecaster's summary; its key needs a paid plan after a 14-day trial.
 - **Finder**: rest on a file or folder for its path, size, dates, where it came from, and which apps
   are using it. Images, videos, and audio show large beside their details, including what songs' and
   videos' own tags say. Click any detail to copy it.

@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.4.0 - Unreleased
+
+### Added
+
+- Choose AccuWeather for the weather popup in Settings → Weather, with your own key, which needs a paid plan after a 14-day free trial.
+- With AccuWeather, the weather popup shows today's pollen, how warm it feels in the shade, how today compares with yesterday, and a forecaster's summary of the days ahead.
+- Turn the weather popup's pollen off in Settings → Weather.
+
+### Changed
+
+- The weather popup's hourly forecast says how many hours it covers, as AccuWeather's covers 12.
+
 ## 0.3.0 - 10-12-2026
 
 ### Added
