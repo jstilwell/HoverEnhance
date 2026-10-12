@@ -77,6 +77,8 @@ after every build (the welcome window explains how to remove and re-add the app)
   player open in the browser.
 - `Updates` wraps Sparkle's updater; the Makefile bundles `Sparkle.framework` into the app (without
   the XPC services, which only sandboxed apps use) and signs it from the inside out.
+- `GlobalShortcut` registers the pause shortcut as a Carbon hot key, which needs no further permission.
+  `SkippedWebsites` matches the websites previews skip, by domain and subdomain.
 - `AppSettings` keeps settings in UserDefaults; code reads it where it's used, so changes apply at
   once. `SettingsWindowController` shows the SwiftUI tabs in `SettingsViews`.
 - Reddit answers scripted requests with a JavaScript check; `WebPageLoader` passes it in an

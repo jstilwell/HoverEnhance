@@ -23,6 +23,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let preview = PreviewController()
     private let hud = HUD()
     private let access = AccessibilityWatcher()
+    private let pauseShortcut = GlobalShortcut()
     private var statusItem: NSStatusItem?
     private var settingsWindow: SettingsWindowController?
     private var aboutWindow: AboutWindowController?
@@ -30,12 +31,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// Whether the app proper is up: the menu bar item and the hover monitor. It waits for access.
     private var isRunning = false
     private var lastInfo: HoverInfo?
+    /// The last web page hovered, and the app showing it, for skipping its website from the menu.
+    private var lastWebPage: (pid: pid_t, url: URL)?
     /// Whether the activation key was down at the last modifier change, so other modifiers are ignored.
     private var activationKeyHeld = false
 
     private var versionItem: NSMenuItem!
     private var grantItem: NSMenuItem!
     private var previewsItem: NSMenuItem!
+    private var skipSiteItem: NSMenuItem!
     private var copyItem: NSMenuItem!
     private var updateItem: NSMenuItem!
 
@@ -86,6 +90,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         updateActivity()
         whenChanged({ AppSettings.shared.inspectionPolicy }) { [weak self] _ in self?.monitor.settingsChanged() }
+        pauseShortcut.action = { [weak self] in self?.togglePreviews() }
+        pauseShortcut.register(settings.pauseShortcut)
+        whenChanged({ AppSettings.shared.pauseShortcut }) { [weak self] shortcut in self?.pauseShortcut.register(shortcut) }
         whenChanged({ Updates.shared.waitingVersion }) { [weak self] version in
             self?.statusItem?.button?.image = MenuBarIcon.image(badged: version != nil)
         }
@@ -144,6 +151,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         switch result {
         case .success(let info):
             preview.hovered(info, again: again)
+            if let page = info.pageURL { lastWebPage = (info.pid, page) }
             guard info != lastInfo else { return }
             lastInfo = info
             #if DEBUG
@@ -203,6 +211,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         versionItem.isEnabled = false
         grantItem = menuItem("Grant Accessibility Access…", action: #selector(grantAccess), symbol: "hand.raised")
         previewsItem = menuItem("Show Previews", action: #selector(togglePreviews), key: "e", symbol: "eye")
+        skipSiteItem = menuItem("Skip Previews on This Website", action: #selector(toggleSkippedSite), symbol: "nosign")
         copyItem = menuItem("Copy Inspector Result", action: #selector(copyLastResult), key: "c", symbol: "doc.on.doc")
         updateItem = menuItem("Check for Updates…", action: #selector(checkForUpdates), symbol: "arrow.triangle.2.circlepath")
 
@@ -211,7 +220,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.autoenablesItems = false
         menu.items = [
             versionItem, grantItem, .separator(),
-            previewsItem, copyItem, .separator(),
+            previewsItem, skipSiteItem, copyItem, .separator(),
             menuItem("About HoverEnhance", action: #selector(showAbout), symbol: "info.circle"),
             updateItem,
             menuItem("Settings…", action: #selector(showSettings), key: ",", symbol: "gearshape"),
@@ -270,6 +279,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let granted = access.isGranted
         grantItem.isHidden = granted
         previewsItem.state = settings.previewsEnabled ? .on : .off
+        if let domain = lastWebsite {
+            skipSiteItem.isHidden = false
+            skipSiteItem.title = settings.skippedWebsites.contains(domain) ? "Allow Previews on \(domain)" : "Skip Previews on \(domain)"
+        } else {
+            skipSiteItem.isHidden = true
+        }
         copyItem.isHidden = !settings.showsInspector
         copyItem.isEnabled = lastInfo != nil
         let updates = Updates.shared
@@ -301,6 +316,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc private func togglePreviews() {
         settings.previewsEnabled.toggle()
+    }
+
+    /// The website of the page last hovered, while its app is in front, for skipping it from the menu.
+    private var lastWebsite: String? {
+        guard let (pid, page) = lastWebPage, NSWorkspace.shared.frontmostApplication?.processIdentifier == pid,
+              ["http", "https"].contains(page.scheme?.lowercased()) else { return nil }
+        // Already skipped by a broader entry: that's the one to allow again.
+        let host = page.host(percentEncoded: false)?.lowercased() ?? ""
+        return settings.skippedWebsites.first { host == $0 || host.hasSuffix("." + $0) } ?? SkippedWebsites.domain(from: host)
+    }
+
+    @objc private func toggleSkippedSite() {
+        guard let domain = lastWebsite else { return }
+        if settings.skippedWebsites.contains(domain) {
+            settings.skippedWebsites.removeAll { $0 == domain }
+        } else {
+            settings.skippedWebsites.append(domain)
+            preview.reset(because: "website skipped")
+        }
     }
 
     @objc private func copyLastResult() {

@@ -116,6 +116,8 @@ final class AppSettings {
         static let activationKey = "activationKey"
         static let hoverDelay = "hoverDelay"
         static let excludedApps = "excludedApps"
+        static let skippedWebsites = "skippedWebsites"
+        static let pauseShortcut = "pauseShortcut"
         static let previewsInOtherApps = "previewsInOtherApps"
         static let otherAppsSkipEmail = "otherAppsSkipEmail"
         static let otherAppsKnownSitesOnly = "otherAppsKnownSitesOnly"
@@ -165,6 +167,12 @@ final class AppSettings {
     static let shortestHoverDelay = 50.0
     var excludedApps: [ExcludedApp] {
         didSet { defaults.set(try? JSONEncoder().encode(excludedApps), forKey: Key.excludedApps) }
+    }
+    /// Domains, such as "bank.example", on whose pages (and their subdomains') no previews appear.
+    var skippedWebsites: [String] { didSet { defaults.set(skippedWebsites, forKey: Key.skippedWebsites) } }
+    /// Shows or hides previews from any app.
+    var pauseShortcut: Shortcut? {
+        didSet { defaults.set(pauseShortcut.flatMap { try? JSONEncoder().encode($0) }, forKey: Key.pauseShortcut) }
     }
     /// Previews that load from the network in apps other than browsers; see `OtherAppsPolicy`.
     var previewsInOtherApps: Bool { didSet { defaults.set(previewsInOtherApps, forKey: Key.previewsInOtherApps) } }
@@ -274,6 +282,8 @@ final class AppSettings {
         activationKey = defaults.string(forKey: Key.activationKey).flatMap(ModifierKey.init(rawValue:)) ?? .option
         hoverDelay = max(defaults.double(forKey: Key.hoverDelay), Self.shortestHoverDelay)
         excludedApps = defaults.data(forKey: Key.excludedApps).flatMap { try? JSONDecoder().decode([ExcludedApp].self, from: $0) } ?? []
+        skippedWebsites = defaults.stringArray(forKey: Key.skippedWebsites) ?? []
+        pauseShortcut = defaults.data(forKey: Key.pauseShortcut).flatMap { try? JSONDecoder().decode(Shortcut.self, from: $0) }
         previewsInOtherApps = defaults.bool(forKey: Key.previewsInOtherApps)
         otherAppsSkipEmail = defaults.bool(forKey: Key.otherAppsSkipEmail)
         otherAppsKnownSitesOnly = defaults.bool(forKey: Key.otherAppsKnownSitesOnly)
@@ -375,6 +385,11 @@ final class AppSettings {
     /// or one that is, unless the inspector wants to see.
     func inspectsOnRest(holding flags: NSEvent.ModifierFlags) -> Bool {
         showsInspector || (previewsEnabled && previewsAllowed(holding: flags))
+    }
+
+    /// Whether `page` is on a website in `skippedWebsites`.
+    func skips(page: URL?) -> Bool {
+        SkippedWebsites.contains(page, in: skippedWebsites)
     }
 
     func isExcluded(_ bundleID: String?) -> Bool {
