@@ -151,7 +151,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         switch result {
         case .success(let info):
             preview.hovered(info, again: again)
-            if let page = info.pageURL { lastWebPage = (info.pid, page) }
+            if let page = info.websiteURL { lastWebPage = (info.pid, page) }
             guard info != lastInfo else { return }
             lastInfo = info
             #if DEBUG

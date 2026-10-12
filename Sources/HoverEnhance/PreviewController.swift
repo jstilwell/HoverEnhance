@@ -70,7 +70,7 @@ final class PreviewController {
         }
         let settings = AppSettings.shared
         guard settings.previewsEnabled, settings.previewsAllowed(holding: NSEvent.modifierFlags),
-              !settings.isExcluded(info.bundleID), !settings.skips(page: info.pageURL) else {
+              !settings.isExcluded(info.bundleID), !settings.skips(page: info.websiteURL) else {
             noPreview(because: "previews are off here")
             return
         }
