@@ -88,7 +88,7 @@ actor MediaFetcher {
     }
 
     private func data(at url: URL) async -> Data? {
-        guard let (data, response) = try? await session.data(from: url),
+        guard let (data, response) = try? await session.data(from: url, delegate: LocalRedirectGuard.shared),
               (response as? HTTPURLResponse)?.statusCode == 200 else { return nil }
         return data
     }

@@ -87,6 +87,11 @@ final class LimitedDownloader: NSObject, URLSessionDataDelegate, @unchecked Send
         }
     }
 
+    func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse,
+                    newRequest request: URLRequest, completionHandler: @escaping @Sendable (URLRequest?) -> Void) {
+        completionHandler(LocalRedirectGuard.allows(from: task.originalRequest?.url, to: request.url) ? request : nil)
+    }
+
     func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: (any Error)?) {
         finish(task) { download in
             guard error == nil, let response = download.response else { return .failed }
