@@ -62,3 +62,11 @@ struct FileSourceTests {
         #expect(noFolders.allows(.file(app, onDesktop: false)))
     }
 }
+
+struct HiddenCharacterTests {
+    @Test func overridesAndControlsAreShownAsCodes() {
+        #expect("invoice\u{202E}fdp.app".showingHiddenCharacters == "invoice<U+202E>fdp.app")
+        #expect("two\nlines\u{1B}[0m".showingHiddenCharacters == "two<U+000A>lines<U+001B>[0m")
+        #expect("café 写真 שלום.txt".showingHiddenCharacters == "café 写真 שלום.txt")
+    }
+}

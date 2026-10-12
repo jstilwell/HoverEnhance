@@ -158,3 +158,21 @@ final class FileCard {
         }
     }
 }
+
+extension String {
+    /// With characters that hide or rearrange text written out as their codes, so a name reads as what it
+    /// is: control characters, and the direction overrides that can make "invoice\u{202E}fdp.app" look like
+    /// "invoiceppa.pdf".
+    var showingHiddenCharacters: String {
+        var shown = ""
+        for scalar in unicodeScalars {
+            switch scalar.value {
+            case 0x00 ... 0x1F, 0x7F ... 0x9F, 0x202A ... 0x202E, 0x2066 ... 0x2069:
+                shown += String(format: "<U+%04X>", scalar.value)
+            default:
+                shown.unicodeScalars.append(scalar)
+            }
+        }
+        return shown
+    }
+}
