@@ -279,6 +279,9 @@ final class PreviewPanel {
             spinner.stopAnimation(nil)
             imageView.image = nil
             playerView.player = nil
+            // A card's SwiftUI tree, or a paused player's web view, isn't kept by a hidden panel.
+            content?.removeFromSuperview()
+            content = nil
         }
     }
 

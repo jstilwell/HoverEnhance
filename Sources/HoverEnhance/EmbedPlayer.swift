@@ -1,13 +1,18 @@
 import WebKit
 
-/// Plays embeds in a web view. The most recent one stays alive, paused, after its preview closes,
-/// so hovering the same link again picks up where it left off. Links clicked in a player, such as
-/// its title or "Watch on YouTube", open in the browser.
+/// Plays embeds in a web view. The most recent one stays alive, paused, for a few minutes after its
+/// preview closes, so hovering the same link again picks up where it left off. Links clicked in a
+/// player, such as its title or "Watch on YouTube", open in the browser.
 @MainActor
 final class EmbedPlayer: NSObject, WKNavigationDelegate, WKUIDelegate {
     private var current: (embed: Embed, view: WKWebView)?
+    /// How long a paused player is kept. Its web content process holds a hundred megabytes or more.
+    private static let pausedPlayerLifetime: Duration = .seconds(180)
+    private var discardLater: Task<Void, Never>?
 
     func view(for embed: Embed) -> WKWebView? {
+        discardLater?.cancel()
+        discardLater = nil
         if let current, current.embed == embed {
             current.view.setAllMediaPlaybackSuspended(false)
             return current.view
@@ -35,12 +40,19 @@ final class EmbedPlayer: NSObject, WKNavigationDelegate, WKUIDelegate {
 
     // MARK: - Links in players
 
-    /// A link that leaves the player, for the page around it or a new window, opens in the browser.
-    /// Links within the player's own frame stay there.
+    /// The player's own frame goes where the player takes it. The page around it stays the page it was
+    /// loaded as: a clicked link that would leave it, for that page or a new window, opens in the
+    /// browser, and a script in the player can't send it anywhere else.
     func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction) async -> WKNavigationActionPolicy {
-        guard navigationAction.navigationType == .linkActivated, navigationAction.targetFrame?.isMainFrame != false else { return .allow }
-        openInBrowser(navigationAction)
+        guard navigationAction.targetFrame?.isMainFrame != false else { return .allow }
+        if navigationAction.navigationType != .linkActivated, Self.isPlayerPage(navigationAction.request.url) { return .allow }
+        if navigationAction.navigationType == .linkActivated { openInBrowser(navigationAction) }
         return .cancel
+    }
+
+    /// The page the player is embedded in, as `view(for:)` loads it.
+    nonisolated static func isPlayerPage(_ url: URL?) -> Bool {
+        url?.scheme == Embed.origin.scheme && url?.host() == Embed.origin.host() && url?.path() == Embed.origin.path()
     }
 
     /// New windows the player asks for. Only clicked links open; pop-ups a script opens on its own don't.
@@ -55,12 +67,21 @@ final class EmbedPlayer: NSObject, WKNavigationDelegate, WKUIDelegate {
         NSWorkspace.shared.open(url)
     }
 
-    /// Pauses the current embed without losing its place.
+    /// Pauses the current embed without losing its place, for a while.
     func suspend() {
-        current?.view.setAllMediaPlaybackSuspended(true)
+        guard let current else { return }
+        current.view.setAllMediaPlaybackSuspended(true)
+        guard discardLater == nil else { return }
+        discardLater = Task { [weak self] in
+            try? await Task.sleep(for: Self.pausedPlayerLifetime)
+            guard !Task.isCancelled else { return }
+            self?.discard()
+        }
     }
 
     private func discard() {
+        discardLater?.cancel()
+        discardLater = nil
         current?.view.stopLoading()
         current?.view.removeFromSuperview()
         current = nil

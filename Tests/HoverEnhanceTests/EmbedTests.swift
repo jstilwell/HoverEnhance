@@ -39,6 +39,13 @@ struct EmbedTests {
         #expect(embed("https://www.tiktok.com/@scout2015/video/\(String(repeating: "9", count: 40))") == nil)
     }
 
+    @Test func onlyThePlayerPageLoadsAroundThePlayer() {
+        #expect(EmbedPlayer.isPlayerPage(Embed.origin))
+        #expect(!EmbedPlayer.isPlayerPage(URL(string: "https://example.com/")))
+        #expect(!EmbedPlayer.isPlayerPage(Embed.origin.appending(path: "elsewhere")))
+        #expect(!EmbedPlayer.isPlayerPage(nil))
+    }
+
     @Test func playerURLsCarryMuteAndStart() {
         let video = Embed(site: .youtube, id: "dQw4w9WgXcQ", start: 90)
         #expect(video.playerURL(muted: true)?.absoluteString
