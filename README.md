@@ -27,7 +27,8 @@ Download the latest DMG from [Releases](https://github.com/jstilwell/HoverEnhanc
 it, and drag HoverEnhance to Applications. It's signed, notarized, and updates itself.
 
 A welcome window walks you through turning on Accessibility access, which lets HoverEnhance see
-what's under the cursor: it adds HoverEnhance to the list, and you switch it on. Requires macOS 14 or later.
+what's under the cursor: it adds HoverEnhance to the list, and you switch it on. Requires macOS 14
+or later.
 
 ## Privacy
 
