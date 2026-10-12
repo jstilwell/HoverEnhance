@@ -317,8 +317,10 @@ final class AppSettings {
     }
 
     var otherApps: OtherAppsPolicy {
+        // Settings greys the key out while previews appear except while holding it: needing it too would
+        // mean never.
         OtherAppsPolicy(enabled: previewsInOtherApps, skipsEmail: otherAppsSkipEmail, knownSitesOnly: otherAppsKnownSitesOnly,
-                        needsKey: otherAppsNeedKey)
+                        needsKey: otherAppsNeedKey && activation != .unlessHoldingKey)
     }
 
     /// Whether the activation key matters anywhere, so pressing or releasing it should show or hide a

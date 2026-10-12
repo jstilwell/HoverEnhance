@@ -16,6 +16,8 @@ All notable changes to this project will be documented in this file.
 
 - HoverEnhance asks the browser about a resting cursor less often, drops looks the cursor has moved on from, and doesn't look at all while previews wait for a key you aren't holding.
 - Pressing ⌘ or another modifier no longer counts as the activation key.
+- Cut, copy, paste, and undo work in Settings' text fields, such as the YouTube client ID and secret.
+- Previews in other apps no longer stop for good when "Only while holding" is on there and previews appear except while holding a key.
 - A preview whose site doesn't answer gives up after about 10 seconds instead of a minute.
 - Stepping to an album photo still loading no longer downloads it twice, photos fetched ahead stop when the preview closes, and a link that just failed isn't fetched again right away.
 - A web page can no longer lead HoverEnhance to your router, printer, or other things on your local network or this Mac, which browsers already refuse.
