@@ -18,6 +18,8 @@ final class PreviewController {
     /// The album position being shown, or being loaded after a scroll.
     private var index = 0
     private var task: Task<Void, Never>?
+    /// The album image being fetched ahead, so showing it waits for that download instead of starting another.
+    private var prefetching: (position: Int, task: Task<Void, Never>)?
     /// The item on screen, which decides what the scroll wheel does.
     private var showing: MediaItem?
     private var albumSteps = StepAccumulator()
@@ -157,6 +159,8 @@ final class PreviewController {
         if target != nil { log.debug("preview hidden: \(reason, privacy: .public)") }
         task?.cancel()
         task = nil
+        prefetching?.task.cancel()
+        prefetching = nil
         target = nil
         media = nil
         index = 0
@@ -243,6 +247,7 @@ final class PreviewController {
 
         switch media.items[position] {
         case .image(let candidates):
+            if !allowingLarge, let ahead = prefetching, ahead.position == position { await ahead.task.value }
             let outcome = await loader.load(candidates, page: target.page, maxPixelSize: Self.maxPixelSize(),
                                             byteLimit: allowingLarge ? ImageLoader.largestEver : settings.largestImageBytes)
             guard !Task.isCancelled, self.target == requested else { return false }
@@ -444,12 +449,16 @@ final class PreviewController {
         }
     }
 
-    /// Warms the loader's cache so stepping forward to an image is instant.
+    /// Warms the loader's cache so stepping forward to an image is instant. It ends with the hover.
     private func prefetch(_ position: Int) {
+        guard prefetching?.position != position else { return }
+        prefetching?.task.cancel()
+        prefetching = nil
         guard let media, media.items.indices.contains(position), case .image(let candidates) = media.items[position] else { return }
         let page = target?.page
         let limit = AppSettings.shared.largestImageBytes
-        Task { [loader] in _ = await loader.load(candidates, page: page, maxPixelSize: Self.maxPixelSize(), byteLimit: limit) }
+        let task = Task { [loader] in _ = await loader.load(candidates, page: page, maxPixelSize: Self.maxPixelSize(), byteLimit: limit) }
+        prefetching = (position, task)
     }
 
     /// Longest screen edge in pixels; larger images are downsampled to this when decoded.

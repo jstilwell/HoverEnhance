@@ -32,6 +32,10 @@ actor ImageLoader {
 
     private let downloader: LimitedDownloader
     private let decoded = NSCache<NSURL, CacheEntry>()
+    /// Candidates the server said aren't there, such as a YouTube thumbnail size a video lacks: skipped for
+    /// a while rather than asked for again on every hover.
+    private var missing: [URL: Date] = [:]
+    private static let missingLifetime: TimeInterval = 10 * 60
 
     init(configuration: URLSessionConfiguration = ImageLoader.configuration()) {
         downloader = LimitedDownloader(configuration: configuration)
@@ -56,6 +60,7 @@ actor ImageLoader {
         for url in candidates {
             if Task.isCancelled { return .failed }
             if let entry = decoded.object(forKey: url as NSURL) { return .loaded(entry.image) }
+            if let since = missing[url], Date().timeIntervalSince(since) < Self.missingLifetime { continue }
             switch await fetch(url, page: page, maxPixelSize: maxPixelSize, byteLimit: byteLimit) {
             case .loaded(let image):
                 let cost = Int(image.image.size.width * image.image.size.height) * 4
@@ -77,7 +82,13 @@ actor ImageLoader {
         }
         switch await downloader.data(for: request, limit: byteLimit) {
         case .data(let data, let response):
-            if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) { return .failed }
+            if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+                if [404, 410].contains(http.statusCode) {
+                    missing = missing.filter { Date().timeIntervalSince($0.value) < Self.missingLifetime }
+                    missing[url] = Date()
+                }
+                return .failed
+            }
             return ImageDecoder.decode(data, from: url, maxPixelSize: maxPixelSize).map(Outcome.loaded) ?? .failed
         case .tooLarge(let bytes):
             return .tooLarge(url, bytes: bytes)

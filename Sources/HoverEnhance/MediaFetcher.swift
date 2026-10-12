@@ -2,16 +2,33 @@ import Foundation
 
 /// Turns a `MediaSource` into displayable media, doing whatever lookup the site needs.
 actor MediaFetcher {
-    private let session = URLSession(configuration: .default)
+    private let session: URLSession
     /// Lookups, kept for a while: some sites' video links stop working after a few hours.
     private var looked: [MediaSource: (media: Media, time: Date)] = [:]
     private let lookupLifetime: TimeInterval = 30 * 60
+    /// Lookups that found nothing, kept briefly, so hovering the same link again doesn't ask again at once,
+    /// or load Reddit's page in a web view again.
+    private var failed: [MediaSource: Date] = [:]
+    private let failureLifetime: TimeInterval = 60
     private var blueskyDIDs: [String: String] = [:]
     /// YouTube channel pages are about a megabyte, so each is read once per session.
     private var youtubeChannels: [URL: YouTubeChannel] = [:]
 
+    init(configuration: URLSessionConfiguration = MediaFetcher.configuration()) {
+        session = URLSession(configuration: configuration)
+    }
+
+    static func configuration() -> URLSessionConfiguration {
+        let configuration = URLSessionConfiguration.default
+        // A spinner is up while a lookup runs; the defaults would leave it there a minute or more.
+        configuration.timeoutIntervalForRequest = 10
+        configuration.timeoutIntervalForResource = 20
+        return configuration
+    }
+
     func media(for source: MediaSource) async -> Media? {
         if let cached = looked[source], Date().timeIntervalSince(cached.time) < lookupLifetime { return cached.media }
+        if let failure = failed[source], Date().timeIntervalSince(failure) < failureLifetime { return nil }
         let lookedUp: Media?
         switch source {
         case .images(let urls):
@@ -39,6 +56,8 @@ actor MediaFetcher {
         guard !Task.isCancelled else { return nil }
         let media = lookedUp?.webOnly()
         looked[source] = media.map { ($0, Date()) }
+        failed = failed.filter { Date().timeIntervalSince($0.value) < failureLifetime }
+        failed[source] = media == nil ? Date() : nil
         return media
     }
 
