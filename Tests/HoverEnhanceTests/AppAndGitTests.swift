@@ -49,6 +49,26 @@ struct AppBundleInfoTests {
         #expect(AppBundleInfo.signature(of: unsigned) == "Not signed")
     }
 
+    @Test func signaturesCheckEveryFile() throws {
+        let scratch = try Scratch()
+        func app(_ name: String) throws -> URL {
+            let app = scratch.folder.appending(path: "\(name).app", directoryHint: .isDirectory)
+            let contents = app.appending(path: "Contents")
+            try FileManager.default.createDirectory(at: contents.appending(path: "MacOS"), withIntermediateDirectories: true)
+            try FileManager.default.createDirectory(at: contents.appending(path: "Resources"), withIntermediateDirectories: true)
+            let plist: [String: Any] = ["CFBundleIdentifier": "test.\(name)", "CFBundleExecutable": name]
+            try PropertyListSerialization.data(fromPropertyList: plist, format: .xml, options: 0).write(to: contents.appending(path: "Info.plist"))
+            try FileManager.default.copyItem(at: URL(filePath: "/usr/bin/true"), to: contents.appending(path: "MacOS/\(name)"))
+            try Data("as signed".utf8).write(to: contents.appending(path: "Resources/notes.txt"))
+            #expect(try scratch.run("/usr/bin/codesign", ["--force", "--sign", "-", app.path(percentEncoded: false)]) == 0)
+            return app
+        }
+        #expect(AppBundleInfo.signature(of: try app("Intact")) == "Ad hoc, no developer")
+        let changed = try app("Changed")
+        try Data("changed".utf8).write(to: changed.appending(path: "Contents/Resources/notes.txt"))
+        #expect(AppBundleInfo.signature(of: changed) == "Ad hoc, no developer · files changed since signing")
+    }
+
     @Test func appRowsAndASignatureStillLoading() throws {
         var details = FileDetails()
         details.app = AppBundleInfo(version: "26.0 (21622)", bundleID: "com.apple.Safari", architectures: ["Apple silicon", "Intel"],

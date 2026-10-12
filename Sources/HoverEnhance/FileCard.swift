@@ -48,7 +48,10 @@ final class FileCard {
     func loadSlowDetails() async {
         if signature == .loading {
             let url = url
-            let found = await Task.detached { AppBundleInfo.signature(of: url) }.value
+            // On a queue of its own: it can wait seconds for every file to be checked.
+            let found = await withCheckedContinuation { continuation in
+                DispatchQueue.global(qos: .userInitiated).async { continuation.resume(returning: AppBundleInfo.signature(of: url)) }
+            }
             signature = found.map { .found($0) } ?? .failed
         }
     }
