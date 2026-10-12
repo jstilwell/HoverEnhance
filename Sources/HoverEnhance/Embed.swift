@@ -68,12 +68,12 @@ struct Embed: Sendable, Hashable {
             }
         case "vimeo.com", "www.vimeo.com", "player.vimeo.com":
             // vimeo.com/<id>[/<hash>], vimeo.com/channels/<name>/<id>, player.vimeo.com/video/<id>
-            guard let index = parts.firstIndex(where: { !$0.isEmpty && $0.allSatisfy(\.isNumber) }) else { return nil }
+            guard let index = parts.firstIndex(where: SiteLinks.isNumericID) else { return nil }
             let hash = parts.indices.contains(index + 1) ? parts[index + 1] : query.first { $0.name == "h" }?.value
             return Embed(site: .vimeo, id: parts[index], start: start, hash: hash.flatMap(slug))
         case "tiktok.com", "www.tiktok.com", "m.tiktok.com":
             // @<user>/video/<id>
-            guard parts.count >= 3, parts[1] == "video", parts[2].allSatisfy(\.isNumber) else { return nil }
+            guard parts.count >= 3, parts[1] == "video", SiteLinks.isNumericID(parts[2]) else { return nil }
             return Embed(site: .tiktok, id: parts[2], isPortrait: true)
         case "clips.twitch.tv":
             return parts.first.flatMap(slug).map { Embed(site: .twitch, id: $0) }
@@ -97,8 +97,10 @@ struct Embed: Sendable, Hashable {
         return valid ? string : nil
     }
 
-    /// "90", "90s", "1m30s", "1h2m3s" → seconds.
+    /// "90", "90s", "1m30s", "1h2m3s" → seconds. Twelve characters is more than any video's time needs;
+    /// a longer, made-up one could overflow the sum.
     private static func seconds(_ string: String) -> Int? {
+        guard string.count <= 12, string.allSatisfy(\.isASCII) else { return nil }
         if let plain = Int(string) { return plain }
         var total = 0
         var number = ""

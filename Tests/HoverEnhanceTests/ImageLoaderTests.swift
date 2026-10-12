@@ -59,8 +59,8 @@ struct RefererTests {
     }
 }
 
-/// Serves https://stub.test/<name>.png?size=<bytes>[&declare=0]: a small PNG padded to `size` bytes,
-/// sent in 64 KB pieces, with a Content-Length unless `declare=0`.
+/// Serves https://stub.test/<name>.png?size=<bytes>[&declare=0][&claim=<bytes>]: a small PNG padded to
+/// `size` bytes, sent in 64 KB pieces, with a Content-Length unless `declare=0`, or `claim` if given.
 final class StubImageServer: URLProtocol, @unchecked Sendable {
     static let png: Data = {
         let context = CGContext(data: nil, width: 40, height: 30, bitsPerComponent: 8, bytesPerRow: 0,
@@ -95,7 +95,9 @@ final class StubImageServer: URLProtocol, @unchecked Sendable {
         var body = Self.png
         if body.count < size { body.append(Data(count: size - body.count)) }
         var headers = ["Content-Type": "image/png"]
-        if items.first(where: { $0.name == "declare" })?.value != "0" { headers["Content-Length"] = "\(body.count)" }
+        if items.first(where: { $0.name == "declare" })?.value != "0" {
+            headers["Content-Length"] = items.first { $0.name == "claim" }?.value ?? "\(body.count)"
+        }
         let response = HTTPURLResponse(url: url, statusCode: 200, httpVersion: "HTTP/1.1", headerFields: headers)!
         client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
         var offset = 0
@@ -125,6 +127,16 @@ struct ImageSizeLimitTests {
         let outcome = await downloader.data(for: URLRequest(url: StubImageServer.url(size: 3_000_000)), limit: 1_000_000)
         guard case .tooLarge(let size) = outcome else { Issue.record("expected tooLarge, got \(outcome)"); return }
         #expect(size == 3_000_000)
+    }
+
+    @Test func anImpossibleContentLengthIsRefusedWithoutReservingIt() async {
+        let claim = "100000000000000000"
+        let url = URL(string: "https://stub.test/huge.png?size=1000&claim=\(claim)")!
+        let outcome = await downloader.data(for: URLRequest(url: url), limit: 1_000_000)
+        guard case .tooLarge(let size) = outcome else { Issue.record("expected tooLarge, got \(outcome)"); return }
+        #expect(size == Int64(claim))
+        // Without a limit, only a sensible amount is set aside; this would crash if the claim were believed.
+        _ = await downloader.data(for: URLRequest(url: url), limit: nil)
     }
 
     @Test func withoutAContentLengthItStopsAtTheLimit() async {

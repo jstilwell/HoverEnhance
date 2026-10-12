@@ -244,7 +244,7 @@ final class PreviewController {
         switch media.items[position] {
         case .image(let candidates):
             let outcome = await loader.load(candidates, page: target.page, maxPixelSize: Self.maxPixelSize(),
-                                            byteLimit: allowingLarge ? nil : settings.largestImageBytes)
+                                            byteLimit: allowingLarge ? ImageLoader.largestEver : settings.largestImageBytes)
             guard !Task.isCancelled, self.target == requested else { return false }
             switch outcome {
             case .loaded(let image):
