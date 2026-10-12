@@ -51,7 +51,8 @@ or later.
 
 From the menu bar icon: a shortcut that pauses previews from any app, when they appear (always, or
 while holding a key), the hover delay, apps and websites to skip, what file cards show, preview size,
-and video playback. The menu can also skip the website you're on.
+video playback, and the weather's provider, place, and units. The menu can also skip the website
+you're on.
 
 ## Building from source
 

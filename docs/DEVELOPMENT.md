@@ -77,6 +77,18 @@ app).
   show large in `FileMediaCardView`, with the card beside or below them as `FileMediaLayout`
   decides; songs play through `VideoPlayback` too. `Tests/HoverEnhanceTests/Fixtures` holds tiny
   tagged media for the tests, with the commands that made them.
+- The weather popup: `WeatherTrigger` matches Apple's Weather menu bar item, and `PreviewController`
+  hangs a `WeatherPopupView` under it rather than beside the cursor
+  (`PreviewGeometry.dropDownFrame`, with a tab from the item down to it). `WeatherPopupModel`
+  resolves the place set in Settings (`WeatherLocationChoice`: a `WeatherPlace` found with MapKit's
+  search, or `CurrentLocation` through Core Location, which the hardened runtime allows only with
+  the entitlement in `HoverEnhance.entitlements`), then gets a `WeatherReport`, always metric, from
+  `WeatherService`, which keeps forecasts ten minutes and shows an older one at once while a new one
+  loads. Each provider is a `WeatherSource` (`OpenMeteo`, `OpenWeatherMap`, `WeatherAPIcom`,
+  `TomorrowIO`, `PirateWeather`) fetching through `WeatherHTTP`, which turns HTTP failures into
+  `WeatherError`s the popup explains; `NWSAlerts` adds US alerts when a provider has none. Keys are
+  kept in the Keychain, and `WeatherUnits` writes values in the units chosen.
+  `Tests/HoverEnhanceTests/Fixtures/weather` holds each provider's sample answers.
 - `EmbedPlayer` hosts players in a web view loaded under an HTTPS origin (YouTube needs a
   Referer), with AirPlay and WebRTC off so nothing asks for local network access. Links clicked in a
   player open in the browser, and nothing else can take the page around the player elsewhere. A
