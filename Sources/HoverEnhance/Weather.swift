@@ -93,6 +93,23 @@ struct WeatherReport: Sendable, Equatable {
     }
 
     struct AirQuality: Sendable, Equatable {
+        /// The US EPA's index for these concentrations, from its breakpoints for particles (PM2.5 as revised
+        /// in 2024): for providers that give the amounts but not the index.
+        static func usIndex(pm25: Double?, pm10: Double?) -> Int? {
+            func index(_ value: Double?, _ breakpoints: [(Double, Double, Int, Int)]) -> Int? {
+                guard let value, value >= 0 else { return nil }
+                for (low, high, indexLow, indexHigh) in breakpoints where value <= high {
+                    return Int((Double(indexHigh - indexLow) / (high - low) * (value - low) + Double(indexLow)).rounded())
+                }
+                return 500
+            }
+            let fine = index(pm25.map { ($0 * 10).rounded(.down) / 10 }, [(0, 9, 0, 50), (9.1, 35.4, 51, 100), (35.5, 55.4, 101, 150),
+                                                                         (55.5, 125.4, 151, 200), (125.5, 225.4, 201, 300), (225.5, 325.4, 301, 500)])
+            let coarse = index(pm10.map { $0.rounded(.down) }, [(0, 54, 0, 50), (55, 154, 51, 100), (155, 254, 101, 150), (255, 354, 151, 200),
+                                                                (355, 424, 201, 300), (425, 604, 301, 500)])
+            return [fine, coarse].compactMap { $0 }.max()
+        }
+
         /// The US EPA's index, 0–500.
         var usIndex: Int?
         /// The European Environment Agency's index, 0–100+.
@@ -107,6 +124,19 @@ struct WeatherReport: Sendable, Equatable {
     /// The hours from now on, at most `count`.
     func upcomingHours(_ count: Int, from now: Date = Date()) -> [Hour] {
         Array(hourly.drop { $0.time.addingTimeInterval(3600) <= now }.prefix(count))
+    }
+
+    /// The forecast for the next day, from the step now on: 25 hours, or nine 3-hour steps where that's
+    /// what the provider gives.
+    func nextDay(from now: Date = Date()) -> [Hour] {
+        let upcoming = hourly.drop { $0.time.addingTimeInterval(stepLength) <= now }
+        return Array(upcoming.prefix { $0.time <= now.addingTimeInterval(24 * 3600 + stepLength / 2) })
+    }
+
+    /// Seconds between forecast steps: an hour, or three.
+    var stepLength: TimeInterval {
+        guard hourly.count >= 2 else { return 3600 }
+        return max(3600, hourly[1].time.timeIntervalSince(hourly[0].time))
     }
 
     /// Whether air pressure is rising or falling over the next three hours, from the hourly forecast.
@@ -194,6 +224,17 @@ enum WeatherCondition: String, Sendable, CaseIterable {
         case .hail: "cloud.hail.fill"
         case .windy: "wind"
         }
+    }
+
+    /// How much it matters, for a day's summary: storms over snow over rain over gray skies over clear.
+    private var severity: Int {
+        [.clear, .mostlyClear, .partlyCloudy, .cloudy, .windy, .haze, .fog, .drizzle, .rain, .sleet, .freezingRain, .snow,
+         .heavyRain, .heavySnow, .hail, .thunderstorm].firstIndex(of: self) ?? 0
+    }
+
+    /// The most notable of several, as a day's worth of steps is summed up.
+    static func worst(_ conditions: [WeatherCondition]) -> WeatherCondition {
+        conditions.max { $0.severity < $1.severity } ?? .cloudy
     }
 
     /// Whether anything is falling.

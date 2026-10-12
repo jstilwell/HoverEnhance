@@ -63,6 +63,131 @@ struct OpenMeteoTests {
     }
 }
 
+struct OpenWeatherMapTests {
+    @Test func theDocumentedExampleReadsInFull() throws {
+        let rome = try #require(TimeZone(identifier: "Europe/Rome"))
+        let report = try OpenWeatherMap.report(current: try fixture("owm-weather"), forecast: try fixture("owm-forecast"), air: try fixture("owm-air"),
+                                               timeZone: rome, fetched: Date())
+        #expect(report.provider == .openWeatherMap && report.timeZone == rome)
+        #expect(report.current.temperature == 25.33 && report.current.condition == .rain && report.current.isDay)
+        #expect(report.current.visibility == 10 && report.current.pressure == 1015 && report.current.precipitation == 3.16)
+        // Not given by the free API: worked out from temperature and humidity.
+        #expect(report.current.dewPoint.map { (18 ... 19).contains($0) } == true)
+        #expect(report.hourly.count == 4 && report.hourly[0].precipitationChance == 32)
+        #expect(!report.daily.isEmpty && report.daily[0].sunrise != nil)
+        // OpenWeatherMap's own index is 1 to 5; the US one comes from the particle amounts.
+        #expect(report.air?.usIndex == 77 && report.air?.pm25 == 23.253)
+    }
+
+    @Test func conditionCodesBecomeConditions() {
+        #expect(OpenWeatherMap.condition(211) == .thunderstorm)
+        #expect(OpenWeatherMap.condition(502) == .heavyRain)
+        #expect(OpenWeatherMap.condition(511) == .freezingRain)
+        #expect(OpenWeatherMap.condition(613) == .sleet)
+        #expect(OpenWeatherMap.condition(741) == .fog)
+        #expect(OpenWeatherMap.condition(800) == .clear && OpenWeatherMap.condition(804) == .cloudy)
+    }
+
+    @Test func theKeyGoesOnlyInTheQuery() throws {
+        let url = try #require(OpenWeatherMap.request("weather", at: Coordinate(latitude: 40.712776, longitude: -74.005974), key: "abc123")?.url)
+        #expect(url.host() == "api.openweathermap.org" && url.query()?.contains("appid=abc123") == true && url.query()?.contains("lat=40.71") == true)
+    }
+}
+
+struct WeatherAPIcomTests {
+    @Test func aForecastReadsInFull() throws {
+        let fetched = Date(timeIntervalSince1970: 1_774_203_300)
+        let report = try WeatherAPIcom.report(from: try fixture("weatherapi-forecast"), timeZone: .current, fetched: fetched)
+        #expect(report.timeZone.identifier == "Europe/London")
+        #expect(report.current.temperature == 12.3 && report.current.condition == .partlyCloudy)
+        #expect(report.hourly.count == 72 && report.daily.count == 3)
+        // Sunrise is written as local 12-hour time.
+        let sunrise = try #require(report.daily[0].sunrise)
+        #expect(WeatherTimes(timeZone: report.timeZone).time(sunrise).replacingOccurrences(of: "\u{202F}", with: " ") == "6:03 AM")
+        #expect(report.alerts.map(\.title) == ["Wind Advisory"])
+        // The US category (1 to 6) isn't the index; the index comes from PM2.5.
+        #expect(report.air?.usIndex == 46)
+        // Wind comes in km/h and is kept in m/s.
+        #expect(report.current.windSpeed.map { $0 < 30 } == true)
+    }
+
+    @Test func conditionCodesBecomeConditions() {
+        #expect(WeatherAPIcom.condition(1000) == .clear && WeatherAPIcom.condition(1195) == .heavyRain)
+        #expect(WeatherAPIcom.condition(1201) == .freezingRain && WeatherAPIcom.condition(1225) == .heavySnow)
+        #expect(WeatherAPIcom.condition(1276) == .thunderstorm && WeatherAPIcom.condition(1135) == .fog)
+    }
+}
+
+struct TomorrowIOTests {
+    @Test func theDocumentedExampleReadsInFull() throws {
+        let newYork = try #require(TimeZone(identifier: "America/New_York"))
+        let report = try TomorrowIO.report(forecast: try fixture("tomorrow-forecast"), realtime: try fixture("tomorrow-realtime"), timeZone: newYork, fetched: Date())
+        #expect(report.minutely.count == 60 && report.hourly.count == 120 && report.daily.count == 7)
+        #expect(report.current.temperature == 1.88 && report.current.condition == .cloudy)
+        // Days start at 6 am local, and are told by their date there.
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = newYork
+        #expect(calendar.dateComponents([.month, .day, .hour], from: report.daily[0].date) == DateComponents(month: 2, day: 8, hour: 0))
+        #expect(report.daily[0].condition == .snow && report.daily[0].high == -1.7)
+        #expect(report.daily.allSatisfy { $0.sunrise != nil })
+    }
+
+    @Test func withoutRealtimeTheHourStandsIn() throws {
+        let report = try TomorrowIO.report(forecast: try fixture("tomorrow-forecast"), realtime: nil, timeZone: .current, fetched: Date())
+        #expect(report.current.pressure != nil)
+    }
+
+    @Test func weatherCodesBecomeConditions() {
+        #expect(TomorrowIO.condition(1100) == .mostlyClear && TomorrowIO.condition(4201) == .heavyRain)
+        #expect(TomorrowIO.condition(6201) == .freezingRain && TomorrowIO.condition(7101) == .sleet)
+        #expect(TomorrowIO.condition(80001) == .thunderstorm && TomorrowIO.condition(21070) == .fog)
+    }
+}
+
+struct PirateWeatherTests {
+    @Test func aForecastReadsInFull() throws {
+        let fetched = Date(timeIntervalSince1970: 1_762_718_100)
+        let report = try PirateWeather.report(from: try fixture("pirateweather-forecast"), timeZone: .current, fetched: fetched)
+        #expect(report.timeZone.identifier == "America/Toronto")
+        #expect(report.current.temperature == -0.88 && report.current.condition == .snow)
+        // Fractions become percents.
+        #expect(report.current.humidity == 82)
+        #expect(report.minutely.count == 61 && report.hourly.count == 48 && report.daily.count == 8)
+        #expect(report.alerts.count == 1 && report.alerts[0].url != nil)
+        // In SI units the index is Europe's.
+        #expect(report.air?.europeanIndex == 18)
+        #expect(report.hourly.contains { $0.condition == .freezingRain })
+    }
+
+    @Test func iconsBecomeConditions() {
+        #expect(PirateWeather.condition(["icon": "rain", "precipIntensity": 9.0]) == .heavyRain)
+        #expect(PirateWeather.condition(["icon": "sleet", "precipType": "ice"]) == .freezingRain)
+        #expect(PirateWeather.condition(["icon": "partly-cloudy-night"]) == .partlyCloudy)
+        #expect(PirateWeather.condition(["icon": "wind"]) == .windy)
+    }
+
+    @Test func theKeyIsAPathSegment() throws {
+        let url = try #require(PirateWeather.request(at: Coordinate(latitude: 43.65, longitude: -79.38), key: "abc")?.url?.absoluteString)
+        #expect(url.hasPrefix("https://api.pirateweather.net/forecast/abc/43.65,-79.38?") && url.contains("units=si") && url.contains("version=2"))
+    }
+}
+
+struct QuotaTests {
+    @Test func aUsedUpQuotaIsntABadKey() {
+        #expect(URLSessionWeatherHTTP.saysQuota(Data(#"{"error":{"code":2007,"message":"API key has exceeded calls per month quota."}}"#.utf8)))
+        #expect(!URLSessionWeatherHTTP.saysQuota(Data(#"{"error":{"code":2006,"message":"API key is invalid."}}"#.utf8)))
+    }
+}
+
+struct AirQualityIndexTests {
+    @Test func theUSIndexFollowsTheEPABreakpoints() {
+        #expect(WeatherReport.AirQuality.usIndex(pm25: 9, pm10: nil) == 50)
+        #expect(WeatherReport.AirQuality.usIndex(pm25: 35.4, pm10: nil) == 100)
+        #expect(WeatherReport.AirQuality.usIndex(pm25: 3, pm10: 160) == 103)
+        #expect(WeatherReport.AirQuality.usIndex(pm25: nil, pm10: nil) == nil)
+    }
+}
+
 struct NWSAlertsTests {
     @Test func activeAlertsComeOnceEachMostSevereFirst() throws {
         // At 10 AM in Arizona, the 5 AM alerts have ended.

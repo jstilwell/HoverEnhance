@@ -28,3 +28,9 @@ Real answers from the providers that need no key, for the parsers: Open-Meteo fo
 point (Berlin, 52.52,13.41) on 2026-10-12, asked exactly as `OpenMeteo.forecastRequest` and `airRequest` ask,
 and the National Weather Service's active alerts for Arizona that day (`/alerts/active?area=AZ`; a `point=`
 answer has the same shape). Neither holds anything personal.
+
+The keyed providers' samples come from their documentation, as no key was used to make them:
+`owm-*.json` are OpenWeatherMap's examples (converted from Kelvin to °C, as `units=metric` answers),
+`tomorrow-*.json` are Tomorrow.io's examples verbatim, and `weatherapi-forecast.json` and
+`pirateweather-forecast.json` are built on WeatherAPI.com's and Pirate Weather's own examples, filled out
+with made-up values to their published schemas.

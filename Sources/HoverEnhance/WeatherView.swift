@@ -45,9 +45,9 @@ private struct WeatherDashboard: View {
                 .padding(.horizontal, 18)
                 .padding(.top, 16)
                 .padding(.bottom, 14)
-            if !hidden.contains(.hourly), report.upcomingHours(25).count >= 2 {
+            if !hidden.contains(.hourly), report.nextDay().count >= 2 {
                 Divider()
-                HourlyStrip(hours: report.upcomingHours(25), units: units, times: times)
+                HourlyStrip(hours: report.nextDay(), units: units, times: times)
                     .padding(.horizontal, 18)
                     .padding(.vertical, 12)
             }
@@ -218,9 +218,16 @@ private struct HourlyStrip: View {
     let units: WeatherUnits
     let times: WeatherTimes
 
-    /// A column every two hours, from now; the chart under them spans the same hours.
-    private var columns: [WeatherReport.Hour] { hours.enumerated().filter { $0.offset % 2 == 0 }.map(\.element) }
-    private var span: ClosedRange<Double> { -1 ... Double(columns.count * 2 - 1) }
+    /// Hourly forecasts get a column every two hours; 3-hour ones, one per step. The charts under the
+    /// columns place each step by its time, so the two line up.
+    private var stride: Int { hours.count >= 2 && hours[1].time.timeIntervalSince(hours[0].time) >= 2 * 3600 ? 1 : 2 }
+    private var columns: [WeatherReport.Hour] { hours.enumerated().filter { $0.offset % stride == 0 }.map(\.element) }
+    private var columnHours: Double {
+        guard columns.count >= 2 else { return 2 }
+        return columns[1].time.timeIntervalSince(columns[0].time) / 3600
+    }
+    private var span: ClosedRange<Double> { -columnHours / 2 ... Double(columns.count - 1) * columnHours + columnHours / 2 }
+    private func x(_ hour: WeatherReport.Hour) -> Double { hour.time.timeIntervalSince(hours[0].time) / 3600 }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -241,15 +248,15 @@ private struct HourlyStrip: View {
             }
             Chart {
                 ForEach(Array(hours.enumerated()), id: \.offset) { index, hour in
-                    AreaMark(x: .value("Hour", Double(index)), yStart: .value("Floor", lowest - 2), yEnd: .value("Temperature", shown(hour.temperature)))
+                    AreaMark(x: .value("Hour", x(hour)), yStart: .value("Floor", lowest - 2), yEnd: .value("Temperature", shown(hour.temperature)))
                         .interpolationMethod(.catmullRom)
                         .foregroundStyle(.linearGradient(colors: [.orange.opacity(0.28), .orange.opacity(0.02)], startPoint: .top, endPoint: .bottom))
-                    LineMark(x: .value("Hour", Double(index)), y: .value("Temperature", shown(hour.temperature)))
+                    LineMark(x: .value("Hour", x(hour)), y: .value("Temperature", shown(hour.temperature)))
                         .interpolationMethod(.catmullRom)
                         .foregroundStyle(.orange)
                         .lineStyle(StrokeStyle(lineWidth: 2, lineCap: .round))
-                    if index % 2 == 0 {
-                        PointMark(x: .value("Hour", Double(index)), y: .value("Temperature", shown(hour.temperature)))
+                    if index % stride == 0 {
+                        PointMark(x: .value("Hour", x(hour)), y: .value("Temperature", shown(hour.temperature)))
                             .symbolSize(18)
                             .foregroundStyle(.orange)
                             .annotation(position: .top, spacing: 3) {
@@ -265,8 +272,9 @@ private struct HourlyStrip: View {
             .frame(height: 62)
             if hours.contains(where: { ($0.precipitationChance ?? 0) >= 10 }) {
                 Chart {
-                    ForEach(Array(hours.enumerated()), id: \.offset) { index, hour in
-                        BarMark(x: .value("Hour", Double(index)), yStart: .value("None", 0), yEnd: .value("Chance", hour.precipitationChance ?? 0), width: .ratio(0.6))
+                    ForEach(Array(hours.enumerated()), id: \.offset) { _, hour in
+                        BarMark(x: .value("Hour", x(hour)), yStart: .value("None", 0), yEnd: .value("Chance", hour.precipitationChance ?? 0),
+                                width: .ratio(stride == 1 ? 0.35 : 0.6))
                             .foregroundStyle(.blue.opacity(0.55))
                             .cornerRadius(2)
                     }

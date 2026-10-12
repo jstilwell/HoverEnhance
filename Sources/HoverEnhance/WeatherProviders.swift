@@ -44,7 +44,7 @@ enum WeatherProviderID: String, CaseIterable, Identifiable, Codable, Sendable {
     var attribution: (text: String, url: URL) {
         switch self {
         case .openMeteo: ("Weather data by Open-Meteo.com", URL(string: "https://open-meteo.com/")!)
-        case .openWeatherMap: ("Weather data from OpenWeather", URL(string: "https://openweathermap.org/")!)
+        case .openWeatherMap: ("Weather data provided by OpenWeather", URL(string: "https://openweathermap.org/")!)
         case .weatherAPI: ("Powered by WeatherAPI.com", URL(string: "https://www.weatherapi.com/")!)
         case .tomorrow: ("Powered by Tomorrow.io", URL(string: "https://www.tomorrow.io/")!)
         case .pirateWeather: ("Powered by Pirate Weather", URL(string: "https://pirateweather.net/")!)
@@ -94,6 +94,24 @@ protocol WeatherHTTP: Sendable {
     func data(for request: URLRequest) async throws(WeatherError) -> Data
 }
 
+extension URLSessionWeatherHTTP {
+    static func saysQuota(_ body: Data) -> Bool {
+        let text = String(decoding: body.prefix(600), as: UTF8.self).lowercased()
+        return ["quota", "exceeded", "limit"].contains { text.contains($0) }
+    }
+}
+
+extension WeatherHTTP {
+    /// The data or what went wrong, for a request made alongside another.
+    func result(for request: URLRequest) async -> Result<Data, WeatherError> {
+        do throws(WeatherError) {
+            return .success(try await data(for: request))
+        } catch {
+            return .failure(error)
+        }
+    }
+}
+
 struct URLSessionWeatherHTTP: WeatherHTTP {
     let session: URLSession
 
@@ -119,7 +137,8 @@ struct URLSessionWeatherHTTP: WeatherHTTP {
         guard let status = (response as? HTTPURLResponse)?.statusCode else { throw .unavailable(nil) }
         switch status {
         case 200..<300: return data
-        case 401, 403: throw .badKey
+        // A used-up quota comes back as 403 from some (WeatherAPI.com's code 2007), which isn't a bad key.
+        case 401, 403: throw Self.saysQuota(data) ? .rateLimited : .badKey
         case 429: throw .rateLimited
         default: throw .unavailable(status)
         }
