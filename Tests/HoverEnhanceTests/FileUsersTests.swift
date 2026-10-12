@@ -63,6 +63,16 @@ struct FileUsersTests {
         #expect(users.contains { $0.name == "Finder" && $0.use == .running })
     }
 
+    @Test func aCardThatsGoneStopsLooking() async {
+        let found = await Task {
+            withUnsafeCurrentTask { $0?.cancel() }
+            // Everything is using the startup disk's root, so only stopping early leaves this empty.
+            return await FileUsers.find(URL(filePath: "/"))
+        }.value
+        #expect(found.isEmpty)
+        #expect(!(await FileUsers.find(URL(filePath: "/"))).isEmpty)
+    }
+
     @Test func nothingUsesAFreshFile() async throws {
         let file = try tempFile()
         defer { try? FileManager.default.removeItem(at: file) }

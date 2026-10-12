@@ -35,13 +35,15 @@ struct FileUser: Sendable, Equatable, Identifiable {
 /// Finds who's using a file or folder, and quits them.
 enum FileUsers {
     /// Everyone using the item at `url`, apart from `ownPID`. Asks every app about its windows and looks
-    /// through every process's open files, which takes a few hundred milliseconds.
+    /// through every process's open files, which takes a few hundred milliseconds. Both run as child
+    /// tasks, so a card that goes away cancels them, and each stops between its steps.
     static func find(_ url: URL, excluding ownPID: pid_t = getpid()) async -> [FileUser] {
         let path = FileCard.path(of: url)
-        async let windows = Task.detached { appsShowing(path) }.value
-        async let holders = Task.detached { processesUsing(path) }.value
+        async let windows = appsShowing(path)
+        async let holders = processesUsing(path)
         var uses = await holders
         for (pid, use) in await windows { uses[pid] = min(uses[pid] ?? use, use) }
+        guard !Task.isCancelled else { return [] }
         for app in runningApps(at: path) { uses[app] = .running }
         uses[ownPID] = nil
         return uses.map { FileUser(pid: $0.key, started: startTime(of: $0.key), name: name(of: $0.key), executable: executable(of: $0.key),
@@ -61,6 +63,7 @@ enum FileUsers {
     /// Apps with a window whose document is `path`. Document apps such as Preview and TextEdit read a
     /// file and close it, so only their windows tell that it's open.
     private static func appsShowing(_ path: String) -> [pid_t: FileUser.Use] {
+        guard !Task.isCancelled else { return [:] }
         let target = canonical(path)
         let apps = NSWorkspace.shared.runningApplications.filter { $0.activationPolicy == .regular }.map(\.processIdentifier)
         let found = OSAllocatedUnfairLock<[pid_t: FileUser.Use]>(initialState: [:])
@@ -83,6 +86,7 @@ enum FileUsers {
     /// Processes with `path` open, mapped, or as their working folder; for a volume other than the
     /// startup disk, those with anything open on it.
     private static func processesUsing(_ path: String) -> [pid_t: FileUser.Use] {
+        guard !Task.isCancelled else { return [:] }
         let values = try? URL(filePath: path).resourceValues(forKeys: [.isDirectoryKey, .isVolumeKey, .volumeIsRootFileSystemKey])
         let isVolume = values?.isVolume == true && values?.volumeIsRootFileSystem != true
         // Watchers such as Finder's open files only to hear about changes; they don't count.
@@ -97,6 +101,7 @@ enum FileUsers {
 
         var uses: [pid_t: FileUser.Use] = [:]
         for pid in pids.prefix(Int(bytes) / MemoryLayout<pid_t>.size) where pid > 0 {
+            if Task.isCancelled { return [:] }
             if isVolume {
                 uses[pid] = .onVolume
             } else if isFolder, workingFolder(of: pid).map({ $0.dev == UInt32(bitPattern: info.st_dev) && $0.inode == info.st_ino }) == true {
