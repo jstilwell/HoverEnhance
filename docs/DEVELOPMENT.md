@@ -90,6 +90,8 @@ update only if it's signed with the key whose public half is `SUPublicEDKey`. To
 1. Raise `CFBundleShortVersionString` in `Resources/Info.plist` and add a dated entry for it to
    `CHANGELOG.md` (its bullets become the release notes).
 2. Commit, then run `./bin/build-release.sh --upload`.
+3. Bring [hoverenhance.com](https://hoverenhance.com) up to date: the `FALLBACK` release in its
+   `src/routes/+page.server.ts`, and anything else the release changes.
 
 The script builds a universal app signed with Developer ID and the hardened runtime, puts it in a
 signed DMG, notarizes and staples it, signs the update and the appcast, and publishes both as a
