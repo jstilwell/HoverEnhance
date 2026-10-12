@@ -9,10 +9,13 @@ All notable changes to this project will be documented in this file.
 - Press Esc to close any preview.
 - Set a shortcut in Settings → General to show or hide previews from any app.
 - Skip previews on websites you choose, in Settings → Sites, or from the menu bar for the one you're on.
+- The welcome window warns when HoverEnhance is running from its disk image, where its access wouldn't last, and says to move it to Applications.
+- The welcome window's last screen says how to zoom, step through albums, and change a video's volume.
 - A preview that couldn't load says so for a moment, instead of its spinner just vanishing.
 
 ### Changed
 
+- The welcome window's Open System Settings adds HoverEnhance to the Accessibility list, so you only have to turn it on.
 - Pausing previews, quitting, or excluding Chrome or an Electron app switches off the accessibility mode HoverEnhance turned on there, so window managers like Rectangle move its windows without animating again.
 - Excluded apps, and apps that can't show previews, are no longer looked into at all.
 - The shortest hover delay is 50 ms.

@@ -7,8 +7,27 @@ enum AccessibilityPermission {
 
     static let settingsURL = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!
 
+    /// Adds the app to the Accessibility list, switched off, so it's there to turn on (macOS may say so
+    /// in an alert of its own the first time), and opens the list.
     static func openSettings() {
+        // kAXTrustedCheckOptionPrompt, by its value: Swift 6 won't read the C global.
+        _ = AXIsProcessTrustedWithOptions(["AXTrustedCheckOptionPrompt": true] as CFDictionary)
         NSWorkspace.shared.open(settingsURL)
+    }
+}
+
+/// Where the app is running from.
+enum AppLocation {
+    /// Run from the disk image, or from where macOS runs a downloaded app it hasn't seen moved
+    /// (App Translocation): Accessibility access granted there doesn't last, and updates can't install.
+    static var isTemporary: Bool {
+        let readOnly = (try? Bundle.main.bundleURL.resourceValues(forKeys: [.volumeIsReadOnlyKey]))?.volumeIsReadOnly ?? false
+        return isTemporary(Bundle.main.bundlePath, onReadOnlyVolume: readOnly)
+    }
+
+    /// A disk image mounts read-only under /Volumes; a writable drive there is a fine place for apps.
+    static func isTemporary(_ path: String, onReadOnlyVolume readOnly: Bool) -> Bool {
+        path.contains("/AppTranslocation/") || (readOnly && path.hasPrefix("/Volumes/"))
     }
 }
 

@@ -18,7 +18,8 @@ Release builds keep hover details out of the log; debug builds log them for `mak
 `Tests/Manual/preview-test.html` has an example, or where to find one, for each preview case.
 
 Nothing runs without Accessibility access. On first launch a welcome window opens the Accessibility
-settings and offers the app's icon to drag into the list; the app starts once access is on, and the
+settings, adding the app to the list there (`AXIsProcessTrustedWithOptions`), and offers its icon to
+drag in should it be missing; it warns when the app runs from the disk image; the app starts once access is on, and the
 window comes back if access is turned off. The bundle is signed with your first Apple Development /
 Developer ID identity so the grant survives rebuilds. With ad-hoc signing you'd have to re-grant
 after every build (the welcome window explains how to remove and re-add the app).
