@@ -19,8 +19,6 @@ final class FileCard {
     private(set) var thumbnail: NSImage?
     /// Who signed an app; nil for anything else.
     private(set) var signature: FileDetails.Lookup<String>?
-    /// Uncommitted changes in a Git repository; nil for anything else.
-    private(set) var gitChanges: FileDetails.Lookup<Int>?
     /// Who's using it; nil while looking.
     private(set) var users: [FileUser]?
     private(set) var userIcons: [pid_t: NSImage] = [:]
@@ -44,18 +42,14 @@ final class FileCard {
         name = FileManager.default.displayName(atPath: path)
         icon = NSWorkspace.shared.icon(forFile: path)
         if details.app != nil, options.shows(.signature) { signature = .loading }
-        if details.git != nil, options.shows(.gitChanges) { gitChanges = .loading }
     }
 
-    /// The signature and Git changes, which take longer than the rest.
+    /// The signature, which takes longer than the rest.
     func loadSlowDetails() async {
         if signature == .loading {
             let url = url
             let found = await Task.detached { AppBundleInfo.signature(of: url) }.value
             signature = found.map { .found($0) } ?? .failed
-        }
-        if gitChanges == .loading {
-            gitChanges = await GitRepository.changeCount(in: url).map { .found($0) } ?? .failed
         }
     }
 
@@ -71,7 +65,7 @@ final class FileCard {
         return [details.kind, size].compactMap { $0 }.joined(separator: " · ")
     }
 
-    var rows: [DetailRow] { details.rows(pathStyle: options.pathStyle, signature: signature, changes: gitChanges) }
+    var rows: [DetailRow] { details.rows(pathStyle: options.pathStyle, signature: signature) }
 
     static let pathID = "path"
     static let linkTargetID = "linkTarget"

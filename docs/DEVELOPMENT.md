@@ -57,9 +57,9 @@ after every build (the welcome window explains how to remove and re-add the app)
   or the item's group. `FileDetails` reads the card's details from Spotlight and Finder's records
   first, so protected folders aren't opened just to describe a file; `FileStatus` covers tags, iCloud,
   quarantine, and aliases, `ZipSummary` reads a zip's central directory, `AppBundleInfo` an app's
-  Info.plist and signature, and `GitRepository` a repository's `.git`. Uncommitted changes come from
-  `git status`, with the repository's ability to run commands switched off, or not at all when its
-  config could still run one. `FileUsers` finds apps whose windows show the file (`AXDocument`) and
+  Info.plist and signature, and `GitRepository` a repository's branch and remote from its `.git`. Git
+  itself is never run: a repository's settings can make it run commands, and a hovered folder can come
+  from anywhere. `FileUsers` finds apps whose windows show the file (`AXDocument`) and
   processes that hold it open, map it, or work in it (`proc_listpidspath`), and quits them. The card
   grows as slower details fill in (`CardHostingView`). `MediaMetadata` reads audio and video files'
   own tags (ID3, iTunes, QuickTime) and tracks with AVFoundation, since Spotlight often hasn't. Images,

@@ -103,14 +103,13 @@ struct GitRepositoryTests {
         #expect(GitRepository.webPage(of: "ssh://git@git.example.com/team/repo.git") == nil)
     }
 
-    @Test func repositoriesReadTheirBranchRemoteAndChanges() async throws {
-        let git = try #require(GitRepository.executable, "the developer tools' Git is needed")
+    @Test func repositoriesReadTheirBranchAndRemote() async throws {
         let scratch = try Scratch()
         let repo = scratch.folder.appending(path: "repo", directoryHint: .isDirectory)
         let path = repo.path(percentEncoded: false)
-        let gitPath = git.path(percentEncoded: false)
         func run(_ arguments: [String]) throws {
-            #expect(try scratch.run(gitPath, ["-c", "user.name=Test", "-c", "user.email=test@example.com", "-C", path] + arguments) == 0)
+            // Only the test runs Git, to make a real repository; the app reads it without Git.
+            #expect(try scratch.run("/usr/bin/git", ["-c", "user.name=Test", "-c", "user.email=test@example.com", "-C", path] + arguments) == 0)
         }
         try FileManager.default.createDirectory(at: repo, withIntermediateDirectories: true)
         try run(["init", "-q", "-b", "main"])
@@ -120,98 +119,57 @@ struct GitRepositoryTests {
         try run(["commit", "-q", "-m", "first"])
 
         #expect(GitRepository.read(repo) == GitRepository(head: .branch("main"), remote: "https://github.com/someone/project.git"))
-        #expect(await GitRepository.changeCount(in: repo) == 0)
-        try Data("changed".utf8).write(to: repo.appending(path: "a.txt"))
-        try Data("new".utf8).write(to: repo.appending(path: "b.txt"))
-        #expect(await GitRepository.changeCount(in: repo) == 2)
 
         // A worktree's .git is a file pointing at the real one; its remote comes from the main repository.
         let worktree = scratch.folder.appending(path: "worktree", directoryHint: .isDirectory)
         try run(["worktree", "add", "-q", "-b", "side", worktree.path(percentEncoded: false)])
         #expect(GitRepository.read(worktree) == GitRepository(head: .branch("side"), remote: "https://github.com/someone/project.git"))
+        // However the folder's URL is written.
+        #expect(GitRepository.read(URL(filePath: String(worktree.path(percentEncoded: false).dropLast())))?.head == .branch("side"))
 
         #expect(GitRepository.read(scratch.folder) == nil)
-        #expect(await GitRepository.changeCount(in: scratch.folder) == nil)
     }
 
-    @Test func repositoriesThatWouldRunCommandsArentAsked() async throws {
-        let git = try #require(GitRepository.executable, "the developer tools' Git is needed")
+    @Test func aCommonDirectoryIsFoundInsideTheGitDirectory() throws {
+        let scratch = try Scratch()
+        let gitDirectory = scratch.folder.appending(path: ".git", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: gitDirectory.appending(path: "shared"), withIntermediateDirectories: true)
+        try Data("ref: refs/heads/main\n".utf8).write(to: gitDirectory.appending(path: "HEAD"))
+        try Data("shared\n".utf8).write(to: gitDirectory.appending(path: "commondir"))
+        try Data("[remote \"origin\"]\n\turl = https://example.com/inside.git\n".utf8).write(to: gitDirectory.appending(path: "shared/config"))
+        // Where it would be if `commondir` were taken as relative to the folder instead, as it once was.
+        try FileManager.default.createDirectory(at: scratch.folder.appending(path: "shared"), withIntermediateDirectories: true)
+        try Data("[remote \"origin\"]\n\turl = https://example.com/outside.git\n".utf8).write(to: scratch.folder.appending(path: "shared/config"))
+
+        #expect(GitRepository.read(scratch.folder)?.remote == "https://example.com/inside.git")
+    }
+
+    @Test func hoveringARepositoryRunsNothingInIt() throws {
         let scratch = try Scratch()
         let marker = scratch.folder.appending(path: "ran")
         let payload = scratch.folder.appending(path: "payload.sh")
         try Data("#!/bin/sh\ntouch '\(marker.path(percentEncoded: false))'\n".utf8).write(to: payload)
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: payload.path(percentEncoded: false))
+        let repo = scratch.folder.appending(path: "repo", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: repo.appending(path: ".git"), withIntermediateDirectories: true)
+        try Data("ref: refs/heads/main\n".utf8).write(to: repo.appending(path: ".git/HEAD"))
+        let config = "[core]\n\tfsmonitor = \(payload.path(percentEncoded: false))\n[filter \"evil\"]\n\tclean = \(payload.path(percentEncoded: false))\n"
+        try Data(config.utf8).write(to: repo.appending(path: ".git/config"))
+        try Data("* filter=evil\n".utf8).write(to: repo.appending(path: ".gitattributes"))
+        try Data("x".utf8).write(to: repo.appending(path: "file.txt"))
 
-        func repository(_ name: String, config: String) throws -> URL {
-            let repo = scratch.folder.appending(path: name, directoryHint: .isDirectory)
-            try FileManager.default.createDirectory(at: repo, withIntermediateDirectories: true)
-            #expect(try scratch.run(git.path(percentEncoded: false), ["-C", repo.path(percentEncoded: false), "init", "-q"]) == 0)
-            let handle = try FileHandle(forWritingTo: repo.appending(path: ".git/config"))
-            try handle.seekToEnd()
-            try handle.write(contentsOf: Data(config.utf8))
-            try handle.close()
-            try Data("x".utf8).write(to: repo.appending(path: "file.txt"))
-            try Data("* filter=evil\n".utf8).write(to: repo.appending(path: ".gitattributes"))
-            return repo
-        }
-        let payloadPath = payload.path(percentEncoded: false)
-
-        // A file system monitor is switched off from the command line, so this one is asked, safely.
-        let monitor = try repository("monitor", config: "[core]\n\tfsmonitor = \(payloadPath)\n")
-        #expect(await GitRepository.changeCount(in: monitor) == 2)
+        let details = FileDetails.load(repo, options: FileCardOptions())
+        #expect(details.git?.head == .branch("main"))
         #expect(!FileManager.default.fileExists(atPath: marker.path(percentEncoded: false)))
-
-        // Filters can't be, so a repository defining one, or pulling in other settings, isn't asked.
-        let filter = try repository("filter", config: "[filter \"evil\"]\n\tclean = \(payloadPath)\n")
-        #expect(await GitRepository.changeCount(in: filter) == nil)
-        let include = try repository("include", config: "[include]\n\tpath = ../../elsewhere.config\n")
-        #expect(await GitRepository.changeCount(in: include) == nil)
-        #expect(!FileManager.default.fileExists(atPath: marker.path(percentEncoded: false)))
-
-        // A config Git could read but HoverEnhance can't is refused too.
-        let unreadable = try repository("unreadable", config: "")
-        try FileManager.default.setAttributes([.posixPermissions: 0o000], ofItemAtPath: unreadable.appending(path: ".git/config").path(percentEncoded: false))
-        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: unreadable.appending(path: ".git/config").path(percentEncoded: false)) }
-        #expect(GitRepository.configRunsCommands(unreadable))
-        #expect(!GitRepository.configRunsCommands(monitor))
     }
 
-    @Test func configChecksIgnoreCaseAndBadBytes() {
-        func runs(_ text: String) -> Bool { GitRepository.configMayRunCommands(Data(text.utf8)) }
-        #expect(runs("[includeIf \"gitdir:~/work/\"]\n\tpath = x"))
-        #expect(runs("[FILTER \"x\"]\n\tClean = y"))
-        #expect(runs("[filter.x]\nclean = y"))
-        #expect(runs("[core] sshCommand = evil"))
-        #expect(runs("[extensions]\n\tpartialClone = origin"))
-        #expect(runs("[remote \"origin\"]\n\tpromisor = true"))
-        // Bytes that aren't UTF-8 can't hide a filter.
-        #expect(GitRepository.configMayRunCommands(Data([0xFF, 0xFE]) + Data("[filter \"x\"]".utf8) + Data([0xC3])))
-        #expect(!runs("[core]\n\tbare = false\n\tfsmonitor = true\n[remote \"origin\"]\n\turl = git@github.com:a/b.git"))
-    }
-
-    @Test func aHungGitIsGivenUpOn() async throws {
-        let scratch = try Scratch()
-        let slow = scratch.folder.appending(path: "slow-git")
-        // The sleep is a child that keeps the output open after the script itself is stopped.
-        try Data("#!/bin/sh\nsleep 10\ntrue\n".utf8).write(to: slow)
-        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: slow.path(percentEncoded: false))
-        // Looks enough like a repository for Git to be run.
-        try FileManager.default.createDirectory(at: scratch.folder.appending(path: ".git"), withIntermediateDirectories: true)
-        let start = Date()
-        #expect(await GitRepository.changeCount(in: scratch.folder, git: slow, timeout: 0.3) == nil)
-        #expect(Date().timeIntervalSince(start) > 0.25)
-        #expect(Date().timeIntervalSince(start) < 3)
-    }
-
-    @Test func gitRowsAndChangeCounts() {
+    @Test func gitRows() {
         var details = FileDetails()
         details.git = GitRepository(head: .detached("88dc125"), remote: "git@github.com:a/b.git")
-        let rows = details.rows(pathStyle: .full, changes: .found(3))
-        #expect(rows.map(\.label) == ["Branch", "Remote", "Changes"])
+        let rows = details.rows(pathStyle: .full)
+        #expect(rows.map(\.label) == ["Branch", "Remote"])
         #expect(rows[0].value == .text("Detached at 88dc125") && rows[0].copyText == "88dc125")
         #expect(rows[1].value == .link("github.com/a/b", URL(string: "https://github.com/a/b")!))
         #expect(rows[1].copyText == "git@github.com:a/b.git")
-        #expect(rows[2].value == .text("3 uncommitted changes"))
-        #expect(details.rows(pathStyle: .full, changes: .found(0)).last?.value == .text("None"))
     }
 }

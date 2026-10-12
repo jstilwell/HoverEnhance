@@ -11,7 +11,7 @@ enum FileCardField: String, CaseIterable, Identifiable, Sendable {
     case music, recording, dimensions, duration, pages, camera, exposure, codecs, mediaFormat
     case archive
     case appVersion, bundleID, architectures, minimumSystem, signature
-    case gitBranch, gitChanges
+    case gitBranch
     case users
 
     /// Sections of the card, and of its settings.
@@ -50,7 +50,7 @@ enum FileCardField: String, CaseIterable, Identifiable, Sendable {
         case .dimensions, .duration, .pages, .camera, .exposure, .recording, .codecs, .mediaFormat, .music: .media
         case .archive: .archives
         case .appVersion, .bundleID, .architectures, .minimumSystem, .signature: .apps
-        case .gitBranch, .gitChanges: .git
+        case .gitBranch: .git
         case .users: .inUse
         }
     }
@@ -85,7 +85,6 @@ enum FileCardField: String, CaseIterable, Identifiable, Sendable {
         case .minimumSystem: "Minimum macOS"
         case .signature: "Code signature"
         case .gitBranch: "Branch and remote"
-        case .gitChanges: "Uncommitted changes"
         case .users: "Apps using it"
         }
     }
@@ -118,7 +117,6 @@ enum FileCardField: String, CaseIterable, Identifiable, Sendable {
         case .minimumSystem: "The oldest macOS it runs on"
         case .signature: "Apple, the Mac App Store, a developer, or no one"
         case .gitBranch: "Of folders at the top of a repository; the remote opens in the browser"
-        case .gitChanges: "How many files differ from the last commit, from Git. Repositories whose settings would have Git run their own commands aren't checked."
         case .users: "Apps with it open in a window, and processes holding it open or working in the folder"
         case .created, .modified: nil
         }

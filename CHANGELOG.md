@@ -6,6 +6,7 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
+- Finder cards no longer count a Git repository's uncommitted changes, so hovering a folder never runs Git, which a downloaded repository could use to run its own commands.
 - Load Anyway stops at 1 GB, so an image that never finishes downloading can't fill memory.
 
 ### Fixed
