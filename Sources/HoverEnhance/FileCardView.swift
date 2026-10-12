@@ -20,7 +20,7 @@ struct FileCardView: View {
                         .frame(width: FileCard.imageSize, height: FileCard.imageSize)
                 }
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(card.name).font(.headline).lineLimit(2)
+                    Text(card.name.showingHiddenCharacters).font(.headline).lineLimit(2)
                     if !card.kindAndSize.isEmpty {
                         Text(card.kindAndSize).font(.callout).foregroundStyle(.secondary).lineLimit(1)
                     }
@@ -149,7 +149,8 @@ private struct DetailValue: View {
     }
 }
 
-/// A path in a box, which copies itself when clicked.
+/// A path in a box, which copies itself when clicked. Characters that would hide or rearrange part of
+/// it are shown as codes; the copy is the real path.
 private struct PathButton: View {
     let card: FileCard
     let text: String
@@ -159,7 +160,7 @@ private struct PathButton: View {
     var body: some View {
         Button { card.copy(text, id: id) } label: {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text(text)
+                Text(text.showingHiddenCharacters)
                     .font(.system(.callout, design: .monospaced))
                     .multilineTextAlignment(.leading)
                     .lineLimit(5)

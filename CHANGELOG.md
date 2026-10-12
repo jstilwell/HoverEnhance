@@ -16,6 +16,7 @@ All notable changes to this project will be documented in this file.
 - An image whose server claims an impossible size no longer crashes HoverEnhance.
 - Resting on a file that's only in iCloud, or in Dropbox and the like, no longer downloads it; its card shows what macOS already knows.
 - Large images download faster.
+- Finder cards show invisible characters in a file's name and path as codes, so a name made to read backwards, like a fake ".pdf" that's really an app, can't pass for something else.
 - A Finder card's "Signed by" checks every file the signature covers, and says when an app was changed after it was signed, or was too big to check in time.
 - A video player in a preview can no longer swap itself for some other web page.
 - A paused video player lets go of its memory a few minutes after its preview closes.
