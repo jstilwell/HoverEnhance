@@ -79,7 +79,7 @@ final class HoverInspector: @unchecked Sendable {
     /// when there's no policy (previews paused, or the app quitting). Left alone while VoiceOver runs,
     /// which needs them. `wait` waits for it, for when the app is about to quit.
     func switchOff(unlessKeptBy policy: InspectionPolicy?, voiceOverIsRunning: Bool, wait: Bool = false) {
-        let work = { [self] in
+        let work: @Sendable () -> Void = { [self] in
             for (pid, record) in switchedOn {
                 let app = NSRunningApplication(processIdentifier: pid)
                 // A pid can be another app's by now.
