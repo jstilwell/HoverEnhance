@@ -70,6 +70,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         monitor.onKeyDown = { [weak self] isEscape in self?.preview.keyPressed(isEscape: isEscape) }
         monitor.policy = { AppSettings.shared.inspectionPolicy }
         monitor.shouldInspect = { AppSettings.shared.inspectsOnRest(holding: NSEvent.modifierFlags) }
+        // Paused or not before it starts, so a paused launch switches nothing on in the app in front.
+        updateActivity()
         monitor.start()
 
         NotificationCenter.default.addObserver(forName: .showSettingsTab, object: nil, queue: .main) { [weak self] note in
@@ -88,11 +90,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             if shows, let lastInfo { hud.show(lastInfo.summary) } else { hud.hide() }
             updateActivity()
         }
-        updateActivity()
         whenChanged({ AppSettings.shared.inspectionPolicy }) { [weak self] _ in self?.monitor.settingsChanged() }
         pauseShortcut.action = { [weak self] in self?.togglePreviews() }
-        pauseShortcut.register(settings.pauseShortcut)
-        whenChanged({ AppSettings.shared.pauseShortcut }) { [weak self] shortcut in self?.pauseShortcut.register(shortcut) }
+        registerPauseShortcut(settings.pauseShortcut)
+        whenChanged({ AppSettings.shared.pauseShortcut }) { [weak self] shortcut in self?.registerPauseShortcut(shortcut) }
         whenChanged({ Updates.shared.waitingVersion }) { [weak self] version in
             self?.statusItem?.button?.image = MenuBarIcon.image(badged: version != nil)
         }
@@ -107,12 +108,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if paused != monitor.isPaused {
             monitor.isPaused = paused
             monitor.settingsChanged()
+            // Key changes weren't heard while paused.
+            activationKeyHeld = NSEvent.modifierFlags.contains(settings.activationKey.flag)
         }
         statusItem?.button?.appearsDisabled = !settings.previewsEnabled
     }
 
     func applicationWillTerminate(_ notification: Notification) {
         if isRunning { monitor.stop() }
+    }
+
+    private func registerPauseShortcut(_ shortcut: Shortcut?) {
+        if !pauseShortcut.register(shortcut), let shortcut {
+            log.error("pause shortcut \(shortcut.label, privacy: .public) is taken by another app")
+        }
     }
 
     private func accessChanged(_ granted: Bool) {

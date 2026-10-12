@@ -25,10 +25,15 @@ struct Shortcut: Codable, Hashable, Sendable {
         self.key = key
     }
 
-    /// The key pressed, if it makes a shortcut: one with ⌘, ⌥, or ⌃, so typing can't set it off.
+    /// The key pressed, if it makes a shortcut that works in every app without taking one over: two
+    /// modifiers, one of them ⌘, ⌥, or ⌃ (⌘V alone would take over pasting, ⌥P typing π), or a function
+    /// key with any of them.
     init?(event: NSEvent) {
         let flags = event.modifierFlags.intersection([.command, .option, .control, .shift])
         guard !flags.isDisjoint(with: [.command, .option, .control]) else { return nil }
+        let modifierCount = [NSEvent.ModifierFlags.command, .option, .control, .shift].filter(flags.contains).count
+        let isFunctionKey = Self.keyNames[event.keyCode]?.hasPrefix("F") == true
+        guard modifierCount >= 2 || isFunctionKey else { return nil }
         let key = Self.keyNames[event.keyCode] ?? event.charactersIgnoringModifiers?.uppercased() ?? ""
         guard !key.isEmpty, !key.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) }) else { return nil }
         self.init(keyCode: event.keyCode, modifiers: flags, key: key)
@@ -74,6 +79,16 @@ final class GlobalShortcut {
         installHandler()
         let id = EventHotKeyID(signature: OSType(0x4845_4E48), id: 1) // "HENH"
         return RegisterEventHotKey(UInt32(shortcut.keyCode), shortcut.carbonModifiers, id, GetEventDispatcherTarget(), 0, &hotKey) == noErr
+    }
+
+    /// Whether the system would take `shortcut`, which it won't when another app holds the same keys.
+    static func isAvailable(_ shortcut: Shortcut) -> Bool {
+        var trial: EventHotKeyRef?
+        let id = EventHotKeyID(signature: OSType(0x4845_4E48), id: 2)
+        guard RegisterEventHotKey(UInt32(shortcut.keyCode), shortcut.carbonModifiers, id, GetEventDispatcherTarget(), 0, &trial) == noErr,
+              let trial else { return false }
+        UnregisterEventHotKey(trial)
+        return true
     }
 
     private func installHandler() {

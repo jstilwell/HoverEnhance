@@ -260,10 +260,14 @@ struct ShortcutTests {
                          characters: characters, charactersIgnoringModifiers: characters, isARepeat: false, keyCode: code)!
     }
 
-    @Test func aShortcutNeedsCommandOptionOrControl() {
+    @Test func aShortcutNeedsTwoModifiersOrAFunctionKey() {
         #expect(Shortcut(event: key("p", code: 35, [.control, .option, .command]))?.label == "⌃⌥⌘P")
-        #expect(Shortcut(event: key(" ", code: 49, [.option]))?.label == "⌥Space")
+        #expect(Shortcut(event: key(" ", code: 49, [.option, .command]))?.label == "⌥⌘Space")
+        #expect(Shortcut(event: key("", code: 96, [.option]))?.label == "⌥F5")
         #expect(Shortcut(event: key("p", code: 35, [])) == nil)
         #expect(Shortcut(event: key("P", code: 35, [.shift])) == nil)
+        // One modifier would take over a key everywhere: ⌘V's pasting, ⌥P's π.
+        #expect(Shortcut(event: key("v", code: 9, [.command])) == nil)
+        #expect(Shortcut(event: key("p", code: 35, [.option])) == nil)
     }
 }
