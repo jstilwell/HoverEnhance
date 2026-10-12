@@ -28,7 +28,13 @@ struct WeatherReport: Sendable, Equatable {
     var hourly: [Hour] = []
     var daily: [Day] = []
     var air: AirQuality?
+    /// Today's pollen, by kind, where the provider forecasts it.
+    var pollen: [Pollen] = []
     var alerts: [WeatherAlert] = []
+    /// A forecaster's line on the days ahead, as "Rain Tuesday night into Wednesday".
+    var summary: String?
+    /// The provider's own page for the place.
+    var link: URL?
 
     struct Current: Sendable, Equatable {
         var time: Date
@@ -36,11 +42,15 @@ struct WeatherReport: Sendable, Equatable {
         var isDay = true
         var temperature: Double
         var feelsLike: Double?
+        /// How it feels out of the sun.
+        var feelsLikeInShade: Double?
         /// Percent.
         var humidity: Double?
         var dewPoint: Double?
         /// At sea level.
         var pressure: Double?
+        /// Where the provider says which way pressure is heading; otherwise it comes from the hours ahead.
+        var pressureTendency: PressureTrend?
         var windSpeed: Double?
         var windGust: Double?
         /// Where the wind comes from, in degrees clockwise from north.
@@ -51,6 +61,10 @@ struct WeatherReport: Sendable, Equatable {
         var cloudCover: Double?
         /// Millimeters an hour, now.
         var precipitation: Double?
+        /// Degrees warmer than this time yesterday, or colder when negative.
+        var changeSinceYesterday: Double?
+        /// Millimeters in the last 24 hours.
+        var precipitationLast24Hours: Double?
     }
 
     struct Minute: Sendable, Equatable {
@@ -114,11 +128,41 @@ struct WeatherReport: Sendable, Equatable {
         var usIndex: Int?
         /// The European Environment Agency's index, 0–100+.
         var europeanIndex: Int?
+        /// The provider's own rating, for providers that give no index.
+        var rating: Rating?
+        /// What most of it is, in the provider's words: "Ozone", "PM2.5".
+        var mainPollutant: String?
         /// Micrograms per cubic meter.
         var pm25: Double?
         var pm10: Double?
         var ozone: Double?
         var nitrogenDioxide: Double?
+    }
+
+    /// A provider's word for a level, as "Moderate", and where it stands, from 0 for the least up to 5.
+    struct Rating: Sendable, Equatable {
+        var name: String
+        var level: Int
+    }
+
+    /// One kind of pollen's forecast for the day.
+    struct Pollen: Sendable, Equatable {
+        enum Kind: String, Sendable, CaseIterable {
+            case tree, grass, ragweed, mold
+
+            var name: String {
+                switch self {
+                case .tree: "Tree"
+                case .grass: "Grass"
+                case .ragweed: "Ragweed"
+                case .mold: "Mold"
+                }
+            }
+        }
+
+        var kind: Kind
+        /// "Low", "Moderate", "High", "Very high".
+        var rating: Rating
     }
 
     /// The steps from the one under way on, at most `count`.
@@ -140,8 +184,10 @@ struct WeatherReport: Sendable, Equatable {
         return max(3600, hourly[1].time.timeIntervalSince(hourly[0].time))
     }
 
-    /// Whether air pressure is rising or falling over the next three hours, from the hourly forecast.
+    /// Whether air pressure is rising or falling: as the provider says, or over the next three hours of
+    /// the hourly forecast.
     func pressureTrend(from now: Date = Date()) -> PressureTrend? {
+        if let tendency = current.pressureTendency { return tendency }
         let hours = upcomingHours(Int(4 * 3600 / stepLength), from: now)
         guard let first = current.pressure ?? hours.first?.pressure,
               let later = hours.first(where: { $0.time >= now.addingTimeInterval(3 * 3600 - stepLength / 2) })?.pressure else { return nil }

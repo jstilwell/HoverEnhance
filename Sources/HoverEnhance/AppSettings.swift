@@ -100,16 +100,17 @@ enum PathStyle: String, CaseIterable, Identifiable, Sendable {
 
 /// Parts of the weather popup that can be turned off.
 enum WeatherSection: String, CaseIterable, Identifiable, Sendable {
-    case hourly, daily, details, airQuality, alerts
+    case hourly, daily, details, airQuality, pollen, alerts
 
     var id: Self { self }
 
     var name: String {
         switch self {
-        case .hourly: "Next 24 hours"
+        case .hourly: "Hourly forecast"
         case .daily: "Daily forecast"
         case .details: "Wind, humidity, pressure, UV, and more"
         case .airQuality: "Air quality"
+        case .pollen: "Pollen"
         case .alerts: "Weather alerts"
         }
     }
