@@ -18,8 +18,12 @@ struct HoverInfo: Sendable, Equatable {
     var url: URL?
     /// `AXURL` of the nearest enclosing `AXLink`.
     var linkURL: URL?
-    /// `AXURL` of the enclosing `AXWebArea`, i.e. the page being viewed.
+    /// `AXURL` of the enclosing `AXWebArea`, i.e. the page being viewed, or the frame within it.
     var pageURL: URL?
+    /// The page the tab shows: the outermost `AXWebArea`, which differs from `pageURL` in a frame.
+    var topPageURL: URL?
+    /// The website previews are skipped or allowed by: the tab's page, not a frame's.
+    var websiteURL: URL? { topPageURL ?? pageURL }
     /// The image under the cursor: the element itself, or one beneath an overlay covering it.
     var imageURL: URL?
     var imageFrame: CGRect?
@@ -62,6 +66,7 @@ struct HoverInfo: Sendable, Equatable {
         add("link", linkURL?.absoluteString)
         add("post", postURL?.absoluteString ?? postSearch.map { "none: \($0)" })
         add("page", pageURL?.absoluteString)
+        add("top", topPageURL == pageURL ? nil : topPageURL?.absoluteString)
         add("text", isOnText ? "yes" : nil)
         add("video", videoFrame.map { "on the page, \(Int($0.width))×\(Int($0.height))" })
         add("file", fileURL?.path(percentEncoded: false))

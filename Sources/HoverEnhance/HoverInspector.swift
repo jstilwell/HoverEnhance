@@ -158,15 +158,24 @@ final class HoverInspector: @unchecked Sendable {
         info.url = element.url
         info.frame = element.frame
 
-        // Walk up to find the enclosing link and page. The path is handy while exploring.
+        // Walk up to find the enclosing link and page, and past a frame's page to the tab's. The path is
+        // handy while exploring.
         var webArea: AXElement?
         var node: AXElement? = element
         while let current = node, info.ancestry.count < 40 {
             let role = current.role ?? "?"
             info.ancestry.append(role)
-            if role == "AXLink", info.linkURL == nil { info.linkURL = current.url }
-            if role == "AXWebArea" { info.pageURL = current.url; webArea = current; break }
             if role == kAXWindowRole { break }
+            if role == "AXWebArea" {
+                let url = current.url
+                if webArea == nil {
+                    info.pageURL = url
+                    webArea = current
+                }
+                info.topPageURL = url
+            } else if role == "AXLink", webArea == nil, info.linkURL == nil {
+                info.linkURL = current.url
+            }
             node = current.parent
         }
 
