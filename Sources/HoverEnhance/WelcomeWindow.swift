@@ -86,22 +86,24 @@ struct WelcomeView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
+            if AppLocation.isTemporary { MoveToApplicationsNote() }
             Text(isReturning
                  ? "macOS turned off its Accessibility access, so it can't see what's under the cursor. Turn it back on to carry on."
                  : "To see what's under the cursor, HoverEnhance needs Accessibility access. It only looks at the thing you're resting on, and never records what you type.")
                 .fixedSize(horizontal: false, vertical: true)
 
             VStack(alignment: .leading, spacing: 14) {
-                Step(number: 1, title: "Open Accessibility in System Settings") {
+                Step(number: 1, title: "Open Accessibility in System Settings",
+                     detail: "HoverEnhance is added to the list there.") {
                     Button("Open System Settings") { AccessibilityPermission.openSettings() }
                 }
-                Step(number: 2, title: "Drag HoverEnhance into the list",
-                     detail: "Or click + below the list and choose HoverEnhance.") {
-                    DragHandle()
-                }
-                Step(number: 3, title: "Turn on the switch next to it",
+                Step(number: 2, title: "Turn on the switch next to HoverEnhance",
                      detail: "macOS may ask for your password or Touch ID.") {
                     EmptyView()
+                }
+                Step(number: 3, title: "Not in the list? Drag it in",
+                     detail: "Or click + below the list and choose HoverEnhance.") {
+                    DragHandle()
                 }
             }
             .padding(16)
@@ -148,9 +150,12 @@ struct WelcomeView: View {
                     Image(nsImage: MenuBarIcon.image())
                 }
                 Text("Rest the cursor on an image or a link in your browser, or on a file in Finder.")
+                Text("Scroll on a preview to zoom in or step through an album. On a video, scroll the notch under the cursor for the volume.")
+                    .fixedSize(horizontal: false, vertical: true)
             }
             .multilineTextAlignment(.center)
             .foregroundStyle(.secondary)
+            if AppLocation.isTemporary { MoveToApplicationsNote() }
             HStack(spacing: 10) {
                 Button("Open Settings") {
                     openSettings()
@@ -164,6 +169,27 @@ struct WelcomeView: View {
         .padding(32)
         .padding(.top, 8)
         .frame(maxWidth: .infinity)
+    }
+}
+
+/// Shown while the app runs from its disk image: access and updates need it in Applications.
+private struct MoveToApplicationsNote: View {
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.yellow)
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Move HoverEnhance to Applications first").fontWeight(.medium)
+                Text("It's running from the disk image, where macOS won't keep its access and updates can't install. Quit, drag it to Applications, and open it from there.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Button("Open Applications") { NSWorkspace.shared.open(URL(filePath: "/Applications")) }
+            }
+        }
+        .multilineTextAlignment(.leading)
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.yellow.opacity(0.12), in: RoundedRectangle(cornerRadius: 10))
     }
 }
 

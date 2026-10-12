@@ -94,3 +94,48 @@ struct LocalFileTests {
         #expect(Media(items: [.video(URL(string: "file:///tmp/a.mp4")!, size: nil)]).webOnly() == nil)
     }
 }
+
+struct LocalNetworkTests {
+    @Test func localAddressesAndNames() {
+        for host in ["localhost", "app.localhost", "printer.local", "router", "127.0.0.1", "10.0.0.8", "172.20.1.1", "192.168.1.1",
+                     "169.254.10.1", "100.100.1.1", "0.0.0.0", "224.0.0.251", "::1", "[::1]", "fe80::1", "fd12:3456::1",
+                     "::ffff:192.168.1.1", "printer.local.", "3232235777", "0xC0A80101", "0300.0250.1.1", "10.1",
+                     "router.home.arpa", "nas.internal", "printer.lan"] {
+            #expect(LocalNetwork.contains(host: host), "\(host)")
+        }
+    }
+
+    @Test func publicAddressesAndNames() {
+        for host in ["example.com", "i.redd.it", "8.8.8.8", "172.32.0.1", "100.128.0.1", "2606:4700::1111", "::ffff:8.8.8.8", "local.example.com"] {
+            #expect(!LocalNetwork.contains(host: host), "\(host)")
+        }
+        #expect(!LocalNetwork.contains(URL(string: "data:image/png;base64,AAAA")))
+        #expect(!LocalNetwork.contains(URL(filePath: "/tmp/a.png")))
+    }
+
+    @Test func redirectsMayNotLeaveTheWebForTheLocalNetwork() {
+        let web = URL(string: "https://example.com/a.jpg")
+        let lan = URL(string: "http://192.168.1.1/a.jpg")
+        #expect(!LocalRedirectGuard.allows(from: web, to: lan))
+        #expect(LocalRedirectGuard.allows(from: web, to: URL(string: "https://cdn.example.com/a.jpg")))
+        #expect(LocalRedirectGuard.allows(from: URL(string: "http://localhost:3000/a.jpg"), to: lan))
+    }
+
+    @Test func webPagesCantLeadToTheLocalNetwork() {
+        func info(page: String?, link: String? = nil, image: String? = nil) -> HoverInfo {
+            var info = HoverInfo(pid: 1, appKind: .browser)
+            info.pageURL = page.flatMap(URL.init(string:))
+            info.linkURL = link.flatMap(URL.init(string:))
+            info.imageURL = image.flatMap(URL.init(string:))
+            return info
+        }
+        #expect(MediaResolver.source(for: info(page: "https://evil.example/", link: "http://192.168.1.1/cgi-bin/x?.jpg")) == nil)
+        #expect(MediaResolver.source(for: info(page: "https://evil.example/", image: "http://router.local/a.png")) == nil)
+        #expect(MediaResolver.source(for: info(page: nil, link: "http://localhost:8080/clip.mp4")) == nil)
+        // A page that's itself local may show its own images.
+        let local = URL(string: "http://localhost:3000/a.png")!
+        #expect(MediaResolver.source(for: info(page: "http://localhost:3000/", image: local.absoluteString)) == .images([local]))
+        // Lookups can't hand back local addresses either.
+        #expect(Media(items: [.image([URL(string: "http://10.0.0.1/a.jpg")!])]).webOnly() == nil)
+    }
+}

@@ -1,4 +1,5 @@
 import Foundation
+import os
 import Testing
 @testable import HoverEnhance
 
@@ -25,6 +26,9 @@ struct SiteLinksTests {
     @Test func otherLinksAreNotSources() {
         #expect(source("https://streamable.com/") == nil)
         #expect(source("https://x.com/Passengers") == nil)
+        // Ids longer than 64 bits overflowed the token X's lookup needs, crashing the app.
+        #expect(source("https://x.com/a/status/\(String(repeating: "9", count: 34))") == nil)
+        #expect(source("https://x.com/a/status/١٢٣") == nil)
         #expect(source("https://bsky.app/profile/bsky.app") == nil)
         #expect(source("https://i.imgur.com/AbCdEfG.jpg") == nil)
         #expect(source("https://example.com/article") == nil)
@@ -115,6 +119,12 @@ struct FeedPhotoTests {
 
 /// Fixtures are trimmed copies of real responses.
 struct SiteAPIsTests {
+    @Test func theTweetTokenSurvivesAnyId() {
+        #expect(!SiteAPIs.syndicationToken("821025484150423557").isEmpty)
+        #expect(SiteAPIs.syndicationToken(String(repeating: "9", count: 400)) == "0")
+        #expect(SiteAPIs.syndicationToken("-5") == "0")
+    }
+
     @Test func streamablePrefersTheFullQualityMP4() {
         let json = """
         {"status": 2, "files": {
@@ -172,5 +182,48 @@ struct SiteAPIsTests {
         """
         #expect(SiteAPIs.blueskyPost(Data(images.utf8))?.items.count == 2)
         #expect(SiteAPIs.blueskyDID(Data(#"{"did": "did:plc:z72i7hdynmk6r22z27h6tvur"}"#.utf8)) == "did:plc:z72i7hdynmk6r22z27h6tvur")
+    }
+}
+
+/// Answers every request with `status` and an empty JSON object, counting requests by path. Hosts under
+/// "nothing" answer 200; others 503.
+final class StubAPIServer: URLProtocol, @unchecked Sendable {
+    private static let counts = OSAllocatedUnfairLock<[String: Int]>(initialState: [:])
+    static func requests(for path: String) -> Int { counts.withLock { $0[path] ?? 0 } }
+
+    static func configuration() -> URLSessionConfiguration {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [StubAPIServer.self]
+        return configuration
+    }
+
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override func stopLoading() {}
+
+    override func startLoading() {
+        guard let url = request.url else { return }
+        Self.counts.withLock { $0[url.path(), default: 0] += 1 }
+        let status = url.path().contains("nothing") ? 200 : 503
+        client?.urlProtocol(self, didReceive: HTTPURLResponse(url: url, statusCode: status, httpVersion: "HTTP/1.1", headerFields: nil)!,
+                            cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: Data("{}".utf8))
+        client?.urlProtocolDidFinishLoading(self)
+    }
+}
+
+struct MediaFetcherTests {
+    @Test func aFailedLookupIsntRepeatedRightAway() async {
+        let fetcher = MediaFetcher(configuration: StubAPIServer.configuration())
+        let id = "gone\(UUID().uuidString.prefix(8))"
+        #expect(await fetcher.lookUp(.streamable(id: id)) == .failed)
+        #expect(await fetcher.lookUp(.streamable(id: id)) == .failed)
+        #expect(StubAPIServer.requests(for: "/videos/\(id)") == 1)
+    }
+
+    @Test func aSiteThatAnswersWithNothingIsntAFailure() async {
+        // As for a post without photos or video: no "Couldn't load" for that.
+        let fetcher = MediaFetcher(configuration: StubAPIServer.configuration())
+        #expect(await fetcher.lookUp(.streamable(id: "nothing\(UUID().uuidString.prefix(8))")) == .nothing)
     }
 }

@@ -1,5 +1,6 @@
 import AppKit
 import ImageIO
+import os
 import Testing
 import UniformTypeIdentifiers
 @testable import HoverEnhance
@@ -37,6 +38,54 @@ struct ImageDecoderTests {
         #expect(decodedWidth(image) == 300)
     }
 
+    private func image(width: Int, height: Int) throws -> CGImage {
+        let context = try #require(CGContext(
+            data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
+            space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ))
+        context.setFillColor(red: 0, green: 1, blue: 0, alpha: 1)
+        context.fill(CGRect(x: 0, y: 0, width: width, height: height))
+        return try #require(context.makeImage())
+    }
+
+    private func file(_ type: UTType, frames: [CGImage]) throws -> Data {
+        let data = NSMutableData()
+        let destination = try #require(CGImageDestinationCreateWithData(data, type.identifier as CFString, frames.count, nil))
+        for frame in frames { CGImageDestinationAddImage(destination, frame, nil) }
+        #expect(CGImageDestinationFinalize(destination))
+        return data as Data
+    }
+
+    private func picture(_ data: Data, largestStill: Int = ImageDecoder.Picture.largestStill,
+                         largestFrame: Int = ImageDecoder.Picture.largestFrame) throws -> ImageDecoder.Picture {
+        let source = try #require(CGImageSourceCreateWithData(data as CFData, nil))
+        return try #require(ImageDecoder.Picture(source, largestStill: largestStill, largestFrame: largestFrame))
+    }
+
+    @Test func refusesPicturesTooLargeToDecode() throws {
+        // A real one takes hundreds of megabytes to make; the limit is lowered instead.
+        let still = try picture(try png(width: 2000, height: 1000), largestStill: 1_000_000)
+        #expect(still.pixelSize == CGSize(width: 2000, height: 1000) && !still.isDecodable)
+        #expect(try picture(try png(width: 2000, height: 1000)).isDecodable)
+
+        // An animation with frames too large to play is shown as a still of its first.
+        let gif = try file(.gif, frames: [image(width: 400, height: 300), image(width: 400, height: 300)])
+        let frames = try picture(gif, largestFrame: 100_000)
+        #expect(!frames.isAnimation && frames.isDecodable && frames.index == 0)
+    }
+
+    @Test func playsAnimationsButDownsamplesOtherMultiPictureFiles() throws {
+        let gif = try file(.gif, frames: [image(width: 40, height: 30), image(width: 40, height: 30)])
+        #expect(try picture(gif).isAnimation)
+
+        // A TIFF's pages aren't an animation: the largest is shown, downsampled like any still.
+        let tiff = try file(.tiff, frames: [image(width: 40, height: 30), image(width: 2000, height: 1000)])
+        let pages = try picture(tiff)
+        #expect(!pages.isAnimation && pages.index == 1 && pages.pixelSize == CGSize(width: 2000, height: 1000))
+        let decoded = try #require(ImageDecoder.decode(tiff, from: URL(string: "https://example.com/pages.tiff")!, maxPixelSize: 500))
+        #expect(decodedWidth(decoded) == 500)
+    }
+
     @Test func rejectsNonImages() {
         let html = Data("<html><body>Sign in</body></html>".utf8)
         #expect(ImageDecoder.decode(html, from: URL(string: "https://example.com/a.jpg")!, maxPixelSize: 500) == nil)
@@ -59,9 +108,13 @@ struct RefererTests {
     }
 }
 
-/// Serves https://stub.test/<name>.png?size=<bytes>[&declare=0]: a small PNG padded to `size` bytes,
-/// sent in 64 KB pieces, with a Content-Length unless `declare=0`.
+/// Serves https://stub.test/<name>.png?size=<bytes>[&declare=0][&claim=<bytes>][&status=<code>]: a small
+/// PNG padded to `size` bytes, sent in 64 KB pieces, with a Content-Length unless `declare=0`, or `claim`
+/// if given. It counts the requests for each address.
 final class StubImageServer: URLProtocol, @unchecked Sendable {
+    private static let counts = OSAllocatedUnfairLock<[URL: Int]>(initialState: [:])
+    static func requests(for url: URL) -> Int { counts.withLock { $0[url] ?? 0 } }
+
     static let png: Data = {
         let context = CGContext(data: nil, width: 40, height: 30, bitsPerComponent: 8, bytesPerRow: 0,
                                 space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
@@ -91,12 +144,16 @@ final class StubImageServer: URLProtocol, @unchecked Sendable {
 
     override func startLoading() {
         guard let url = request.url, let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems else { return }
+        Self.counts.withLock { $0[url, default: 0] += 1 }
         let size = items.first { $0.name == "size" }?.value.flatMap(Int.init) ?? 0
+        let status = items.first { $0.name == "status" }?.value.flatMap(Int.init) ?? 200
         var body = Self.png
         if body.count < size { body.append(Data(count: size - body.count)) }
         var headers = ["Content-Type": "image/png"]
-        if items.first(where: { $0.name == "declare" })?.value != "0" { headers["Content-Length"] = "\(body.count)" }
-        let response = HTTPURLResponse(url: url, statusCode: 200, httpVersion: "HTTP/1.1", headerFields: headers)!
+        if items.first(where: { $0.name == "declare" })?.value != "0" {
+            headers["Content-Length"] = items.first { $0.name == "claim" }?.value ?? "\(body.count)"
+        }
+        let response = HTTPURLResponse(url: url, statusCode: status, httpVersion: "HTTP/1.1", headerFields: headers)!
         client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
         var offset = 0
         while offset < body.count {
@@ -127,10 +184,32 @@ struct ImageSizeLimitTests {
         #expect(size == 3_000_000)
     }
 
+    @Test func anImpossibleContentLengthIsRefusedWithoutReservingIt() async {
+        let claim = "100000000000000000"
+        let url = URL(string: "https://stub.test/huge.png?size=1000&claim=\(claim)")!
+        let outcome = await downloader.data(for: URLRequest(url: url), limit: 1_000_000)
+        guard case .tooLarge(let size) = outcome else { Issue.record("expected tooLarge, got \(outcome)"); return }
+        #expect(size == Int64(claim))
+        // Without a limit, only a sensible amount is set aside; this would crash if the claim were believed.
+        _ = await downloader.data(for: URLRequest(url: url), limit: nil)
+    }
+
     @Test func withoutAContentLengthItStopsAtTheLimit() async {
         let outcome = await downloader.data(for: URLRequest(url: StubImageServer.url(size: 3_000_000, declared: false)), limit: 1_000_000)
         guard case .tooLarge(let size) = outcome else { Issue.record("expected tooLarge, got \(outcome)"); return }
         #expect(size == nil)
+    }
+
+    @Test func aMissingCandidateIsntAskedForAgainRightAway() async {
+        let loader = ImageLoader(configuration: StubImageServer.configuration())
+        let missing = URL(string: "https://stub.test/maxres-\(UUID().uuidString).png?size=100&status=404")!
+        let present = StubImageServer.url(size: 1_000)
+        for _ in 0..<2 {
+            guard case .loaded = await loader.load([missing, present], page: nil, maxPixelSize: 500, byteLimit: nil) else {
+                Issue.record("expected the second candidate to load"); return
+            }
+        }
+        #expect(StubImageServer.requests(for: missing) == 1)
     }
 
     @Test func theLoaderOffersTheLargeImageAndLoadsItWhenAsked() async throws {

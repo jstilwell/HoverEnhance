@@ -16,6 +16,14 @@ struct EmbedTests {
         #expect(embed("https://www.youtube.com/watch?v=short") == nil)
     }
 
+    @Test func madeUpStartTimesDontOverflow() {
+        // These multiplied out past Int.max and crashed the app on hover.
+        #expect(embed("https://example.com/?t=3000000000000000h") == nil)
+        #expect(embed("https://youtu.be/dQw4w9WgXcQ?t=3000000000000000h") == Embed(site: .youtube, id: "dQw4w9WgXcQ"))
+        #expect(embed("https://youtu.be/dQw4w9WgXcQ?t=99999999999999999999") == Embed(site: .youtube, id: "dQw4w9WgXcQ"))
+        #expect(embed("https://youtu.be/dQw4w9WgXcQ?t=1h2m3s") == Embed(site: .youtube, id: "dQw4w9WgXcQ", start: 3723))
+    }
+
     @Test func otherSites() {
         #expect(embed("https://vimeo.com/76979871") == Embed(site: .vimeo, id: "76979871"))
         #expect(embed("https://vimeo.com/76979871/abc123def") == Embed(site: .vimeo, id: "76979871", hash: "abc123def"))
@@ -27,6 +35,15 @@ struct EmbedTests {
         #expect(embed("https://clips.twitch.tv/FunnyClipSlug-AbC123") == Embed(site: .twitch, id: "FunnyClipSlug-AbC123"))
         #expect(embed("https://www.twitch.tv/somechannel/clip/FunnyClipSlug-AbC123") == Embed(site: .twitch, id: "FunnyClipSlug-AbC123"))
         #expect(embed("https://www.twitch.tv/somechannel") == nil)
+        #expect(embed("https://vimeo.com/٧٦٩٧٩٨٧١") == nil)
+        #expect(embed("https://www.tiktok.com/@scout2015/video/\(String(repeating: "9", count: 40))") == nil)
+    }
+
+    @Test func onlyThePlayerPageLoadsAroundThePlayer() {
+        #expect(EmbedPlayer.isPlayerPage(Embed.origin))
+        #expect(!EmbedPlayer.isPlayerPage(URL(string: "https://example.com/")))
+        #expect(!EmbedPlayer.isPlayerPage(Embed.origin.appending(path: "elsewhere")))
+        #expect(!EmbedPlayer.isPlayerPage(nil))
     }
 
     @Test func playerURLsCarryMuteAndStart() {

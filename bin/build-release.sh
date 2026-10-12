@@ -29,6 +29,8 @@ APP="$RELEASE_DIR/$APP_NAME.app"
 APPCAST="$RELEASE_DIR/appcast.xml"
 # The feed the app reads (SUFeedURL): the appcast attached to whichever release is latest.
 FEED_URL="https://github.com/${REPO}/releases/latest/download/appcast.xml"
+# The team every release is signed by; the Makefile's TEAM_ID, passed to it below.
+TEAM_ID="G65RD22S57"
 # The keychain account holding HoverEnhance's update signing key (see `generate_keys --account`).
 SPARKLE_ACCOUNT="HoverEnhance"
 NOTARY_PROFILE="${NOTARY_PROFILE:-notarytool-profile}"
@@ -153,7 +155,7 @@ fi
 
 echo -e "${GREEN}Building ${APP_NAME} ${VERSION}${NC}"
 rm -rf "$RELEASE_DIR"
-make release-app
+make release-app TEAM_ID="$TEAM_ID"
 
 # The appcast's minimum system must be what the binary needs, or Sparkle offers the update to Macs
 # that can't run it.
@@ -177,12 +179,13 @@ else
     hdiutil create -volname "$APP_NAME" -srcfolder "$DMG_TEMP" -ov -format UDZO "$DMG_PATH"
 fi
 
-SIGNING_IDENTITY=$(codesign -dvv "$APP" 2>&1 | awk -F= '/^Authority=Developer ID Application/{print $2; exit}')
-if [ -z "$SIGNING_IDENTITY" ]; then
-    echo -e "${RED}Error: the app isn't signed with a Developer ID Application identity${NC}"
+# The same certificate as the app, by hash: a renewed certificate shares the old one's name.
+SIGNING_IDENTITY=$(make -s print-developer-id TEAM_ID="$TEAM_ID")
+if [ -z "$SIGNING_IDENTITY" ] || ! codesign -dv "$APP" 2>&1 | grep -qx "TeamIdentifier=$TEAM_ID"; then
+    echo -e "${RED}Error: the app isn't signed with team ${TEAM_ID}'s Developer ID Application certificate${NC}"
     exit 1
 fi
-echo -e "${YELLOW}Signing the DMG as ${SIGNING_IDENTITY}${NC}"
+echo -e "${YELLOW}Signing the DMG with ${SIGNING_IDENTITY} (team ${TEAM_ID})${NC}"
 codesign --sign "$SIGNING_IDENTITY" --timestamp "$DMG_PATH"
 codesign --verify --strict "$DMG_PATH"
 

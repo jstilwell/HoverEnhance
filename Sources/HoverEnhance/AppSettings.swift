@@ -116,6 +116,8 @@ final class AppSettings {
         static let activationKey = "activationKey"
         static let hoverDelay = "hoverDelay"
         static let excludedApps = "excludedApps"
+        static let skippedWebsites = "skippedWebsites"
+        static let pauseShortcut = "pauseShortcut"
         static let previewsInOtherApps = "previewsInOtherApps"
         static let otherAppsSkipEmail = "otherAppsSkipEmail"
         static let otherAppsKnownSitesOnly = "otherAppsKnownSitesOnly"
@@ -159,10 +161,18 @@ final class AppSettings {
     var previewsEnabled: Bool { didSet { defaults.set(previewsEnabled, forKey: Key.previewsEnabled) } }
     var activation: Activation { didSet { defaults.set(activation.rawValue, forKey: Key.activation) } }
     var activationKey: ModifierKey { didSet { defaults.set(activationKey.rawValue, forKey: Key.activationKey) } }
-    /// Milliseconds the cursor rests before a preview starts.
+    /// Milliseconds the cursor rests before a preview starts. At least `shortestHoverDelay`: shorter, and
+    /// the cursor would be looked under between every two moves it makes.
     var hoverDelay: Double { didSet { defaults.set(hoverDelay, forKey: Key.hoverDelay) } }
+    static let shortestHoverDelay = 50.0
     var excludedApps: [ExcludedApp] {
         didSet { defaults.set(try? JSONEncoder().encode(excludedApps), forKey: Key.excludedApps) }
+    }
+    /// Domains, such as "bank.example", on whose pages (and their subdomains') no previews appear.
+    var skippedWebsites: [String] { didSet { defaults.set(skippedWebsites, forKey: Key.skippedWebsites) } }
+    /// Shows or hides previews from any app.
+    var pauseShortcut: Shortcut? {
+        didSet { defaults.set(pauseShortcut.flatMap { try? JSONEncoder().encode($0) }, forKey: Key.pauseShortcut) }
     }
     /// Previews that load from the network in apps other than browsers; see `OtherAppsPolicy`.
     var previewsInOtherApps: Bool { didSet { defaults.set(previewsInOtherApps, forKey: Key.previewsInOtherApps) } }
@@ -270,8 +280,10 @@ final class AppSettings {
         previewsEnabled = defaults.bool(forKey: Key.previewsEnabled)
         activation = defaults.string(forKey: Key.activation).flatMap(Activation.init(rawValue:)) ?? .always
         activationKey = defaults.string(forKey: Key.activationKey).flatMap(ModifierKey.init(rawValue:)) ?? .option
-        hoverDelay = defaults.double(forKey: Key.hoverDelay)
+        hoverDelay = max(defaults.double(forKey: Key.hoverDelay), Self.shortestHoverDelay)
         excludedApps = defaults.data(forKey: Key.excludedApps).flatMap { try? JSONDecoder().decode([ExcludedApp].self, from: $0) } ?? []
+        skippedWebsites = defaults.stringArray(forKey: Key.skippedWebsites) ?? []
+        pauseShortcut = defaults.data(forKey: Key.pauseShortcut).flatMap { try? JSONDecoder().decode(Shortcut.self, from: $0) }
         previewsInOtherApps = defaults.bool(forKey: Key.previewsInOtherApps)
         otherAppsSkipEmail = defaults.bool(forKey: Key.otherAppsSkipEmail)
         otherAppsKnownSitesOnly = defaults.bool(forKey: Key.otherAppsKnownSitesOnly)
@@ -315,8 +327,10 @@ final class AppSettings {
     }
 
     var otherApps: OtherAppsPolicy {
+        // Settings greys the key out while previews appear except while holding it: needing it too would
+        // mean never.
         OtherAppsPolicy(enabled: previewsInOtherApps, skipsEmail: otherAppsSkipEmail, knownSitesOnly: otherAppsKnownSitesOnly,
-                        needsKey: otherAppsNeedKey)
+                        needsKey: otherAppsNeedKey && activation != .unlessHoldingKey)
     }
 
     /// Whether the activation key matters anywhere, so pressing or releasing it should show or hide a
@@ -360,6 +374,22 @@ final class AppSettings {
         case .muted: true
         case .unmuted: false
         }
+    }
+
+    /// What the inspector needs to know. With the inspector on, every app is looked at in full.
+    var inspectionPolicy: InspectionPolicy {
+        showsInspector ? InspectionPolicy() : InspectionPolicy(skipped: Set(excludedApps.map(\.bundleID)), includesOtherApps: previewsInOtherApps)
+    }
+
+    /// Whether resting the cursor is worth a look now: not while previews wait for a key that isn't held,
+    /// or one that is, unless the inspector wants to see.
+    func inspectsOnRest(holding flags: NSEvent.ModifierFlags) -> Bool {
+        showsInspector || (previewsEnabled && previewsAllowed(holding: flags))
+    }
+
+    /// Whether `page` is on a website in `skippedWebsites`.
+    func skips(page: URL?) -> Bool {
+        SkippedWebsites.contains(page, in: skippedWebsites)
     }
 
     func isExcluded(_ bundleID: String?) -> Bool {

@@ -150,3 +150,25 @@ struct OtherAppsPolicy: Sendable, Equatable {
         return !needsKey || keyHeld
     }
 }
+
+/// Websites the user asked for no previews on, by domain: "bank.example" covers its pages and its
+/// subdomains' ("www.bank.example", "login.bank.example").
+enum SkippedWebsites {
+    /// The domain in what someone typed or pasted: "https://www.Bank.example/login" → "bank.example".
+    /// Nil if there's no domain in it.
+    static func domain(from input: String) -> String? {
+        var text = input.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if !text.contains("://") { text = "https://" + text }
+        guard var host = URL(string: text)?.host(percentEncoded: false), !host.isEmpty else { return nil }
+        while host.hasSuffix(".") { host.removeLast() }
+        if host.hasPrefix("www.") { host.removeFirst(4) }
+        let allowed = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyz0123456789.-:[]")
+        guard host.contains(".") || host == "localhost", host.unicodeScalars.allSatisfy(allowed.contains) else { return nil }
+        return host
+    }
+
+    static func contains(_ page: URL?, in domains: [String]) -> Bool {
+        guard let host = page?.host(percentEncoded: false)?.lowercased() else { return false }
+        return domains.contains { host == $0 || host.hasSuffix("." + $0) }
+    }
+}
