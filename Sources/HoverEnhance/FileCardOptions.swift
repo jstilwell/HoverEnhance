@@ -115,7 +115,7 @@ enum FileCardField: String, CaseIterable, Identifiable, Sendable {
         case .bundleID: "Such as com.apple.Safari"
         case .architectures: "Whether it runs natively on Apple silicon, Intel, or both"
         case .minimumSystem: "The oldest macOS it runs on"
-        case .signature: "Apple, the Mac App Store, a developer, or no one"
+        case .signature: "Apple, the Mac App Store, a developer, or no one, and whether its files are still as signed"
         case .gitBranch: "Of folders at the top of a repository; the remote opens in the browser"
         case .users: "Apps with it open in a window, and processes holding it open or working in the folder"
         case .created, .modified: nil
