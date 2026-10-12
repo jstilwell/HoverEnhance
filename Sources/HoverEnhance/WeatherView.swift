@@ -139,7 +139,9 @@ private struct WeatherHeader: View {
                     .compactMap { $0 }.joined(separator: "  ·  "))
                     .foregroundStyle(.secondary)
                 if let next = report.nextHourPrecipitation() {
-                    Label(Self.describe(next, times: times), systemImage: next.isDry ? "umbrella" : "cloud.rain")
+                    let falling = Self.falling(report)
+                    Label(Self.describe(next, falling: falling, times: times),
+                          systemImage: next.isDry ? "umbrella" : falling == "Snow" ? "cloud.snow" : "cloud.rain")
                         .font(.callout)
                         .foregroundStyle(next.isDry ? Color.secondary : Color.blue)
                 }
@@ -163,13 +165,21 @@ private struct WeatherHeader: View {
         .accessibilityElement(children: .combine)
     }
 
-    static func describe(_ next: WeatherReport.NextHour, times: WeatherTimes) -> String {
-        switch next {
-        case .now(let until?): "Rain stopping around \(times.time(until))"
-        case .now(nil): "Rain for the next hour"
-        case .starting(let time): "Rain starting around \(times.time(time))"
-        case .dry: "No rain in the next hour"
-        case .chance(let percent): percent < 10 ? "Rain unlikely in the next hour" : "\(Int(percent))% chance of rain this hour"
+    /// What's falling or about to: the sky now, or the next hour that has something falling.
+    static func falling(_ report: WeatherReport) -> String {
+        let condition = report.current.condition.isPrecipitation ? report.current.condition
+            : report.upcomingHours(2).first { $0.condition.isPrecipitation }?.condition ?? .rain
+        return condition.precipitationWord
+    }
+
+    static func describe(_ next: WeatherReport.NextHour, falling: String, times: WeatherTimes) -> String {
+        let lower = falling.lowercased()
+        return switch next {
+        case .now(let until?): "\(falling) stopping around \(times.time(until))"
+        case .now(nil): "\(falling) for the next hour"
+        case .starting(let time): "\(falling) starting around \(times.time(time))"
+        case .dry: "No \(lower) in the next hour"
+        case .chance(let percent): percent < 10 ? "\(falling) unlikely in the next hour" : "\(Int(percent))% chance of \(lower) this hour"
         }
     }
 }
@@ -272,9 +282,10 @@ private struct HourlyStrip: View {
             .frame(height: 62)
             if hours.contains(where: { ($0.precipitationChance ?? 0) >= 10 }) {
                 Chart {
-                    ForEach(Array(hours.enumerated()), id: \.offset) { _, hour in
+                    ForEach(Array(hours.enumerated()).filter { ($0.element.precipitationChance ?? 0) > 0 }, id: \.offset) { _, hour in
+                        // A fixed width: a ratio means nothing on a continuous axis, and the bars would vanish.
                         BarMark(x: .value("Hour", x(hour)), yStart: .value("None", 0), yEnd: .value("Chance", hour.precipitationChance ?? 0),
-                                width: .ratio(stride == 1 ? 0.35 : 0.6))
+                                width: .fixed(stride == 1 ? 14 : 9))
                             .foregroundStyle(.blue.opacity(0.55))
                             .cornerRadius(2)
                     }
