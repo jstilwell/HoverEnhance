@@ -1,8 +1,8 @@
-import Foundation
+import AppKit
 
 /// The weather services a forecast can come from.
 enum WeatherProviderID: String, CaseIterable, Identifiable, Codable, Sendable {
-    case openMeteo, openWeatherMap, weatherAPI, tomorrow, pirateWeather
+    case openMeteo, openWeatherMap, weatherAPI, tomorrow, pirateWeather, accuWeather
 
     var id: Self { self }
 
@@ -13,6 +13,7 @@ enum WeatherProviderID: String, CaseIterable, Identifiable, Codable, Sendable {
         case .weatherAPI: "WeatherAPI.com"
         case .tomorrow: "Tomorrow.io"
         case .pirateWeather: "Pirate Weather"
+        case .accuWeather: "AccuWeather"
         }
     }
 
@@ -24,10 +25,14 @@ enum WeatherProviderID: String, CaseIterable, Identifiable, Codable, Sendable {
         case .weatherAPI: "Free key. 3-day forecast, air quality, and weather alerts."
         case .tomorrow: "Free key. Rain minute by minute, 5-day forecast. The free plan allows 25 lookups an hour."
         case .pirateWeather: "Free key. Rain minute by minute, 8-day forecast, and weather alerts."
+        case .accuWeather: "Paid key, after a 14-day free trial. RealFeel, pollen, and a forecaster's summary; 12-hour and 5-day forecasts."
         }
     }
 
     var needsKey: Bool { self != .openMeteo }
+
+    /// Whether its key is free; AccuWeather's only lasts a trial.
+    var keyIsFree: Bool { self != .accuWeather }
 
     /// Whether it has weather alerts of its own; for the others, US alerts come from the NWS.
     var hasAlerts: Bool { [.weatherAPI, .pirateWeather].contains(self) }
@@ -40,6 +45,7 @@ enum WeatherProviderID: String, CaseIterable, Identifiable, Codable, Sendable {
         case .weatherAPI: URL(string: "https://www.weatherapi.com/signup.aspx")
         case .tomorrow: URL(string: "https://app.tomorrow.io/development/keys")
         case .pirateWeather: URL(string: "https://pirate-weather.apiable.io/")
+        case .accuWeather: URL(string: "https://developer.accuweather.com/")
         }
     }
 
@@ -51,7 +57,18 @@ enum WeatherProviderID: String, CaseIterable, Identifiable, Codable, Sendable {
         case .weatherAPI: ("Powered by WeatherAPI.com", URL(string: "https://www.weatherapi.com/")!)
         case .tomorrow: ("Powered by Tomorrow.io", URL(string: "https://www.tomorrow.io/")!)
         case .pirateWeather: ("Powered by Pirate Weather", URL(string: "https://pirateweather.net/")!)
+        case .accuWeather: ("Powered by AccuWeather", URL(string: "https://www.accuweather.com/")!)
         }
+    }
+
+    /// The logo it asks to be credited with, for a light or a dark background: AccuWeather's, which it
+    /// asks for, linked, wherever its data is shown. Rendered from design/logos by bin/render-icons.sh,
+    /// in the small-space artwork its guidelines give for logos under 110 pixels wide. Outside the app
+    /// bundle (tests, `swift run`) there's none, and the credit is written out.
+    func logo(dark: Bool) -> NSImage? {
+        guard self == .accuWeather, let image = Bundle.main.image(forResource: dark ? "AccuWeatherLogoDark" : "AccuWeatherLogo") else { return nil }
+        image.size = NSSize(width: 98, height: 14)
+        return image
     }
 
     /// The Keychain account its key is kept under.
@@ -64,6 +81,7 @@ enum WeatherProviderID: String, CaseIterable, Identifiable, Codable, Sendable {
         case .weatherAPI: WeatherAPIcom()
         case .tomorrow: TomorrowIO()
         case .pirateWeather: PirateWeather()
+        case .accuWeather: AccuWeather()
         }
     }
 }

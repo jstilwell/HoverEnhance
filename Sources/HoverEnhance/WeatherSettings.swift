@@ -205,7 +205,7 @@ private struct WeatherKeyField: View {
             }
         HStack(spacing: 10) {
             if let page = provider.keyPage {
-                Link("Get a free key", destination: page)
+                Link(provider.keyIsFree ? "Get a free key" : "Get a key", destination: page)
             }
             Spacer()
             switch test {
