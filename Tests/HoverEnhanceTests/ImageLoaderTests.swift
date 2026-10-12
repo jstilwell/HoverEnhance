@@ -1,5 +1,6 @@
 import AppKit
 import ImageIO
+import os
 import Testing
 import UniformTypeIdentifiers
 @testable import HoverEnhance
@@ -107,9 +108,13 @@ struct RefererTests {
     }
 }
 
-/// Serves https://stub.test/<name>.png?size=<bytes>[&declare=0][&claim=<bytes>]: a small PNG padded to
-/// `size` bytes, sent in 64 KB pieces, with a Content-Length unless `declare=0`, or `claim` if given.
+/// Serves https://stub.test/<name>.png?size=<bytes>[&declare=0][&claim=<bytes>][&status=<code>]: a small
+/// PNG padded to `size` bytes, sent in 64 KB pieces, with a Content-Length unless `declare=0`, or `claim`
+/// if given. It counts the requests for each address.
 final class StubImageServer: URLProtocol, @unchecked Sendable {
+    private static let counts = OSAllocatedUnfairLock<[URL: Int]>(initialState: [:])
+    static func requests(for url: URL) -> Int { counts.withLock { $0[url] ?? 0 } }
+
     static let png: Data = {
         let context = CGContext(data: nil, width: 40, height: 30, bitsPerComponent: 8, bytesPerRow: 0,
                                 space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
@@ -139,14 +144,16 @@ final class StubImageServer: URLProtocol, @unchecked Sendable {
 
     override func startLoading() {
         guard let url = request.url, let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems else { return }
+        Self.counts.withLock { $0[url, default: 0] += 1 }
         let size = items.first { $0.name == "size" }?.value.flatMap(Int.init) ?? 0
+        let status = items.first { $0.name == "status" }?.value.flatMap(Int.init) ?? 200
         var body = Self.png
         if body.count < size { body.append(Data(count: size - body.count)) }
         var headers = ["Content-Type": "image/png"]
         if items.first(where: { $0.name == "declare" })?.value != "0" {
             headers["Content-Length"] = items.first { $0.name == "claim" }?.value ?? "\(body.count)"
         }
-        let response = HTTPURLResponse(url: url, statusCode: 200, httpVersion: "HTTP/1.1", headerFields: headers)!
+        let response = HTTPURLResponse(url: url, statusCode: status, httpVersion: "HTTP/1.1", headerFields: headers)!
         client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
         var offset = 0
         while offset < body.count {
@@ -191,6 +198,18 @@ struct ImageSizeLimitTests {
         let outcome = await downloader.data(for: URLRequest(url: StubImageServer.url(size: 3_000_000, declared: false)), limit: 1_000_000)
         guard case .tooLarge(let size) = outcome else { Issue.record("expected tooLarge, got \(outcome)"); return }
         #expect(size == nil)
+    }
+
+    @Test func aMissingCandidateIsntAskedForAgainRightAway() async {
+        let loader = ImageLoader(configuration: StubImageServer.configuration())
+        let missing = URL(string: "https://stub.test/maxres-\(UUID().uuidString).png?size=100&status=404")!
+        let present = StubImageServer.url(size: 1_000)
+        for _ in 0..<2 {
+            guard case .loaded = await loader.load([missing, present], page: nil, maxPixelSize: 500, byteLimit: nil) else {
+                Issue.record("expected the second candidate to load"); return
+            }
+        }
+        #expect(StubImageServer.requests(for: missing) == 1)
     }
 
     @Test func theLoaderOffersTheLargeImageAndLoadsItWhenAsked() async throws {

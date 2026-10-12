@@ -1,4 +1,5 @@
 import Foundation
+import os
 import Testing
 @testable import HoverEnhance
 
@@ -181,5 +182,39 @@ struct SiteAPIsTests {
         """
         #expect(SiteAPIs.blueskyPost(Data(images.utf8))?.items.count == 2)
         #expect(SiteAPIs.blueskyDID(Data(#"{"did": "did:plc:z72i7hdynmk6r22z27h6tvur"}"#.utf8)) == "did:plc:z72i7hdynmk6r22z27h6tvur")
+    }
+}
+
+/// Answers every request with a 503, counting them by path.
+final class UnavailableServer: URLProtocol, @unchecked Sendable {
+    private static let counts = OSAllocatedUnfairLock<[String: Int]>(initialState: [:])
+    static func requests(for path: String) -> Int { counts.withLock { $0[path] ?? 0 } }
+
+    static func configuration() -> URLSessionConfiguration {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [UnavailableServer.self]
+        return configuration
+    }
+
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override func stopLoading() {}
+
+    override func startLoading() {
+        guard let url = request.url else { return }
+        Self.counts.withLock { $0[url.path(), default: 0] += 1 }
+        client?.urlProtocol(self, didReceive: HTTPURLResponse(url: url, statusCode: 503, httpVersion: "HTTP/1.1", headerFields: nil)!,
+                            cacheStoragePolicy: .notAllowed)
+        client?.urlProtocolDidFinishLoading(self)
+    }
+}
+
+struct MediaFetcherTests {
+    @Test func aFailedLookupIsntRepeatedRightAway() async {
+        let fetcher = MediaFetcher(configuration: UnavailableServer.configuration())
+        let id = "gone\(UUID().uuidString.prefix(8))"
+        #expect(await fetcher.media(for: .streamable(id: id)) == nil)
+        #expect(await fetcher.media(for: .streamable(id: id)) == nil)
+        #expect(UnavailableServer.requests(for: "/videos/\(id)") == 1)
     }
 }
