@@ -19,8 +19,9 @@ extension needed.
   own key. AccuWeather adds pollen, the temperature in the shade, the change since yesterday, and a
   forecaster's summary; its key needs a paid plan after a 14-day trial.
 - **Finder**: rest on a file or folder for its path, size, dates, where it came from, and which apps
-  are using it. Images, videos, and audio show large beside their details, including what songs' and
-  videos' own tags say. Click any detail to copy it.
+  are using it. Images, songs, and videos show large beside their details, including what songs' and
+  videos' own tags say, with play, mute, and a scrubber showing the time under songs and videos.
+  Click any detail to copy it.
 
 Images the page already shows large are left alone unless their post has more photos, as are videos
 it's already playing. Move away, click, press Esc, or switch apps or Spaces, and the preview is

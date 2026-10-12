@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 ## 0.5.0 - Unreleased
 
+### Added
+
+- Songs and videos in Finder previews have controls under them: play and pause, a scrubber with the time played and left, and mute.
+- Click a Finder video, or a song's artwork, to play or pause it.
+
 ### Fixed
 
 - A YouTube, Vimeo, TikTok, or Twitch video rested on again picks up where it was, instead of stopping on a play button that did nothing when clicked.

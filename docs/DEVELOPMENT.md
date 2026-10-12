@@ -75,7 +75,9 @@ app).
   (`CardHostingView`). `MediaMetadata` reads audio and video files' own tags (ID3, iTunes,
   QuickTime) and tracks with AVFoundation, since Spotlight often hasn't. Images, videos, and audio
   show large in `FileMediaCardView`, with the card beside or below them as `FileMediaLayout`
-  decides; songs play through `VideoPlayback` too. `Tests/HoverEnhanceTests/Fixtures` holds tiny
+  decides; songs play through `VideoPlayback` too. Songs and videos have a `TransportBar` under them,
+  following the player through a `MediaTransport`; AVKit's own controls show only while the cursor is
+  on the video, and there it's in Finder. `Tests/HoverEnhanceTests/Fixtures` holds tiny
   tagged media for the tests, with the commands that made them.
 - The weather popup: `WeatherTrigger` matches Apple's Weather menu bar item, and `PreviewController`
   hangs a `WeatherPopupView` under it rather than beside the cursor

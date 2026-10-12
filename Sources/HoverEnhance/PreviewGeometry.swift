@@ -139,9 +139,11 @@ enum FileMediaLayout: Equatable, Sendable {
     case beside, below
 
     /// Whichever leaves the media larger in `room`, with the media's size there. Media isn't enlarged
-    /// past `media`, its natural size; details that don't fit beside it in height go below.
-    static func choose(media: CGSize, details: CGSize, room: CGSize) -> (layout: FileMediaLayout, mediaSize: CGSize) {
+    /// past `media`, its natural size; details that don't fit beside it in height go below. `controls` is
+    /// the height of a player's controls under the media.
+    static func choose(media: CGSize, details: CGSize, room: CGSize, controls: CGFloat = 0) -> (layout: FileMediaLayout, mediaSize: CGSize) {
         func fit(_ box: CGSize) -> CGSize {
+            let box = CGSize(width: box.width, height: box.height - controls)
             guard media.width > 0, media.height > 0, box.width > 0, box.height > 0 else { return .zero }
             let scale = min(1, box.width / media.width, box.height / media.height)
             return CGSize(width: (media.width * scale).rounded(.down), height: (media.height * scale).rounded(.down))
