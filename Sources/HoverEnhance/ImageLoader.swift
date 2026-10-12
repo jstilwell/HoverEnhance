@@ -18,6 +18,10 @@ actor ImageLoader {
         directory: FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0].appending(path: "HoverEnhance/Images")
     )
 
+    /// Even Load Anyway stops here: no image needs more, and a response that never ends would otherwise
+    /// fill memory.
+    static let largestEver: Int64 = 1_000_000_000
+
     enum Outcome: Sendable {
         case loaded(LoadedImage)
         /// Over the size limit, and not downloaded: its size in bytes, when the server said.

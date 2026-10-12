@@ -32,7 +32,8 @@ enum SiteAPIs {
 
     /// The `token` embedders send alongside the id: π·id/10¹⁵ in base 36, without zeros or the point.
     static func syndicationToken(_ id: String) -> String {
-        guard let number = Double(id) else { return "0" }
+        // Ids are 64-bit; anything else would overflow the whole part below.
+        guard let number = Double(id), number >= 0, number < 1e20 else { return "0" }
         let value = number / 1e15 * Double.pi
         let digits = Array("0123456789abcdefghijklmnopqrstuvwxyz")
         var whole = Int(value)

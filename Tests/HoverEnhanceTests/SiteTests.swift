@@ -25,6 +25,9 @@ struct SiteLinksTests {
     @Test func otherLinksAreNotSources() {
         #expect(source("https://streamable.com/") == nil)
         #expect(source("https://x.com/Passengers") == nil)
+        // Ids longer than 64 bits overflowed the token X's lookup needs, crashing the app.
+        #expect(source("https://x.com/a/status/\(String(repeating: "9", count: 34))") == nil)
+        #expect(source("https://x.com/a/status/١٢٣") == nil)
         #expect(source("https://bsky.app/profile/bsky.app") == nil)
         #expect(source("https://i.imgur.com/AbCdEfG.jpg") == nil)
         #expect(source("https://example.com/article") == nil)
@@ -115,6 +118,12 @@ struct FeedPhotoTests {
 
 /// Fixtures are trimmed copies of real responses.
 struct SiteAPIsTests {
+    @Test func theTweetTokenSurvivesAnyId() {
+        #expect(!SiteAPIs.syndicationToken("821025484150423557").isEmpty)
+        #expect(SiteAPIs.syndicationToken(String(repeating: "9", count: 400)) == "0")
+        #expect(SiteAPIs.syndicationToken("-5") == "0")
+    }
+
     @Test func streamablePrefersTheFullQualityMP4() {
         let json = """
         {"status": 2, "files": {

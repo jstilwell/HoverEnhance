@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.3.0 - Unreleased
+
+### Changed
+
+- Load Anyway stops at 1 GB, so an image that never finishes downloading can't fill memory.
+
+### Fixed
+
+- Resting on a link made with an absurdly long video time or post number no longer crashes HoverEnhance.
+- An image whose server claims an impossible size no longer crashes HoverEnhance.
+- Large images download faster.
+
 ## 0.2.0 - 10-11-2026
 
 ### Added

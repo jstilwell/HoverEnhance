@@ -33,7 +33,7 @@ enum SiteLinks {
 
         case _ where xHosts.contains(host):
             // <user>/status/<id>, optionally followed by /photo/1 or /video/1.
-            guard parts.count >= 4, parts[2] == "status", parts[3].allSatisfy(\.isNumber) else { return nil }
+            guard parts.count >= 4, parts[2] == "status", isNumericID(parts[3]) else { return nil }
             return .tweet(id: parts[3])
 
         case "bsky.app":
@@ -57,6 +57,11 @@ enum SiteLinks {
         default:
             return nil
         }
+    }
+
+    /// Up to 20 ASCII digits, as post and video ids are: a 64-bit number at most.
+    static func isNumericID(_ string: String) -> Bool {
+        (1...20).contains(string.count) && string.allSatisfy { $0.isASCII && $0.isNumber }
     }
 
     private static func isAlphanumeric(_ string: String) -> Bool {
