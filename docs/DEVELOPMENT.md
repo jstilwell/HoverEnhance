@@ -96,7 +96,9 @@ app).
 - `EmbedPlayer` hosts players in a web view loaded under an HTTPS origin (YouTube needs a
   Referer), with AirPlay and WebRTC off so nothing asks for local network access. Links clicked in a
   player open in the browser, and nothing else can take the page around the player elsewhere. A
-  paused player is kept three minutes, for hovering its link again.
+  paused player is kept three minutes, for hovering its link again; one whose video never started
+  (a script in an isolated world reports `playing`) is let go, since WebKit refuses its autoplay
+  once suspended. WebKit counts suspensions, so each player is suspended once at most.
 - `Updates` wraps Sparkle's updater; the Makefile bundles `Sparkle.framework` into the app (without
   the XPC services, which only sandboxed apps use) and signs it from the inside out.
 - `GlobalShortcut` registers the pause shortcut as a Carbon hot key, which needs no further
