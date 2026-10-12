@@ -20,9 +20,10 @@ Release builds keep hover details out of the log; debug builds log them for `mak
 Nothing runs without Accessibility access. On first launch a welcome window opens the Accessibility
 settings, adding the app to the list there (`AXIsProcessTrustedWithOptions`), and offers its icon to
 drag in should it be missing; it warns when the app runs from the disk image. The app starts once
-access is on, and the window comes back if access is turned off. The bundle is signed with your first Apple Development /
-Developer ID identity so the grant survives rebuilds. With ad-hoc signing you'd have to re-grant
-after every build (the welcome window explains how to remove and re-add the app).
+access is on, and the window comes back if access is turned off. The bundle is signed with your
+first Apple Development / Developer ID identity so the grant survives rebuilds. With ad-hoc signing
+you'd have to re-grant after every build (the welcome window explains how to remove and re-add the
+app).
 
 ## How it works
 
@@ -38,48 +39,52 @@ after every build (the welcome window explains how to remove and re-add the app)
   calls are synchronous IPC into the target app) and walks up to the enclosing link and web area.
   A look the cursor has moved on from is dropped before its slow parts, and excluded apps
   (`InspectionPolicy`) get only the hit-test.
-- `MediaResolver` turns the hovered image or link into a `MediaSource` (`ImageRules` for
-  full-size image URLs, `SiteLinks` for posts and videos), following `file:` URLs only from local
-  pages, and to the local network (`LocalNetwork`: loopback, private ranges, `.local`) only from local
-  pages, redirects included. `MediaFetcher` does any lookup the site needs (`SiteAPIs`, `RedditGallery`), giving `Media`:
-  one item or an album, with web addresses only. Nothing is previewed over a video the page shows
-  (WebKit gives videos their URL; Chromium shows them as plain groups, found through its search for
-  graphics), or over an image it already shows about as large as a preview could be, unless it's from
-  a post holding more. A photo outside any link, as in Instagram's feed, takes its post from the
-  nearest link to one before it in the page (the time in the post's header), through the engine's
-  search for links. `AppKind` tells browsers and email apps apart from
-  what they declare they open, and `OtherAppsPolicy` decides what may load outside browsers.
+- `MediaResolver` turns the hovered image or link into a `MediaSource` (`ImageRules` for full-size
+  image URLs, `SiteLinks` for posts and videos), following `file:` URLs only from local pages, and
+  to the local network (`LocalNetwork`: loopback, private ranges, `.local`) only from local pages,
+  redirects included. `MediaFetcher` does any lookup the site needs (`SiteAPIs`, `RedditGallery`),
+  giving `Media`: one item or an album, with web addresses only; lookups that fail are remembered
+  for a minute. Nothing is previewed over a video
+  the page shows (WebKit gives videos their URL; Chromium shows them as plain groups, found through
+  its search for graphics), or over an image it already shows about as large as a preview could be,
+  unless it's from a post holding more. A photo outside any link, as in Instagram's feed, takes its
+  post from the nearest link to one before it in the page (the time in the post's header), through
+  the engine's search for links. `AppKind` tells browsers and email apps apart from what they
+  declare they open, and `OtherAppsPolicy` decides what may load outside browsers.
 - `PreviewController` shows items in `PreviewPanel`: images via `ImageLoader` (downloaded through
-  `LimitedDownloader`, which stops at the size limit, and downsampled off the main thread), videos
+  `LimitedDownloader`, which stops at the size limit, sized up before decoding by
+  `ImageDecoder.Picture`, and downsampled off the main thread), videos
   via `VideoPlayback` (AVPlayer). A spinner stands in for a preview that takes a moment. A small
   click-through notch sits under the cursor and joins it to the preview (`PreviewGeometry`); moving
   off the notch any way but onto the preview ends the hover at once. Clicking, Esc, and switching
-  apps or Spaces end it too, as does scrolling anywhere else. `ScrollTap` (an active event tap) hands
-  scroll events over the notch or preview to the controller and swallows the ones it uses: on the notch, a video's
-  volume, shown on `VolumeRockerView` above the notch, whose space counts as the notch; on the video,
-  its position.
-- In Finder, `FinderItem` finds the hovered item: each one is an element with `AXFilename` and a file
-  reference `AXURL`, reached from other cells of a list row or the label under an icon through the row
-  or the item's group. `FileDetails` reads the card's details from Spotlight and Finder's records
-  first, so protected folders aren't opened just to describe a file, and reads nothing of a file that's
-  only in the cloud (the app also turns off downloading such files on read, in `main.swift`); `FileStatus` covers tags, iCloud,
-  quarantine, and aliases, `ZipSummary` reads a zip's central directory, `AppBundleInfo` an app's
-  Info.plist and signature, and `GitRepository` a repository's branch and remote from its `.git`. Git
-  itself is never run: a repository's settings can make it run commands, and a hovered folder can come
-  from anywhere. `FileUsers` finds apps whose windows show the file (`AXDocument`) and
-  processes that hold it open, map it, or work in it (`proc_listpidspath`), and quits them. The card
-  grows as slower details fill in (`CardHostingView`). `MediaMetadata` reads audio and video files'
-  own tags (ID3, iTunes, QuickTime) and tracks with AVFoundation, since Spotlight often hasn't. Images,
-  videos, and audio show large in `FileMediaCardView`, with the card beside or below them as
-  `FileMediaLayout` decides; songs play through `VideoPlayback` too. `Tests/HoverEnhanceTests/Fixtures`
-  holds tiny tagged media for the tests, with the commands that made them.
+  apps or Spaces end it too, as does scrolling anywhere else. `ScrollTap` (an active event tap)
+  hands scroll events over the notch or preview to the controller and swallows the ones it uses: on
+  the notch, a video's volume, shown on `VolumeRockerView` above the notch, whose space counts as
+  the notch; on the video, its position.
+- In Finder, `FinderItem` finds the hovered item: each one is an element with `AXFilename` and a
+  file reference `AXURL`, reached from other cells of a list row or the label under an icon through
+  the row or the item's group. `FileDetails` reads the card's details from Spotlight and Finder's
+  records first, so protected folders aren't opened just to describe a file, and reads nothing of a
+  file that's only in the cloud (the app also turns off downloading such files on read, in
+  `main.swift`); `FileStatus` covers tags, iCloud, quarantine, and aliases, `ZipSummary` reads a
+  zip's central directory, `AppBundleInfo` an app's Info.plist and signature, and `GitRepository` a
+  repository's branch and remote from its `.git`. Git itself is never run: a repository's settings
+  can make it run commands, and a hovered folder can come from anywhere. `FileUsers` finds apps
+  whose windows show the file (`AXDocument`) and processes that hold it open, map it, or work in it
+  (`proc_listpidspath`), and quits them. The card grows as slower details fill in
+  (`CardHostingView`). `MediaMetadata` reads audio and video files' own tags (ID3, iTunes,
+  QuickTime) and tracks with AVFoundation, since Spotlight often hasn't. Images, videos, and audio
+  show large in `FileMediaCardView`, with the card beside or below them as `FileMediaLayout`
+  decides; songs play through `VideoPlayback` too. `Tests/HoverEnhanceTests/Fixtures` holds tiny
+  tagged media for the tests, with the commands that made them.
 - `EmbedPlayer` hosts players in a web view loaded under an HTTPS origin (YouTube needs a
   Referer), with AirPlay and WebRTC off so nothing asks for local network access. Links clicked in a
-  player open in the browser.
+  player open in the browser, and nothing else can take the page around the player elsewhere. A
+  paused player is kept three minutes, for hovering its link again.
 - `Updates` wraps Sparkle's updater; the Makefile bundles `Sparkle.framework` into the app (without
   the XPC services, which only sandboxed apps use) and signs it from the inside out.
-- `GlobalShortcut` registers the pause shortcut as a Carbon hot key, which needs no further permission.
-  `SkippedWebsites` matches the websites previews skip, by domain and subdomain.
+- `GlobalShortcut` registers the pause shortcut as a Carbon hot key, which needs no further
+  permission. `SkippedWebsites` matches the websites previews skip, by domain and subdomain.
 - `AppSettings` keeps settings in UserDefaults; code reads it where it's used, so changes apply at
   once. `SettingsWindowController` shows the SwiftUI tabs in `SettingsViews`.
 - Reddit answers scripted requests with a JavaScript check; `WebPageLoader` passes it in an
