@@ -121,9 +121,9 @@ struct WeatherReport: Sendable, Equatable {
         var nitrogenDioxide: Double?
     }
 
-    /// The hours from now on, at most `count`.
+    /// The steps from the one under way on, at most `count`.
     func upcomingHours(_ count: Int, from now: Date = Date()) -> [Hour] {
-        Array(hourly.drop { $0.time.addingTimeInterval(3600) <= now }.prefix(count))
+        Array(hourly.drop { $0.time.addingTimeInterval(stepLength) <= now }.prefix(count))
     }
 
     /// The forecast for the next day, from the step now on: 25 hours, or nine 3-hour steps where that's
@@ -142,8 +142,9 @@ struct WeatherReport: Sendable, Equatable {
 
     /// Whether air pressure is rising or falling over the next three hours, from the hourly forecast.
     func pressureTrend(from now: Date = Date()) -> PressureTrend? {
-        let hours = upcomingHours(4, from: now)
-        guard let first = hours.first?.pressure ?? current.pressure, let later = hours.last?.pressure, hours.count >= 4 else { return nil }
+        let hours = upcomingHours(Int(4 * 3600 / stepLength), from: now)
+        guard let first = current.pressure ?? hours.first?.pressure,
+              let later = hours.first(where: { $0.time >= now.addingTimeInterval(3 * 3600 - stepLength / 2) })?.pressure else { return nil }
         let change = later - first
         return abs(change) < 1 ? .steady : change > 0 ? .rising : .falling
     }
@@ -153,11 +154,13 @@ struct WeatherReport: Sendable, Equatable {
     /// What the next hour holds for rain or snow, from minute-by-minute data where there is some, or the
     /// next hour's chance otherwise.
     func nextHourPrecipitation(from now: Date = Date()) -> NextHour? {
-        let minutes = minutely.filter { $0.time >= now.addingTimeInterval(-60) && $0.time < now.addingTimeInterval(3600) }
+        // Each entry covers its step, a minute or a quarter hour, from its time: the one under way counts.
+        let step = minutely.count >= 2 ? minutely[1].time.timeIntervalSince(minutely[0].time) : 60
+        let minutes = minutely.filter { $0.time.addingTimeInterval(step) > now && $0.time < now.addingTimeInterval(3600) }
         if !minutes.isEmpty {
             // A tenth of a millimeter an hour is the least anyone notices.
             if let start = minutes.first(where: { $0.intensity >= 0.1 }) {
-                if start.time <= now.addingTimeInterval(60) {
+                if start.time <= now {
                     let end = minutes.drop { $0.intensity >= 0.1 }.first { $0.intensity < 0.1 }
                     return .now(until: end?.time)
                 }

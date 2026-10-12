@@ -57,7 +57,7 @@ final class WeatherService {
             if provider.needsKey, apiKey?.isEmpty != false { return .failure(.needsKey) }
             do throws(WeatherError) {
                 var report = try await provider.source.report(at: place.coordinate, key: apiKey, timeZone: place.timeZone, using: http)
-                if alertsFromNWS, report.alerts.isEmpty, NWSAlerts.covers(place.coordinate) {
+                if alertsFromNWS, !provider.hasAlerts, NWSAlerts.covers(place) {
                     // Alerts are extra: the forecast stands without them.
                     report.alerts = (try? await NWSAlerts.alerts(at: place.coordinate, using: http)) ?? []
                 }
@@ -100,7 +100,8 @@ final class WeatherPopupModel {
         units = settings.weatherUnits
         hidden = settings.weatherHiddenSections
         location = settings.weatherLocation
-        alertsFromNWS = settings.weatherUsesNWSAlerts
+        // Not when alerts are hidden: there'd be nothing to show for sending the location.
+        alertsFromNWS = settings.weatherUsesNWSAlerts && !settings.weatherHiddenSections.contains(.alerts)
         self.service = service
     }
 

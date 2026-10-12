@@ -67,8 +67,8 @@ struct OpenMeteo: WeatherSource {
             visibility: JSON.double(current["visibility"]).map { $0 / 1000 },
             uvIndex: JSON.double(current["uv_index"]),
             cloudCover: JSON.double(current["cloud_cover"]),
-            // The last quarter hour's millimeters, as millimeters an hour.
-            precipitation: JSON.double(current["precipitation"]).map { $0 * 4 }
+            // The millimeters over the last interval (a quarter hour), as millimeters an hour.
+            precipitation: JSON.double(current["precipitation"]).map { $0 * 3600 / (JSON.double(current["interval"]).flatMap { $0 > 0 ? $0 : nil } ?? 900) }
         ))
 
         if let hourly = json["hourly"] as? [String: Any] {
@@ -79,10 +79,11 @@ struct OpenMeteo: WeatherSource {
             let uv = JSON.doubles(hourly["uv_index"]), winds = JSON.doubles(hourly["wind_speed_10m"])
             report.hourly = times.indices.compactMap { index -> WeatherReport.Hour? in
                 guard let time = times[index], let temperature = temperatures[safe: index] ?? nil else { return nil }
+                // Rain and its chance are for the hour before their time, so an hour's come from the next entry.
                 return WeatherReport.Hour(
                     time: Date(timeIntervalSince1970: time), condition: condition((codes[safe: index] ?? nil).map { Int($0) }),
                     isDay: (days[safe: index] ?? nil) != 0, temperature: temperature, feelsLike: feels[safe: index] ?? nil,
-                    precipitationChance: chances[safe: index] ?? nil, precipitation: amounts[safe: index] ?? nil,
+                    precipitationChance: chances[safe: index + 1] ?? nil, precipitation: amounts[safe: index + 1] ?? nil,
                     pressure: pressures[safe: index] ?? nil, uvIndex: uv[safe: index] ?? nil, windSpeed: winds[safe: index] ?? nil)
             }
         }

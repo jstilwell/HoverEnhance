@@ -54,6 +54,16 @@ struct OpenMeteoTests {
     @Test func zeroesAndOnesAreNumbersNotBooleans() {
         #expect(JSON.double(NSNumber(value: 0.0)) == 0 && JSON.double(NSNumber(value: 1)) == 1)
         #expect(JSON.double(kCFBooleanTrue) == nil)
+        // Nothing a forecast holds is infinite, and turning one into an Int would trap.
+        #expect(JSON.double("nan") == nil && JSON.double("inf") == nil && JSON.double(NSNumber(value: 1e300)) == nil && JSON.int("1e300") == nil)
+    }
+
+    @Test func anHoursRainIsTheNextEntrys() throws {
+        let forecast = try fixture("open-meteo-forecast")
+        let report = try OpenMeteo.report(forecast: forecast, air: nil, at: berlin, timeZone: .current, fetched: Date())
+        let hourly = try #require(try JSON.object(forecast)["hourly"] as? [String: Any])
+        #expect(report.hourly[0].precipitationChance == JSON.doubles(hourly["precipitation_probability"])[1])
+        #expect(report.hourly.last?.precipitationChance == nil)
     }
 
     @Test func somethingElseIsUnreadable() {
@@ -198,10 +208,14 @@ struct NWSAlertsTests {
     }
 
     @Test func onlyUSPlacesAreAsked() throws {
-        #expect(NWSAlerts.covers(Coordinate(latitude: 40.71, longitude: -74.01)))
-        #expect(NWSAlerts.covers(Coordinate(latitude: 21.31, longitude: -157.86)))
-        #expect(!NWSAlerts.covers(berlin))
-        #expect(!NWSAlerts.covers(Coordinate(latitude: 43.65, longitude: -79.38 + 30)))
+        func place(_ country: String?) -> WeatherPlace {
+            WeatherPlace(name: "Somewhere", coordinate: Coordinate(latitude: 43.65, longitude: -79.38), countryCode: country)
+        }
+        #expect(NWSAlerts.covers(place("US")) && NWSAlerts.covers(place("pr")))
+        // Toronto is inside any box drawn around the lower 48; it's the country that decides.
+        #expect(!NWSAlerts.covers(place("CA")) && !NWSAlerts.covers(place("MX")))
+        // Unknown means not sent.
+        #expect(!NWSAlerts.covers(place(nil)))
         let request = try #require(NWSAlerts.request(at: Coordinate(latitude: 40.712776, longitude: -74.005974)))
         #expect(request.value(forHTTPHeaderField: "User-Agent")?.contains("HoverEnhance") == true)
         #expect(request.url?.absoluteString.contains("point=40.71,-74.01") == true)
@@ -229,6 +243,9 @@ struct WeatherModelTests {
         #expect(report([0, 0, 1.2, 2]).nextHourPrecipitation(from: now) == .starting(now.addingTimeInterval(1800)))
         #expect(report([2, 1, 0, 0]).nextHourPrecipitation(from: now) == .now(until: now.addingTimeInterval(1800)))
         #expect(report([2, 2, 2, 2]).nextHourPrecipitation(from: now) == .now(until: nil))
+        // Partway through the quarter hour under way, its rain is falling now, not starting next quarter.
+        #expect(report([2, 2, 2, 2, 2]).nextHourPrecipitation(from: now.addingTimeInterval(100)) == .now(until: nil))
+        #expect(report([0, 2, 2, 2, 2]).nextHourPrecipitation(from: now.addingTimeInterval(100)) == .starting(now.addingTimeInterval(900)))
 
         var hourlyOnly = report([])
         hourlyOnly.hourly = [.init(time: now, condition: .rain, temperature: 10, precipitationChance: 70)]
@@ -306,6 +323,7 @@ private final class FixtureHTTP: WeatherHTTP, @unchecked Sendable {
             case "api.open-meteo.com": return try fixture("open-meteo-forecast")
             case "air-quality-api.open-meteo.com": return try fixture("open-meteo-air")
             case "api.weather.gov": if failNWS { throw WeatherError.unavailable(400) } else { return Data(#"{"features":[]}"#.utf8) }
+            case "api.weatherapi.com": return try fixture("weatherapi-forecast")
             default: throw WeatherError.unavailable(404)
             }
         } catch let error as WeatherError {
@@ -318,7 +336,8 @@ private final class FixtureHTTP: WeatherHTTP, @unchecked Sendable {
 
 @MainActor
 struct WeatherServiceTests {
-    private let newYork = WeatherPlace(name: "New York", coordinate: Coordinate(latitude: 40.71, longitude: -74.01), timeZoneID: "America/New_York")
+    private let newYork = WeatherPlace(name: "New York", coordinate: Coordinate(latitude: 40.71, longitude: -74.01), timeZoneID: "America/New_York",
+                                       countryCode: "US")
 
     @Test func aForecastIsKeptTenMinutesAndSharedByTheSamePlace() async throws {
         let http = FixtureHTTP()
@@ -340,10 +359,32 @@ struct WeatherServiceTests {
         #expect(report.alerts.isEmpty)
     }
 
+    @Test func providersWithAlertsOfTheirOwnDontAskTheNWS() async {
+        let http = FixtureHTTP()
+        let service = WeatherService(http: http, currentLocation: { () async throws(WeatherError) in throw .noLocation }, key: { _ in "key" })
+        _ = await service.report(.weatherAPI, at: newYork, alertsFromNWS: true)
+        #expect(http.requests.count == 1 && !http.requests.contains { $0.host() == "api.weather.gov" })
+    }
+
+    @Test func hiddenAlertsArentLookedUp() async {
+        let http = FixtureHTTP()
+        let service = WeatherService(http: http, currentLocation: { () async throws(WeatherError) in throw .noLocation }, key: { _ in nil })
+        let name = "HoverEnhanceTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: name)!
+        defer { defaults.removePersistentDomain(forName: name) }
+        let settings = AppSettings(defaults: defaults)
+        settings.weatherLocation = .place(newYork)
+        settings.weatherHiddenSections = [.alerts]
+        let model = WeatherPopupModel(settings: settings, service: service)
+        await model.load()
+        guard case .report = model.state else { Issue.record("no report"); return }
+        #expect(!http.requests.contains { $0.host() == "api.weather.gov" })
+    }
+
     @Test func outsideTheUSTheNWSIsntAsked() async {
         let http = FixtureHTTP()
         let service = WeatherService(http: http, currentLocation: { () async throws(WeatherError) in throw .noLocation }, key: { _ in nil })
-        _ = await service.report(.openMeteo, at: WeatherPlace(name: "Berlin", coordinate: berlin), alertsFromNWS: true)
+        _ = await service.report(.openMeteo, at: WeatherPlace(name: "Berlin", coordinate: berlin, countryCode: "DE"), alertsFromNWS: true)
         #expect(!http.requests.contains { $0.host() == "api.weather.gov" })
     }
 
