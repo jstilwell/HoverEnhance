@@ -19,8 +19,6 @@ final class FileCard {
     private(set) var thumbnail: NSImage?
     /// Who signed an app; nil for anything else.
     private(set) var signature: FileDetails.Lookup<String>?
-    /// Uncommitted changes in a Git repository; nil for anything else.
-    private(set) var gitChanges: FileDetails.Lookup<Int>?
     /// Who's using it; nil while looking.
     private(set) var users: [FileUser]?
     private(set) var userIcons: [pid_t: NSImage] = [:]
@@ -44,18 +42,17 @@ final class FileCard {
         name = FileManager.default.displayName(atPath: path)
         icon = NSWorkspace.shared.icon(forFile: path)
         if details.app != nil, options.shows(.signature) { signature = .loading }
-        if details.git != nil, options.shows(.gitChanges) { gitChanges = .loading }
     }
 
-    /// The signature and Git changes, which take longer than the rest.
+    /// The signature, which takes longer than the rest.
     func loadSlowDetails() async {
         if signature == .loading {
             let url = url
-            let found = await Task.detached { AppBundleInfo.signature(of: url) }.value
+            // On a queue of its own: it can wait seconds for every file to be checked.
+            let found = await withCheckedContinuation { continuation in
+                DispatchQueue.global(qos: .userInitiated).async { continuation.resume(returning: AppBundleInfo.signature(of: url)) }
+            }
             signature = found.map { .found($0) } ?? .failed
-        }
-        if gitChanges == .loading {
-            gitChanges = await GitRepository.changeCount(in: url).map { .found($0) } ?? .failed
         }
     }
 
@@ -71,7 +68,7 @@ final class FileCard {
         return [details.kind, size].compactMap { $0 }.joined(separator: " · ")
     }
 
-    var rows: [DetailRow] { details.rows(pathStyle: options.pathStyle, signature: signature, changes: gitChanges) }
+    var rows: [DetailRow] { details.rows(pathStyle: options.pathStyle, signature: signature) }
 
     static let pathID = "path"
     static let linkTargetID = "linkTarget"
@@ -80,7 +77,8 @@ final class FileCard {
 
     /// Folders and files Quick Look can't draw keep their icon.
     func loadThumbnail() async {
-        guard options.shows(.thumbnail), thumbnail == nil else { return }
+        // Quick Look would read the file, and one that's only in the cloud would download for it.
+        guard options.shows(.thumbnail), !details.isCloudOnly, thumbnail == nil else { return }
         let request = QLThumbnailGenerator.Request(fileAt: url, size: CGSize(width: Self.imageSize, height: Self.imageSize),
                                                    scale: NSScreen.main?.backingScaleFactor ?? 2, representationTypes: .thumbnail)
         thumbnail = try? await QLThumbnailGenerator.shared.generateBestRepresentation(for: request).nsImage
@@ -97,6 +95,7 @@ final class FileCard {
     func loadUsers() async {
         guard options.shows(.users), users == nil else { return }
         let found = await FileUsers.find(url)
+        guard !Task.isCancelled else { return }
         for user in found {
             // Commands get the Unix executable icon. Their own file's icon depends on its name, and
             // Claude Code's, named for its version ("2.1.296"), looks like an unknown document.
@@ -158,5 +157,23 @@ final class FileCard {
             try? await Task.sleep(for: .seconds(1.5))
             if generation == copyGeneration { copied = nil }
         }
+    }
+}
+
+extension String {
+    /// With characters that hide or rearrange text written out as their codes, so a name reads as what it
+    /// is: control characters, and the direction overrides that can make "invoice\u{202E}fdp.app" look like
+    /// "invoiceppa.pdf".
+    var showingHiddenCharacters: String {
+        var shown = ""
+        for scalar in unicodeScalars {
+            switch scalar.value {
+            case 0x00 ... 0x1F, 0x7F ... 0x9F, 0x202A ... 0x202E, 0x2066 ... 0x2069:
+                shown += String(format: "<U+%04X>", scalar.value)
+            default:
+                shown.unicodeScalars.append(scalar)
+            }
+        }
+        return shown
     }
 }

@@ -23,6 +23,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let preview = PreviewController()
     private let hud = HUD()
     private let access = AccessibilityWatcher()
+    private let pauseShortcut = GlobalShortcut()
     private var statusItem: NSStatusItem?
     private var settingsWindow: SettingsWindowController?
     private var aboutWindow: AboutWindowController?
@@ -30,10 +31,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// Whether the app proper is up: the menu bar item and the hover monitor. It waits for access.
     private var isRunning = false
     private var lastInfo: HoverInfo?
+    /// The last web page hovered, and the app showing it, for skipping its website from the menu.
+    private var lastWebPage: (pid: pid_t, url: URL)?
+    /// Whether the activation key was down at the last modifier change, so other modifiers are ignored.
+    private var activationKeyHeld = false
 
     private var versionItem: NSMenuItem!
     private var grantItem: NSMenuItem!
     private var previewsItem: NSMenuItem!
+    private var skipSiteItem: NSMenuItem!
     private var copyItem: NSMenuItem!
     private var updateItem: NSMenuItem!
 
@@ -61,7 +67,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         monitor.onScroll = { [weak self] in self?.preview.scrolled() }
         monitor.onClick = { [weak self] in self?.preview.dismiss() }
         monitor.onModifiersChanged = { [weak self] flags in self?.modifiersChanged(flags) }
-        monitor.onKeyDown = { [weak self] in self?.preview.keyPressed() }
+        monitor.onKeyDown = { [weak self] isEscape in self?.preview.keyPressed(isEscape: isEscape) }
+        monitor.policy = { AppSettings.shared.inspectionPolicy }
+        monitor.shouldInspect = { AppSettings.shared.inspectsOnRest(holding: NSEvent.modifierFlags) }
+        // Paused or not before it starts, so a paused launch switches nothing on in the app in front.
+        updateActivity()
         monitor.start()
 
         NotificationCenter.default.addObserver(forName: .showSettingsTab, object: nil, queue: .main) { [weak self] note in
@@ -80,7 +90,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             if shows, let lastInfo { hud.show(lastInfo.summary) } else { hud.hide() }
             updateActivity()
         }
-        updateActivity()
+        whenChanged({ AppSettings.shared.inspectionPolicy }) { [weak self] _ in self?.monitor.settingsChanged() }
+        pauseShortcut.action = { [weak self] in self?.togglePreviews() }
+        registerPauseShortcut(settings.pauseShortcut)
+        whenChanged({ AppSettings.shared.pauseShortcut }) { [weak self] shortcut in self?.registerPauseShortcut(shortcut) }
         whenChanged({ Updates.shared.waitingVersion }) { [weak self] version in
             self?.statusItem?.button?.image = MenuBarIcon.image(badged: version != nil)
         }
@@ -91,8 +104,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     /// Inspects only while something uses what's found, and dims the menu bar icon while previews are off.
     private func updateActivity() {
-        monitor.isPaused = !settings.previewsEnabled && !settings.showsInspector
+        let paused = !settings.previewsEnabled && !settings.showsInspector
+        if paused != monitor.isPaused {
+            monitor.isPaused = paused
+            monitor.settingsChanged()
+            // Key changes weren't heard while paused.
+            activationKeyHeld = NSEvent.modifierFlags.contains(settings.activationKey.flag)
+        }
         statusItem?.button?.appearsDisabled = !settings.previewsEnabled
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        if isRunning { monitor.stop() }
+    }
+
+    private func registerPauseShortcut(_ shortcut: Shortcut?) {
+        if !pauseShortcut.register(shortcut), let shortcut {
+            log.error("pause shortcut \(shortcut.label, privacy: .public) is taken by another app")
+        }
     }
 
     private func accessChanged(_ granted: Bool) {
@@ -131,6 +160,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         switch result {
         case .success(let info):
             preview.hovered(info, again: again)
+            if let page = info.websiteURL { lastWebPage = (info.pid, page) }
             guard info != lastInfo else { return }
             lastInfo = info
             #if DEBUG
@@ -156,6 +186,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// With an activation key in use, pressing or releasing it shows or hides the preview without
     /// waiting for the mouse to move.
     private func modifiersChanged(_ flags: NSEvent.ModifierFlags) {
+        // Only the activation key going down or up counts, not ⌘ for a shortcut, say.
+        let held = flags.contains(settings.activationKey.flag)
+        guard held != activationKeyHeld else { return }
+        activationKeyHeld = held
         guard settings.usesActivationKey else { return }
         if settings.previewsAllowed(holding: flags) {
             monitor.inspectNow()
@@ -186,6 +220,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         versionItem.isEnabled = false
         grantItem = menuItem("Grant Accessibility Access…", action: #selector(grantAccess), symbol: "hand.raised")
         previewsItem = menuItem("Show Previews", action: #selector(togglePreviews), key: "e", symbol: "eye")
+        skipSiteItem = menuItem("Skip Previews on This Website", action: #selector(toggleSkippedSite), symbol: "nosign")
         copyItem = menuItem("Copy Inspector Result", action: #selector(copyLastResult), key: "c", symbol: "doc.on.doc")
         updateItem = menuItem("Check for Updates…", action: #selector(checkForUpdates), symbol: "arrow.triangle.2.circlepath")
 
@@ -194,7 +229,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.autoenablesItems = false
         menu.items = [
             versionItem, grantItem, .separator(),
-            previewsItem, copyItem, .separator(),
+            previewsItem, skipSiteItem, copyItem, .separator(),
             menuItem("About HoverEnhance", action: #selector(showAbout), symbol: "info.circle"),
             updateItem,
             menuItem("Settings…", action: #selector(showSettings), key: ",", symbol: "gearshape"),
@@ -214,7 +249,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         return item
     }
 
-    /// Never shown for a menu bar app, but it gives the Settings window ⌘, ⌘W, and ⌘Q.
+    /// Never shown for a menu bar app, but it gives the Settings window ⌘, ⌘W, and ⌘Q, and its text
+    /// fields cut, copy, paste, and undo, which AppKit finds through the Edit menu.
     private func installMainMenu() {
         let appMenu = NSMenu()
         let aboutItem = NSMenuItem(title: "About HoverEnhance", action: #selector(showAbout), keyEquivalent: "")
@@ -226,11 +262,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             settingsItem, .separator(),
             NSMenuItem(title: "Quit HoverEnhance", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"),
         ]
+        let editMenu = NSMenu(title: "Edit")
+        let redo = NSMenuItem(title: "Redo", action: Selector(("redo:")), keyEquivalent: "z")
+        redo.keyEquivalentModifierMask = [.command, .shift]
+        editMenu.items = [
+            NSMenuItem(title: "Undo", action: Selector(("undo:")), keyEquivalent: "z"), redo, .separator(),
+            NSMenuItem(title: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x"),
+            NSMenuItem(title: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c"),
+            NSMenuItem(title: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v"),
+            NSMenuItem(title: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a"),
+        ]
         let windowMenu = NSMenu(title: "Window")
         windowMenu.items = [NSMenuItem(title: "Close", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")]
 
         let main = NSMenu()
-        for submenu in [appMenu, windowMenu] {
+        for submenu in [appMenu, editMenu, windowMenu] {
             let item = NSMenuItem()
             item.submenu = submenu
             main.addItem(item)
@@ -242,6 +288,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let granted = access.isGranted
         grantItem.isHidden = granted
         previewsItem.state = settings.previewsEnabled ? .on : .off
+        if let domain = lastWebsite {
+            skipSiteItem.isHidden = false
+            skipSiteItem.title = settings.skippedWebsites.contains(domain) ? "Allow Previews on \(domain)" : "Skip Previews on \(domain)"
+        } else {
+            skipSiteItem.isHidden = true
+        }
         copyItem.isHidden = !settings.showsInspector
         copyItem.isEnabled = lastInfo != nil
         let updates = Updates.shared
@@ -273,6 +325,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc private func togglePreviews() {
         settings.previewsEnabled.toggle()
+    }
+
+    /// The website of the page last hovered, while its app is in front, for skipping it from the menu.
+    private var lastWebsite: String? {
+        guard let (pid, page) = lastWebPage, NSWorkspace.shared.frontmostApplication?.processIdentifier == pid,
+              ["http", "https"].contains(page.scheme?.lowercased()) else { return nil }
+        // Already skipped by a broader entry: that's the one to allow again.
+        let host = page.host(percentEncoded: false)?.lowercased() ?? ""
+        return settings.skippedWebsites.first { host == $0 || host.hasSuffix("." + $0) } ?? SkippedWebsites.domain(from: host)
+    }
+
+    @objc private func toggleSkippedSite() {
+        guard let domain = lastWebsite else { return }
+        if settings.skippedWebsites.contains(domain) {
+            settings.skippedWebsites.removeAll { $0 == domain }
+        } else {
+            settings.skippedWebsites.append(domain)
+            preview.reset(because: "website skipped")
+        }
     }
 
     @objc private func copyLastResult() {

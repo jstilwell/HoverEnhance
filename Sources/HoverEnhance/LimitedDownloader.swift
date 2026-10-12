@@ -19,6 +19,9 @@ final class LimitedDownloader: NSObject, URLSessionDataDelegate, @unchecked Send
         var data = Data()
     }
 
+    /// The most set aside ahead of a response, whatever size it claims: the header is only the server's word.
+    private static let largestReservation: Int64 = 64 << 20
+
     /// In-flight downloads by task; the session calls back on its own queue.
     private let downloads = OSAllocatedUnfairLock<[Int: Download]>(initialState: [:])
     private var session: URLSession!
@@ -54,13 +57,15 @@ final class LimitedDownloader: NSObject, URLSessionDataDelegate, @unchecked Send
                     completionHandler: @escaping @Sendable (URLSession.ResponseDisposition) -> Void) {
         // -1 when the server doesn't say.
         let expected = response.expectedContentLength
-        let limit = downloads.withLock { downloads -> Int64?? in
-            guard downloads[dataTask.taskIdentifier] != nil else { return nil }
-            downloads[dataTask.taskIdentifier]?.response = response
-            if expected > 0, expected <= Int64(Int.max) { downloads[dataTask.taskIdentifier]?.data.reserveCapacity(Int(expected)) }
-            return .some(downloads[dataTask.taskIdentifier]?.limit)
+        let tooLarge = downloads.withLock { downloads -> Bool in
+            let id = dataTask.taskIdentifier
+            guard downloads[id] != nil else { return false }
+            if let limit = downloads[id]?.limit, expected > limit { return true }
+            downloads[id]?.response = response
+            if expected > 0 { downloads[id]?.data.reserveCapacity(Int(min(expected, Self.largestReservation))) }
+            return false
         }
-        if let limit = limit ?? nil, expected > limit {
+        if tooLarge {
             finish(dataTask) { _ in .tooLarge(bytes: expected) }
             completionHandler(.cancel)
         } else {
@@ -70,16 +75,21 @@ final class LimitedDownloader: NSObject, URLSessionDataDelegate, @unchecked Send
 
     func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
         let overLimit = downloads.withLock { downloads -> Bool in
-            guard var download = downloads[dataTask.taskIdentifier] else { return false }
-            download.data.append(data)
-            if let limit = download.limit, Int64(download.data.count) > limit { return true }
-            downloads[dataTask.taskIdentifier] = download
-            return false
+            let id = dataTask.taskIdentifier
+            // Appended in place: a copy of the download would copy everything received so far, every time.
+            downloads[id]?.data.append(data)
+            guard let limit = downloads[id]?.limit, let count = downloads[id]?.data.count else { return false }
+            return Int64(count) > limit
         }
         if overLimit {
             finish(dataTask) { _ in .tooLarge(bytes: nil) }
             dataTask.cancel()
         }
+    }
+
+    func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse,
+                    newRequest request: URLRequest, completionHandler: @escaping @Sendable (URLRequest?) -> Void) {
+        completionHandler(LocalRedirectGuard.allows(from: task.originalRequest?.url, to: request.url) ? request : nil)
     }
 
     func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: (any Error)?) {

@@ -10,7 +10,8 @@ enum FileMediaKind: Equatable, Sendable {
     /// Audio and video need what their tracks say, from `FileDetails.addMedia`, to tell them apart:
     /// an .mp4 can hold sound alone.
     init?(details: FileDetails) {
-        guard let type = details.contentType else { return nil }
+        // Showing it large would mean downloading it.
+        guard !details.isCloudOnly, let type = details.contentType else { return nil }
         if type.conforms(to: .image) {
             self = .image
         } else if type.conforms(to: .audiovisualContent), let media = details.media {
@@ -127,30 +128,18 @@ private struct AudioArtworkView: View {
     }
 }
 
-/// Images on disk, read for a large preview.
+/// Images on disk, read for a large preview, with the same limits as images from the web.
 enum LocalImage {
     /// The image's size in pixels as shown (after its EXIF orientation), without decoding it.
     static func pixelSize(of url: URL) -> CGSize? {
-        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
-              let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
-              let width = properties[kCGImagePropertyPixelWidth] as? Int, let height = properties[kCGImagePropertyPixelHeight] as? Int,
-              width > 0, height > 0 else { return nil }
-        // EXIF orientations 5–8 turn the image 90°.
-        let rotated = (properties[kCGImagePropertyOrientation] as? Int ?? 1) >= 5
-        return rotated ? CGSize(width: height, height: width) : CGSize(width: width, height: height)
+        CGImageSourceCreateWithURL(url as CFURL, nil).flatMap { ImageDecoder.Picture($0) }?.pixelSize
     }
 
-    /// Decoded with its long edge at most `maxPixelSize`; animated images whole, so they play.
+    /// Decoded with its long edge at most `maxPixelSize`; animations whole, so they play.
     static func load(_ url: URL, maxPixelSize: Int) -> NSImage? {
-        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
-        if CGImageSourceGetCount(source) > 1 { return NSImage(contentsOf: url) }
-        let options: [CFString: Any] = [
-            kCGImageSourceCreateThumbnailFromImageAlways: true,
-            kCGImageSourceCreateThumbnailWithTransform: true,
-            kCGImageSourceThumbnailMaxPixelSize: maxPixelSize,
-            kCGImageSourceShouldCacheImmediately: true,
-        ]
-        guard let image = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else { return nil }
-        return NSImage(cgImage: image, size: NSSize(width: image.width, height: image.height))
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil), let picture = ImageDecoder.Picture(source),
+              picture.isDecodable else { return nil }
+        if picture.isAnimation { return NSImage(contentsOf: url) }
+        return ImageDecoder.thumbnail(of: picture, in: source, maxPixelSize: maxPixelSize)
     }
 }

@@ -2,71 +2,108 @@ import Foundation
 
 /// Turns a `MediaSource` into displayable media, doing whatever lookup the site needs.
 actor MediaFetcher {
-    private let session = URLSession(configuration: .default)
+    private let session: URLSession
     /// Lookups, kept for a while: some sites' video links stop working after a few hours.
     private var looked: [MediaSource: (media: Media, time: Date)] = [:]
     private let lookupLifetime: TimeInterval = 30 * 60
+    /// Lookups that came back empty, kept briefly, so hovering the same link again doesn't ask again at
+    /// once, or load Reddit's page in a web view again.
+    private var missed: [MediaSource: (failed: Bool, time: Date)] = [:]
+    private let missLifetime: TimeInterval = 60
+
+    enum Lookup: Sendable, Equatable {
+        case found(Media)
+        /// The site answered with nothing to show, as for a post without photos or video.
+        case nothing
+        /// The site didn't answer, or refused.
+        case failed
+    }
+
+    /// Whether any of one lookup's requests went unanswered.
+    private final class Requests {
+        var failed = false
+    }
     private var blueskyDIDs: [String: String] = [:]
     /// YouTube channel pages are about a megabyte, so each is read once per session.
     private var youtubeChannels: [URL: YouTubeChannel] = [:]
 
-    func media(for source: MediaSource) async -> Media? {
-        if let cached = looked[source], Date().timeIntervalSince(cached.time) < lookupLifetime { return cached.media }
+    init(configuration: URLSessionConfiguration = MediaFetcher.configuration()) {
+        session = URLSession(configuration: configuration)
+    }
+
+    static func configuration() -> URLSessionConfiguration {
+        let configuration = URLSessionConfiguration.default
+        // A spinner is up while a lookup runs; the defaults would leave it there a minute or more.
+        configuration.timeoutIntervalForRequest = 10
+        configuration.timeoutIntervalForResource = 20
+        return configuration
+    }
+
+    func lookUp(_ source: MediaSource) async -> Lookup {
+        if let cached = looked[source], Date().timeIntervalSince(cached.time) < lookupLifetime { return .found(cached.media) }
+        if let miss = missed[source], Date().timeIntervalSince(miss.time) < missLifetime { return miss.failed ? .failed : .nothing }
+        let requests = Requests()
         let lookedUp: Media?
         switch source {
         case .images(let urls):
-            return Media(items: [.image(urls)])
+            return .found(Media(items: [.image(urls)]))
         case .video(let url):
-            return Media(items: [.video(url, size: nil)])
+            return .found(Media(items: [.video(url, size: nil)]))
         case .embed(let embed):
-            return Media(items: [.embed(embed)])
+            return .found(Media(items: [.embed(embed)]))
         case .file(let url, _):
-            return Media(items: [.file(url)])
+            return .found(Media(items: [.file(url)]))
         case .redditGallery(let id):
-            lookedUp = await redditGallery(id: id)
+            lookedUp = await redditGallery(id: id, requests)
         case .streamable(let id):
-            lookedUp = await data(at: SiteAPIs.streamableURL(id: id)).flatMap(SiteAPIs.streamable)
+            lookedUp = await data(at: SiteAPIs.streamableURL(id: id), requests).flatMap(SiteAPIs.streamable)
         case .tweet(let id):
-            lookedUp = await data(at: SiteAPIs.tweetURL(id: id)).flatMap(SiteAPIs.tweet)
+            lookedUp = await data(at: SiteAPIs.tweetURL(id: id), requests).flatMap(SiteAPIs.tweet)
         case .blueskyPost(let actor, let rkey):
-            lookedUp = await blueskyPost(actor: actor, rkey: rkey)
+            lookedUp = await blueskyPost(actor: actor, rkey: rkey, requests)
         case .instagram(let code):
-            lookedUp = await instagram(code: code)
+            lookedUp = await instagram(code: code, requests)
         case .youtubeChannel(let ref):
-            lookedUp = await youtubeChannel(ref).map { Media(items: [.channel($0)]) }
+            lookedUp = await youtubeChannel(ref, requests).map { Media(items: [.channel($0)]) }
         }
         // A lookup cut short, as when the cursor moves on, is no answer to keep.
-        guard !Task.isCancelled else { return nil }
-        let media = lookedUp?.webOnly()
-        looked[source] = media.map { ($0, Date()) }
-        return media
+        guard !Task.isCancelled else { return .nothing }
+        if let media = lookedUp?.webOnly() {
+            looked[source] = (media, Date())
+            missed[source] = nil
+            return .found(media)
+        }
+        missed = missed.filter { Date().timeIntervalSince($0.value.time) < missLifetime }
+        missed[source] = (requests.failed, Date())
+        return requests.failed ? .failed : .nothing
     }
 
-    private func redditGallery(id: String) async -> Media? {
+    private func redditGallery(id: String, _ requests: Requests) async -> Media? {
         let url = RedditGallery.pageURL(id: id)
-        var urls = await data(at: url).map { RedditGallery.imageURLs(inPage: String(decoding: $0, as: UTF8.self)) } ?? []
+        var urls = await data(at: url, requests).map { RedditGallery.imageURLs(inPage: String(decoding: $0, as: UTF8.self)) } ?? []
         if urls.isEmpty {
             // Without a cookie from an earlier visit Reddit serves a JavaScript check instead of the
-            // page; a real browser engine passes it.
+            // page; a real browser engine passes it. Whether that answers decides whether this failed.
             let carousel = await WebPageLoader.shared.html(at: url, selector: "gallery-carousel")
+            requests.failed = carousel == nil
             urls = carousel.map(RedditGallery.imageURLs(inPage:)) ?? []
         }
         let items = urls.map { MediaItem.image((ImageRules.fullSize(of: $0) + [$0]).uniqued()) }
         return items.isEmpty ? nil : Media(items: items)
     }
 
-    private func blueskyPost(actor: String, rkey: String) async -> Media? {
+    private func blueskyPost(actor: String, rkey: String, _ requests: Requests) async -> Media? {
         var did = actor.hasPrefix("did:") ? actor : blueskyDIDs[actor]
         if did == nil, let url = SiteAPIs.blueskyHandleURL(actor) {
-            did = await data(at: url).flatMap(SiteAPIs.blueskyDID)
+            did = await data(at: url, requests).flatMap(SiteAPIs.blueskyDID)
             blueskyDIDs[actor] = did
         }
         guard let did, let url = SiteAPIs.blueskyPostURL(did: did, rkey: rkey) else { return nil }
-        return await data(at: url).flatMap(SiteAPIs.blueskyPost)
+        return await data(at: url, requests).flatMap(SiteAPIs.blueskyPost)
     }
 
-    private func instagram(code: String) async -> Media? {
-        guard let page = await data(at: SiteAPIs.instagramEmbedURL(code: code)) else { return nil }
+    private func instagram(code: String, _ requests: Requests) async -> Media? {
+        guard let page = await data(at: SiteAPIs.instagramEmbedURL(code: code), requests) else { return nil }
         if let media = SiteAPIs.instagram(embedPage: String(decoding: page, as: UTF8.self)) {
             return media
         }
@@ -75,21 +112,24 @@ actor MediaFetcher {
         return Media(items: [.image([SiteAPIs.instagramImageURL(code: code)])])
     }
 
-    private func youtubeChannel(_ ref: YouTubeChannelRef) async -> YouTubeChannel? {
+    private func youtubeChannel(_ ref: YouTubeChannelRef, _ requests: Requests) async -> YouTubeChannel? {
         var page = YouTube.channelPageURL(for: ref)
         if case .video(let id) = ref {
-            page = await data(at: YouTube.oEmbedURL(videoID: id)).flatMap(YouTube.channelPageURL(fromOEmbed:))
+            page = await data(at: YouTube.oEmbedURL(videoID: id), requests).flatMap(YouTube.channelPageURL(fromOEmbed:))
         }
         guard let page else { return nil }
         if let known = youtubeChannels[page] { return known }
-        guard let html = await data(at: page), let channel = YouTube.channel(inPage: String(decoding: html, as: UTF8.self)) else { return nil }
+        guard let html = await data(at: page, requests), let channel = YouTube.channel(inPage: String(decoding: html, as: UTF8.self)) else { return nil }
         youtubeChannels[page] = channel
         return channel
     }
 
-    private func data(at url: URL) async -> Data? {
-        guard let (data, response) = try? await session.data(from: url),
-              (response as? HTTPURLResponse)?.statusCode == 200 else { return nil }
+    private func data(at url: URL, _ requests: Requests) async -> Data? {
+        guard let (data, response) = try? await session.data(from: url, delegate: LocalRedirectGuard.shared),
+              (response as? HTTPURLResponse)?.statusCode == 200 else {
+            requests.failed = true
+            return nil
+        }
         return data
     }
 }

@@ -18,7 +18,8 @@ extension needed.
   videos' own tags say. Click any detail to copy it.
 
 Images the page already shows large are left alone unless their post has more photos, as are videos
-it's already playing. Move away, click, or switch apps, and the preview is gone.
+it's already playing. Move away, click, press Esc, or switch apps or Spaces, and the preview is
+gone.
 
 ## Install
 
@@ -26,20 +27,25 @@ Download the latest DMG from [Releases](https://github.com/jstilwell/HoverEnhanc
 it, and drag HoverEnhance to Applications. It's signed, notarized, and updates itself.
 
 A welcome window walks you through turning on Accessibility access, which lets HoverEnhance see
-what's under the cursor. Requires macOS 14 or later.
+what's under the cursor: it adds HoverEnhance to the list, and you switch it on. Requires macOS 14
+or later.
 
 ## Privacy
 
 - **Only what you hover**: HoverEnhance reads the thing under the cursor, never what you type.
 - **Only where you point**: it contacts the sites behind what you hover, GitHub to check for
   updates, and Google only if you sign in to subscribe to YouTube channels.
+- **Not your network**: links and images on a web page that point at your router, printer, or anything
+  else on your local network are left alone.
 - **Browsers by default**: links in other apps, like Mail, load nothing unless you allow it in Settings.
-- **No surprise downloads**: images over 25 MB (adjustable) wait for you to click Load Anyway.
+- **No surprise downloads**: images over 25 MB (adjustable) wait for you to click Load Anyway, and
+  files only in iCloud stay there.
 
 ## Settings
 
-From the menu bar icon: when previews appear (always, or while holding a key), the hover delay,
-apps and sites to skip, what file cards show, preview size, and video playback.
+From the menu bar icon: a shortcut that pauses previews from any app, when they appear (always, or
+while holding a key), the hover delay, apps and websites to skip, what file cards show, preview size,
+and video playback. The menu can also skip the website you're on.
 
 ## Building from source
 

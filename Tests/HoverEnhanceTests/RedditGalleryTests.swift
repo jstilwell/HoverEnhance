@@ -46,6 +46,22 @@ struct MediaResolverTests {
         #expect(MediaResolver.source(for: info) == .redditGallery(id: "1q2w3er"))
     }
 
+    @Test func aFramesWebsiteIsTheTabsPage() {
+        var info = HoverInfo(pid: 1)
+        info.pageURL = URL(string: "https://ads.example.net/frame")
+        #expect(info.websiteURL == info.pageURL)
+        info.topPageURL = URL(string: "https://bank.example/account")
+        #expect(info.websiteURL == info.topPageURL)
+    }
+
+    @Test func plainTextGetsNoSecondLook() {
+        var info = HoverInfo(pid: 1)
+        info.role = "AXStaticText"
+        #expect(info.isPlainText)
+        info.linkURL = URL(string: "https://example.com/")
+        #expect(!info.isPlainText)
+    }
+
     @Test func plainImagesStillResolve() {
         var info = HoverInfo(pid: 1)
         info.imageURL = URL(string: "https://example.com/a.png")

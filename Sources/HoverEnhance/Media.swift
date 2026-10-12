@@ -63,9 +63,9 @@ struct Media: Sendable, Equatable {
     }
 
     /// Without images and videos anywhere but the web, or nil if nothing is left. Lookups read what
-    /// sites answer, and an answer mustn't point HoverEnhance at local files.
+    /// sites answer, and an answer mustn't point HoverEnhance at local files or the local network.
     func webOnly() -> Media? {
-        func isWeb(_ url: URL) -> Bool { ["http", "https"].contains(url.scheme?.lowercased()) }
+        func isWeb(_ url: URL) -> Bool { ["http", "https"].contains(url.scheme?.lowercased()) && !LocalNetwork.contains(url) }
         let items = items.compactMap { item -> MediaItem? in
             switch item {
             case .image(let urls):
@@ -101,6 +101,13 @@ enum MediaResolver {
         if info.pageURL?.isFileURL != true {
             if info.linkURL?.isFileURL == true { info.linkURL = nil }
             if info.imageURL?.isFileURL == true { info.imageURL = nil }
+        }
+        // Nor may a web page lead to this Mac's servers or the local network, as browsers keep it from
+        // doing itself; see `LocalNetwork`.
+        if info.pageURL?.isFileURL != true, !LocalNetwork.contains(info.pageURL) {
+            if LocalNetwork.contains(info.linkURL) { info.linkURL = nil }
+            if LocalNetwork.contains(info.imageURL) { info.imageURL = nil }
+            if LocalNetwork.contains(info.postURL) { info.postURL = nil }
         }
         // On YouTube itself, its thumbnails and hover previews are left alone. Text links to its
         // videos and channels get a card about the creator; text links elsewhere preview as usual.

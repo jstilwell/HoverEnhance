@@ -164,6 +164,15 @@ final class PreviewPanel {
         PreviewGeometry.room(anchor: anchor, visible: visibleFrame(at: anchor), maxFraction: CGFloat(AppSettings.shared.maximumSize))
     }
 
+    /// Whether the spinner is what's on screen.
+    var isShowingLoading: Bool { panel.isVisible && content === loadingView }
+
+    /// In place of the spinner, when what it waited for couldn't be loaded.
+    func showFailure(anchor: CGPoint) {
+        let view = NSHostingView(rootView: LoadFailedView())
+        present(view, naturalSize: view.fittingSize, counter: nil, interactive: false, anchor: anchor)
+    }
+
     /// A small spinner where the preview will appear, joined to the cursor by the notch, while it loads.
     func showLoading(anchor: CGPoint) {
         let size = CGSize(width: 20, height: 20)
@@ -279,6 +288,9 @@ final class PreviewPanel {
             spinner.stopAnimation(nil)
             imageView.image = nil
             playerView.player = nil
+            // A card's SwiftUI tree, or a paused player's web view, isn't kept by a hidden panel.
+            content?.removeFromSuperview()
+            content = nil
         }
     }
 
@@ -369,5 +381,15 @@ final class CardHostingView<Content: View>: NSHostingView<Content> {
     override func invalidateIntrinsicContentSize() {
         super.invalidateIntrinsicContentSize()
         onSizeChange?()
+    }
+}
+
+/// What replaces the spinner, for a moment, when the preview couldn't be loaded.
+private struct LoadFailedView: View {
+    var body: some View {
+        Label("Couldn't load a preview", systemImage: "exclamationmark.triangle")
+            .font(.callout)
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 4)
     }
 }

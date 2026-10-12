@@ -7,6 +7,8 @@ enum InspectionError: Error, Equatable {
     case appNotResponding
     /// The cursor is over one of our own windows (e.g. the HUD).
     case ownWindow
+    /// The cursor moved on before the look was done, so it wasn't finished.
+    case superseded
     case failed(code: Int32)
 
     init(_ error: AXError) {
@@ -24,9 +26,18 @@ enum InspectionError: Error, Equatable {
         case .nothingUnderCursor: "Nothing accessible under the cursor."
         case .appNotResponding: "The app under the cursor didn't respond in time."
         case .ownWindow: "(HoverEnhance)"
+        case .superseded: "(Moved on)"
         case .failed(let code): "Accessibility error \(code)."
         }
     }
+}
+
+/// What the settings ask of the inspector, as plain values it can take to its queue.
+struct InspectionPolicy: Sendable, Equatable {
+    /// Bundle IDs of apps previews skip: they get a bare result, without the walk through their tree.
+    var skipped: Set<String> = []
+    /// Whether apps other than browsers can show previews, and so are worth switching on (Electron apps).
+    var includesOtherApps = true
 }
 
 /// Answers "what's under this point?" using the Accessibility API.
@@ -38,58 +49,98 @@ final class HoverInspector: @unchecked Sendable {
     private let systemWide = AXElement.systemWide()
     private let ownPID = ProcessInfo.processInfo.processIdentifier
     private var preparedPIDs: Set<pid_t> = []
+    /// Apps whose web trees this switched on, with the attribute it set, so it can switch them back off.
+    /// Apps that had it on already, from VoiceOver or another tool, aren't listed: they're left as found.
+    private var switchedOn: [pid_t: (bundleURL: URL, attribute: String)] = [:]
 
     init() {
         // Applies to every element we message: don't let a hung app block us for the default 6 seconds.
         systemWide.setMessagingTimeout(0.25)
     }
 
-    /// `point` is in global display coordinates (top-left origin), as reported by `CGEvent`.
-    func inspect(at point: CGPoint) async -> Result<HoverInfo, InspectionError> {
+    /// `point` is in global display coordinates (top-left origin), as reported by `CGEvent`. `isWanted` is
+    /// asked before each slow part: a look the cursor has since moved away from isn't finished.
+    func inspect(at point: CGPoint, policy: InspectionPolicy = InspectionPolicy(),
+                 isWanted: @escaping @Sendable () -> Bool = { true }) async -> Result<HoverInfo, InspectionError> {
         await withCheckedContinuation { continuation in
-            queue.async { continuation.resume(returning: self.inspectNow(at: point)) }
+            queue.async { continuation.resume(returning: self.inspectNow(at: point, policy: policy, isWanted: isWanted)) }
         }
     }
 
     /// Asks Chromium and Electron apps to build their web-content accessibility tree, which they
     /// otherwise only do when they detect assistive technology.
-    func prepare(pid: pid_t) {
+    func prepare(pid: pid_t, policy: InspectionPolicy) {
         // Never this app: see `OwnWindows`.
         guard pid != ownPID else { return }
-        queue.async { _ = self.prepareIfNeeded(pid: pid) }
+        queue.async { _ = self.prepareIfNeeded(pid: pid, policy: policy) }
     }
 
-    private func inspectNow(at point: CGPoint) -> Result<HoverInfo, InspectionError> {
+    /// Switches web trees back off in apps the policy no longer previews, or in every app it switched on
+    /// when there's no policy (previews paused, or the app quitting). Left alone while VoiceOver runs,
+    /// which needs them. `wait` waits for it, for when the app is about to quit.
+    func switchOff(unlessKeptBy policy: InspectionPolicy?, voiceOverIsRunning: Bool, wait: Bool = false) {
+        let work: @Sendable () -> Void = { [self] in
+            for (pid, record) in switchedOn {
+                let app = NSRunningApplication(processIdentifier: pid)
+                // A pid can be another app's by now.
+                guard app?.bundleURL == record.bundleURL else {
+                    switchedOn[pid] = nil
+                    preparedPIDs.remove(pid)
+                    continue
+                }
+                if let policy, let app, qualifies(app, policy: policy) { continue }
+                if !voiceOverIsRunning { AXElement.application(pid: pid).set(record.attribute, to: kCFBooleanFalse) }
+                switchedOn[pid] = nil
+                preparedPIDs.remove(pid)
+            }
+        }
+        if wait { queue.sync(execute: work) } else { queue.async(execute: work) }
+    }
+
+    private func inspectNow(at point: CGPoint, policy: InspectionPolicy, isWanted: () -> Bool) -> Result<HoverInfo, InspectionError> {
+        guard isWanted() else { return .failure(.superseded) }
         let (hit, error) = systemWide.element(at: point)
         guard var element = hit else { return .failure(InspectionError(error)) }
         guard let pid = element.pid, pid != ownPID else { return .failure(.ownWindow) }
+        // Enough to know the app is skipped, without walking its tree.
+        if let app = NSRunningApplication(processIdentifier: pid), let bundleID = app.bundleIdentifier, policy.skipped.contains(bundleID) {
+            return .success(HoverInfo(pid: pid, appName: app.localizedName, bundleID: bundleID))
+        }
 
-        if prepareIfNeeded(pid: pid) {
+        if prepareIfNeeded(pid: pid, policy: policy) {
             // The tree is built asynchronously, so the first hit-test was likely shallow. Look again.
             Thread.sleep(forTimeInterval: 0.3)
             if let retried = systemWide.element(at: point).0 { element = retried }
         }
+        guard isWanted() else { return .failure(.superseded) }
         return .success(describe(element, pid: pid, at: point))
     }
 
+    /// Whether previews could appear in `app`, so its web tree is worth having.
+    private func qualifies(_ app: NSRunningApplication, policy: InspectionPolicy) -> Bool {
+        guard let bundleURL = app.bundleURL, !policy.skipped.contains(app.bundleIdentifier ?? "") else { return false }
+        return policy.includesOtherApps || AppKind.of(appAt: bundleURL) == .browser
+    }
+
     /// Returns true if this call just switched the app's tree on.
-    private func prepareIfNeeded(pid: pid_t) -> Bool {
-        guard preparedPIDs.insert(pid).inserted,
-              let bundleURL = NSRunningApplication(processIdentifier: pid)?.bundleURL,
-              let engine = WebEngine(appAt: bundleURL) else { return false }
+    private func prepareIfNeeded(pid: pid_t, policy: InspectionPolicy) -> Bool {
+        guard !preparedPIDs.contains(pid), let running = NSRunningApplication(processIdentifier: pid), qualifies(running, policy: policy),
+              let bundleURL = running.bundleURL else { return false }
+        preparedPIDs.insert(pid)
+        guard let engine = WebEngine(appAt: bundleURL) else { return false }
 
         let app = AXElement.application(pid: pid)
-        let result: AXError
-        switch engine {
-        case .electron:
-            result = app.set("AXManualAccessibility", to: kCFBooleanTrue)
-        case .chromium:
-            // What VoiceOver sets on launch. Chromium enables full web accessibility in response, two
-            // seconds after the last change. It's the only switch Chrome listens to: it ignores
-            // Electron's AXManualAccessibility. While it's on, AppKit animates window moves made
-            // through accessibility, which window managers such as Rectangle work around.
-            result = app.set("AXEnhancedUserInterface", to: kCFBooleanTrue)
+        let attribute = switch engine {
+        case .electron: "AXManualAccessibility"
+        // What VoiceOver sets on launch. Chromium enables full web accessibility in response, two
+        // seconds after the last change. It's the only switch Chrome listens to: it ignores
+        // Electron's AXManualAccessibility. While it's on, AppKit animates window moves made
+        // through accessibility, which window managers such as Rectangle work around.
+        case .chromium: "AXEnhancedUserInterface"
         }
+        if app.attribute(attribute) as? Bool == true { return false }
+        let result = app.set(attribute, to: kCFBooleanTrue)
+        if result == .success { switchedOn[pid] = (bundleURL, attribute) }
         // Without access nothing was switched on; try again once access is back.
         if result == .apiDisabled { preparedPIDs.remove(pid) }
         return true
@@ -107,15 +158,24 @@ final class HoverInspector: @unchecked Sendable {
         info.url = element.url
         info.frame = element.frame
 
-        // Walk up to find the enclosing link and page. The path is handy while exploring.
+        // Walk up to find the enclosing link and page, and past a frame's page to the tab's. The path is
+        // handy while exploring.
         var webArea: AXElement?
         var node: AXElement? = element
         while let current = node, info.ancestry.count < 40 {
             let role = current.role ?? "?"
             info.ancestry.append(role)
-            if role == "AXLink", info.linkURL == nil { info.linkURL = current.url }
-            if role == "AXWebArea" { info.pageURL = current.url; webArea = current; break }
             if role == kAXWindowRole { break }
+            if role == "AXWebArea" {
+                let url = current.url
+                if webArea == nil {
+                    info.pageURL = url
+                    webArea = current
+                }
+                info.topPageURL = url
+            } else if role == "AXLink", webArea == nil, info.linkURL == nil {
+                info.linkURL = current.url
+            }
             node = current.parent
         }
 

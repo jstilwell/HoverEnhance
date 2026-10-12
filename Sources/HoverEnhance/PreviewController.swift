@@ -12,12 +12,17 @@ final class PreviewController {
     private let panel = PreviewPanel()
     private let scrollTap = ScrollTap()
     private var activationObserver: NSObjectProtocol?
+    private var spaceObserver: NSObjectProtocol?
 
     private var target: Target?
     private var media: Media?
     /// The album position being shown, or being loaded after a scroll.
     private var index = 0
     private var task: Task<Void, Never>?
+    /// Whether the current load failed, as opposed to finding nothing worth showing.
+    private var loadFailed = false
+    /// The album image being fetched ahead, so showing it waits for that download instead of starting another.
+    private var prefetching: (position: Int, task: Task<Void, Never>)?
     /// The item on screen, which decides what the scroll wheel does.
     private var showing: MediaItem?
     private var albumSteps = StepAccumulator()
@@ -46,6 +51,12 @@ final class PreviewController {
         ) { [weak self] _ in
             MainActor.assumeIsolated { self?.reset(because: "app switched") }
         }
+        // The preview shows on every Space, so it would stay over whatever the new one shows.
+        spaceObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.activeSpaceDidChangeNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.reset(because: "space switched") }
+        }
     }
 
     /// `again` is a second look at the spot the cursor stopped on, after the page had a moment to fill
@@ -59,7 +70,7 @@ final class PreviewController {
         }
         let settings = AppSettings.shared
         guard settings.previewsEnabled, settings.previewsAllowed(holding: NSEvent.modifierFlags),
-              !settings.isExcluded(info.bundleID) else {
+              !settings.isExcluded(info.bundleID), !settings.skips(page: info.websiteURL) else {
             noPreview(because: "previews are off here")
             return
         }
@@ -97,8 +108,15 @@ final class PreviewController {
             spinnerDelay = delay + .milliseconds(max(settings.finderDelay - settings.hoverDelay, 0))
         }
         task = Task {
+            loadFailed = false
             let shown = await withLoadingIndicator(after: spinnerDelay, for: newTarget) {
-                guard let fetched = await fetcher.media(for: source), let media = AppSettings.shared.filter.apply(to: fetched),
+                let lookup = await fetcher.lookUp(source)
+                guard case .found(let fetched) = lookup else {
+                    // A cancelled load mustn't mark the next one failed.
+                    if lookup == .failed, !Task.isCancelled { loadFailed = true }
+                    return false
+                }
+                guard let media = AppSettings.shared.filter.apply(to: fetched),
                       !Task.isCancelled, target == newTarget, !shownLarge || media.items.count > 1 else { return false }
                 self.media = media
                 // An album opens at the photo the page shows, as in a carousel stepped partway through.
@@ -106,8 +124,14 @@ final class PreviewController {
                 // A lone image isn't worth showing unless it's meaningfully bigger than it already appears.
                 return await display(start, unlessSmallerThan: media.items.count == 1 ? elementFrame?.size : nil)
             }
-            // Nothing to show after all: take the spinner down.
-            if !shown, target == newTarget { panel.hide() }
+            // Nothing to show after all: take the spinner down, after saying why if the load failed.
+            guard !shown, target == newTarget, !Task.isCancelled else { return }
+            if loadFailed, panel.isShowingLoading {
+                panel.showFailure(anchor: newTarget.anchor)
+                try? await Task.sleep(for: .seconds(1.5))
+                guard !Task.isCancelled, target == newTarget, showing == nil else { return }
+            }
+            panel.hide()
         }
     }
 
@@ -139,9 +163,14 @@ final class PreviewController {
         if Date().timeIntervalSince(lastScrollHandled) > 0.3 { reset(because: "scrolled") }
     }
 
-    /// A key press in Finder (Space for Quick Look, Return to rename, typing to find a file) means
-    /// the card is in the way; it stays closed until the cursor moves to another item.
-    func keyPressed() {
+    /// Esc closes any preview. Any other key press in Finder (Space for Quick Look, Return to rename,
+    /// typing to find a file) means the card is in the way. Either way it stays closed until the cursor
+    /// moves to something else.
+    func keyPressed(isEscape: Bool) {
+        if isEscape {
+            dismiss()
+            return
+        }
         guard case .file = target?.source, AppSettings.shared.finderClosesOnKeyPress else { return }
         dismiss()
     }
@@ -157,6 +186,8 @@ final class PreviewController {
         if target != nil { log.debug("preview hidden: \(reason, privacy: .public)") }
         task?.cancel()
         task = nil
+        prefetching?.task.cancel()
+        prefetching = nil
         target = nil
         media = nil
         index = 0
@@ -243,8 +274,9 @@ final class PreviewController {
 
         switch media.items[position] {
         case .image(let candidates):
+            if !allowingLarge, let ahead = prefetching, ahead.position == position { await ahead.task.value }
             let outcome = await loader.load(candidates, page: target.page, maxPixelSize: Self.maxPixelSize(),
-                                            byteLimit: allowingLarge ? nil : settings.largestImageBytes)
+                                            byteLimit: allowingLarge ? ImageLoader.largestEver : settings.largestImageBytes)
             guard !Task.isCancelled, self.target == requested else { return false }
             switch outcome {
             case .loaded(let image):
@@ -264,14 +296,18 @@ final class PreviewController {
                 panel.show(card, counter: counter, anchor: requested.anchor)
                 log.infoPrivateInRelease("preview \(position + 1)/\(media.items.count): over the size limit, \(url.absoluteString)")
             case .failed:
+                loadFailed = true
                 return false
             }
 
         case .video(let url, let reportedSize):
             // Keyed by source and position, so the same video resumes however it was reached.
             let key = "\(requested.source)#\(position)"
-            guard let size = await playback.start(url, key: key), !Task.isCancelled, self.target == requested,
-                  let player = playback.player else { return false }
+            guard let size = await playback.start(url, key: key) else {
+                if !Task.isCancelled { loadFailed = true }
+                return false
+            }
+            guard !Task.isCancelled, self.target == requested, let player = playback.player else { return false }
             panel.show(player, videoSize: reportedSize ?? size, counter: counter, anchor: requested.anchor)
             if let volume = playback.volume { panel.showVolume(level: volume.level, muted: volume.muted) }
             log.infoPrivateInRelease("preview \(position + 1)/\(media.items.count): video \(url.absoluteString)")
@@ -444,12 +480,16 @@ final class PreviewController {
         }
     }
 
-    /// Warms the loader's cache so stepping forward to an image is instant.
+    /// Warms the loader's cache so stepping forward to an image is instant. It ends with the hover.
     private func prefetch(_ position: Int) {
+        guard prefetching?.position != position else { return }
+        prefetching?.task.cancel()
+        prefetching = nil
         guard let media, media.items.indices.contains(position), case .image(let candidates) = media.items[position] else { return }
         let page = target?.page
         let limit = AppSettings.shared.largestImageBytes
-        Task { [loader] in _ = await loader.load(candidates, page: page, maxPixelSize: Self.maxPixelSize(), byteLimit: limit) }
+        let task = Task { [loader] in _ = await loader.load(candidates, page: page, maxPixelSize: Self.maxPixelSize(), byteLimit: limit) }
+        prefetching = (position, task)
     }
 
     /// Longest screen edge in pixels; larger images are downsampled to this when decoded.
