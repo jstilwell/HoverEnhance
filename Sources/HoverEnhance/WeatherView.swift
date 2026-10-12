@@ -245,8 +245,10 @@ private struct HourlyStrip: View {
             HStack(spacing: 0) {
                 ForEach(Array(columns.enumerated()), id: \.offset) { index, hour in
                     VStack(spacing: 6) {
-                        Text(index == 0 ? "Now" : times.hour(hour.time))
-                            .font(.caption.weight(index == 0 ? .semibold : .regular))
+                        // A 3-hour forecast's first step can still be ahead; it's "Now" only once under way.
+                        let isNow = index == 0 && hour.time <= Date()
+                        Text(isNow ? "Now" : times.hour(hour.time))
+                            .font(.caption.weight(isNow ? .semibold : .regular))
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
                             .minimumScaleFactor(0.8)
@@ -374,20 +376,22 @@ private struct RangeBar: View {
     var body: some View {
         GeometryReader { geometry in
             let span = max(weekHigh - weekLow, 1)
-            let start = (low - weekLow) / span * geometry.size.width
-            let end = (high - weekLow) / span * geometry.size.width
+            let width = geometry.size.width
+            // At least 5 points wide, and kept inside the track, even for a day whose low is the week's high.
+            let length = min(max((high - low) / span * width, 5), width)
+            let start = min(max((low - weekLow) / span * width, 0), width - length)
             ZStack(alignment: .leading) {
                 Capsule().fill(.quaternary)
                 Capsule()
                     .fill(LinearGradient(colors: [Self.color(low), Self.color(high)], startPoint: .leading, endPoint: .trailing))
-                    .frame(width: max(end - start, 5))
+                    .frame(width: length)
                     .offset(x: start)
                 if let now {
                     Circle()
                         .fill(.white)
                         .overlay(Circle().stroke(.black.opacity(0.25), lineWidth: 1))
                         .frame(width: 7, height: 7)
-                        .offset(x: min(max((now - weekLow) / span * geometry.size.width - 3.5, start - 1), end - 6))
+                        .offset(x: min(max((now - weekLow) / span * width - 3.5, start - 1), start + length - 6))
                 }
             }
         }

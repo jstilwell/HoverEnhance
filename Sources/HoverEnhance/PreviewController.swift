@@ -102,7 +102,11 @@ final class PreviewController {
         reset(because: "new target")
         let elementFrame = info.imageFrame ?? info.frame
         var item: CGRect?
-        if case .weather(let frame) = source { item = frame }
+        if case .weather(let frame) = source {
+            // The item's frame, if it's where the cursor is: on a second display's menu bar it may be
+            // reported on the main one's, and then a stand-in around the cursor will do.
+            item = frame.insetBy(dx: -4, dy: -4).contains(cursor) ? frame : CGRect(x: cursor.x - 16, y: cursor.y - 12, width: 32, height: 24)
+        }
         let notch = item.map { panel.dropDownHoverArea(at: cursor, item: $0) } ?? panel.notchFrame(at: cursor)
         let newTarget = Target(source: source, anchor: cursor, notch: notch, element: elementFrame, page: info.pageURL, item: item)
         target = newTarget

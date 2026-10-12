@@ -55,19 +55,21 @@ struct OpenWeatherMap: WeatherSource {
             precipitation: rain
         ))
 
-        let steps = (try JSON.object(forecast)["list"] as? [[String: Any]]) ?? []
-        report.hourly = steps.compactMap { step -> WeatherReport.Hour? in
+        // Each step with its own high and low, read together, so a step that's skipped can't shift the rest.
+        let steps = ((try JSON.object(forecast)["list"] as? [[String: Any]]) ?? []).compactMap { step -> (hour: WeatherReport.Hour, high: Double, low: Double)? in
             guard let main = step["main"] as? [String: Any], let temperature = JSON.double(main["temp"]), let time = JSON.double(step["dt"]) else { return nil }
             let amount = ((step["rain"] as? [String: Any]).flatMap { JSON.double($0["3h"]) } ?? 0)
                 + ((step["snow"] as? [String: Any]).flatMap { JSON.double($0["3h"]) } ?? 0)
-            return WeatherReport.Hour(
+            let hour = WeatherReport.Hour(
                 time: Date(timeIntervalSince1970: time), condition: condition(JSON.int((step["weather"] as? [[String: Any]])?.first?["id"])),
                 isDay: (step["sys"] as? [String: Any])?["pod"] as? String != "n", temperature: temperature, feelsLike: JSON.double(main["feels_like"]),
                 precipitationChance: JSON.double(step["pop"]).map { $0 * 100 }, precipitation: amount,
                 pressure: JSON.double(main["sea_level"]) ?? JSON.double(main["pressure"]),
                 windSpeed: JSON.double((step["wind"] as? [String: Any])?["speed"]))
+            return (hour, JSON.double(main["temp_max"]) ?? temperature, JSON.double(main["temp_min"]) ?? temperature)
         }
-        report.daily = days(from: steps, report.hourly, timeZone: timeZone, sun: now["sys"] as? [String: Any], today: Date(timeIntervalSince1970: time))
+        report.hourly = steps.map(\.hour)
+        report.daily = days(from: steps, timeZone: timeZone, sun: now["sys"] as? [String: Any], today: Date(timeIntervalSince1970: time))
 
         if let air, let entry = (try? JSON.object(air))?["list"] as? [[String: Any]], let components = entry.first?["components"] as? [String: Any] {
             let pm25 = JSON.double(components["pm2_5"]), pm10 = JSON.double(components["pm10"])
@@ -79,15 +81,11 @@ struct OpenWeatherMap: WeatherSource {
 
     /// Days from the 3-hour steps, by the place's calendar: their highest and lowest, their worst daytime
     /// weather, and the day's chance and amount of rain. A last day with only a few steps left is dropped.
-    private static func days(from steps: [[String: Any]], _ hours: [WeatherReport.Hour], timeZone: TimeZone, sun: [String: Any]?, today: Date) -> [WeatherReport.Day] {
+    private static func days(from steps: [(hour: WeatherReport.Hour, high: Double, low: Double)], timeZone: TimeZone, sun: [String: Any]?,
+                             today: Date) -> [WeatherReport.Day] {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = timeZone
-        var byDay: [Date: [(hour: WeatherReport.Hour, high: Double, low: Double)]] = [:]
-        for (step, hour) in zip(steps, hours) {
-            let main = step["main"] as? [String: Any]
-            byDay[calendar.startOfDay(for: hour.time), default: []].append(
-                (hour, JSON.double(main?["temp_max"]) ?? hour.temperature, JSON.double(main?["temp_min"]) ?? hour.temperature))
-        }
+        let byDay = Dictionary(grouping: steps) { calendar.startOfDay(for: $0.hour.time) }
         let startOfToday = calendar.startOfDay(for: today)
         return byDay.keys.sorted().compactMap { day -> WeatherReport.Day? in
             guard let entries = byDay[day], entries.count >= 3 || day == startOfToday else { return nil }

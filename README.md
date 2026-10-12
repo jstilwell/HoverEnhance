@@ -42,7 +42,7 @@ or later.
   else on your local network are left alone.
 - **Weather where you say**: nothing is looked up until you pick a place or allow your location, which
   goes to the weather provider you choose rounded to about a kilometer (and, in the US, to the
-  National Weather Service for alerts, unless you turn that off).
+  National Weather Service for alerts when your provider has none, unless you turn that off).
 - **Browsers by default**: links in other apps, like Mail, load nothing unless you allow it in Settings.
 - **No surprise downloads**: images over 25 MB (adjustable) wait for you to click Load Anyway, and
   files only in iCloud stay there.

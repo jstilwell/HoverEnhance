@@ -29,6 +29,9 @@ enum WeatherProviderID: String, CaseIterable, Identifiable, Codable, Sendable {
 
     var needsKey: Bool { self != .openMeteo }
 
+    /// Whether it has weather alerts of its own; for the others, US alerts come from the NWS.
+    var hasAlerts: Bool { [.weatherAPI, .pirateWeather].contains(self) }
+
     /// Where to get a key.
     var keyPage: URL? {
         switch self {
@@ -156,10 +159,15 @@ enum JSON {
     static func double(_ value: Any?) -> Double? {
         switch value {
         // Not `is Bool`, which any NSNumber holding 0 or 1 passes: only JSON's true and false are CFBooleans.
-        case let number as NSNumber where CFGetTypeID(number) != CFBooleanGetTypeID(): number.doubleValue
-        case let string as String: Double(string)
+        case let number as NSNumber where CFGetTypeID(number) != CFBooleanGetTypeID(): finite(number.doubleValue)
+        case let string as String: Double(string).flatMap(finite)
         default: nil
         }
+    }
+
+    /// Nothing a forecast holds is infinite or past a trillion, and turning one that is into an Int would trap.
+    private static func finite(_ value: Double) -> Double? {
+        value.isFinite && abs(value) < 1e12 ? value : nil
     }
 
     static func int(_ value: Any?) -> Int? { double(value).map { Int($0.rounded()) } }

@@ -27,6 +27,8 @@ final class PreviewPanel {
     private let loadingView = NSView()
     /// Bumped whenever the panel is shown or hidden, so a fade-out that's overtaken doesn't hide it.
     private var visibility = 0
+    /// Fading out: a card that changes size then mustn't bring the panel back.
+    private var isHiding = false
     private var content: NSView?
     /// The card on screen: its size and where it was shown, for refitting it.
     private var card: (size: CGSize, counter: String?, anchor: CGPoint, item: CGRect?)?
@@ -274,7 +276,7 @@ final class PreviewPanel {
 
     /// Resizes a card on screen whose content changed size, such as a list that filled in.
     func refit(_ view: NSView) {
-        guard content === view, panel.isVisible, let card else { return }
+        guard content === view, panel.isVisible, !isHiding, let card else { return }
         let size = view.fittingSize
         // Setting the frame can make SwiftUI ask again; an unchanged size ends it there.
         guard abs(size.width - card.size.width) > 0.5 || abs(size.height - card.size.height) > 0.5 else { return }
@@ -286,6 +288,7 @@ final class PreviewPanel {
     func hide() {
         guard panel.isVisible || notch.isVisible else { return }
         visibility += 1
+        isHiding = true
         let generation = visibility
         // Nothing on a fading panel should take a click.
         panel.ignoresMouseEvents = true
@@ -370,6 +373,7 @@ final class PreviewPanel {
         panel.ignoresMouseEvents = !interactive
 
         visibility += 1
+        isHiding = false
         let appearing = !panel.isVisible
         if appearing {
             panel.alphaValue = 0

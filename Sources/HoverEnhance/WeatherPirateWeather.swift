@@ -5,7 +5,8 @@ import Foundation
 /// fractions; accumulations in centimeters.
 struct PirateWeather: WeatherSource {
     static func request(at coordinate: Coordinate, key: String) -> URLRequest? {
-        guard let path = key.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) else { return nil }
+        // Everything but letters and digits encoded, so nothing pasted with the key can change the path.
+        guard let path = key.addingPercentEncoding(withAllowedCharacters: .alphanumerics) else { return nil }
         return URLComponents.request("https://api.pirateweather.net/forecast/\(path)/\(coordinate.query)", [
             "units": "si", "version": "2", "include": "airqualitydetails",
         ])
