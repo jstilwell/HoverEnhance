@@ -182,6 +182,102 @@ struct PirateWeatherTests {
     }
 }
 
+struct AccuWeatherTests {
+    /// 2 PM in New York on the fixtures' day.
+    private let fetched = Date(timeIntervalSince1970: 1_791_828_000)
+
+    private func report() throws -> WeatherReport {
+        let location = try AccuWeather.location(from: try fixture("accuweather-location"))
+        return try AccuWeather.report(current: try fixture("accuweather-current"), hourly: try fixture("accuweather-hourly"),
+                                      daily: try fixture("accuweather-daily"), timeZone: try #require(location.timeZone), fetched: fetched)
+    }
+
+    @Test func aPlaceIsFoundByItsKey() throws {
+        let location = try AccuWeather.location(from: try fixture("accuweather-location"))
+        #expect(location == .init(key: "349727", timeZone: TimeZone(identifier: "America/New_York")))
+        #expect(throws: WeatherError.unreadable) { try AccuWeather.location(from: Data("[]".utf8)) }
+    }
+
+    @Test func aForecastReadsInFull() throws {
+        let report = try report()
+        #expect(report.provider == .accuWeather && report.timeZone.identifier == "America/New_York")
+        let now = report.current
+        #expect(now.temperature == 16.1 && now.condition == .partlyCloudy && now.isDay)
+        #expect(now.feelsLike == 15 && now.feelsLikeInShade == 14.2 && now.humidity == 58 && now.dewPoint == 7.8)
+        // Wind comes in km/h and is kept in m/s.
+        #expect(now.windSpeed.map { abs($0 - 14.8 / 3.6) < 0.001 } == true && now.windDirection == 250)
+        #expect(now.pressure == 1016.6 && now.uvIndex == 2.3 && now.visibility == 16.1 && now.cloudCover == 45)
+        #expect(now.changeSinceYesterday == -3.3 && now.precipitationLast24Hours == 4.1)
+        // Its own word for which way pressure is going wins over the hours, which don't give pressure.
+        #expect(report.pressureTrend(from: fetched) == .falling)
+        // Given as plain HTTP.
+        #expect(report.link?.absoluteString.hasPrefix("https://www.accuweather.com/") == true)
+
+        #expect(report.hourly.count == 12 && report.hourly.allSatisfy { $0.feelsLike != nil && $0.precipitationChance != nil })
+        #expect(report.hourly.contains { $0.condition == .heavyRain } && report.hourly.contains { $0.condition == .thunderstorm })
+        #expect(report.hourly.contains { !$0.isDay })
+
+        #expect(report.daily.count == 5)
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = report.timeZone
+        #expect(report.daily.allSatisfy { calendar.startOfDay(for: $0.date) == $0.date })
+        let today = report.daily[0]
+        #expect(today.high == 18.3 && today.low == 10.6 && today.condition == .partlyCloudy)
+        // The day's chance is the higher of day and night's, and its rain both together.
+        #expect(today.precipitationChance == 85 && today.precipitation == 14.2 && today.uvIndexMax == 3)
+        #expect(today.sunrise.map { WeatherTimes(timeZone: report.timeZone).time($0).replacingOccurrences(of: "\u{202F}", with: " ") } == "7:06 AM")
+        #expect(report.daily[1].condition == .thunderstorm)
+        #expect(report.summary == "Heavy rain tonight; a thunderstorm in spots Tuesday afternoon")
+    }
+
+    @Test func todaysAirAndPollenAreRated() throws {
+        let report = try report()
+        // The rating, not a number: what its value measures isn't documented.
+        #expect(report.air == .init(rating: .init(name: "Good", level: 0), mainPollutant: "Ozone"))
+        #expect(report.pollen.map(\.kind) == [.tree, .grass, .ragweed, .mold])
+        #expect(report.pollen[0].rating == .init(name: "Very high", level: 3))
+        #expect(report.pollen[3].rating == .init(name: "Moderate", level: 1))
+    }
+
+    @Test func theKeyGoesInAHeaderNotTheURL() throws {
+        let lookup = try #require(AccuWeather.locationRequest(at: Coordinate(latitude: 40.712776, longitude: -74.005974), key: "abc123"))
+        #expect(lookup.value(forHTTPHeaderField: "Authorization") == "Bearer abc123")
+        #expect(lookup.url?.absoluteString == "https://dataservice.accuweather.com/locations/v1/cities/geoposition/search?q=40.71,-74.01")
+        let daily = try #require(AccuWeather.request("forecasts/v1/daily/5day", for: "349727", key: "abc123")?.url?.absoluteString)
+        #expect(daily == "https://dataservice.accuweather.com/forecasts/v1/daily/5day/349727?details=true&metric=true")
+        // Nothing pasted with a key can add a header.
+        #expect(AccuWeather.locationRequest(at: berlin, key: "abc\r\nX-Other: 1") == nil)
+    }
+
+    @Test func aKeyThatCouldntBeSentIsTurnedDown() async {
+        let http = FixtureHTTP()
+        await #expect(throws: WeatherError.badKey) {
+            try await AccuWeather(locations: AccuWeatherLocations()).report(at: berlin, key: "two words", timeZone: .current, using: http)
+        }
+        #expect(http.requests.isEmpty)
+    }
+
+    @Test func aPlaceIsLookedUpOnce() async throws {
+        let http = FixtureHTTP()
+        let source = AccuWeather(locations: AccuWeatherLocations())
+        let newYork = Coordinate(latitude: 40.71, longitude: -74.01)
+        let first = try await source.report(at: newYork, key: "abc", timeZone: .current, using: http)
+        _ = try await source.report(at: Coordinate(latitude: 40.712, longitude: -74.006), key: "abc", timeZone: .current, using: http)
+        #expect(first.timeZone.identifier == "America/New_York")
+        // One lookup, then three forecasts each time.
+        #expect(http.requests.filter { $0.path().hasPrefix("/locations/") }.count == 1 && http.requests.count == 7)
+    }
+
+    @Test func iconsBecomeConditions() {
+        #expect(AccuWeather.condition(1) == .clear && AccuWeather.condition(34) == .mostlyClear && AccuWeather.condition(36) == .partlyCloudy)
+        #expect(AccuWeather.condition(8) == .cloudy && AccuWeather.condition(11) == .fog && AccuWeather.condition(37) == .haze)
+        #expect(AccuWeather.condition(18) == .rain && AccuWeather.condition(18, intensity: "Heavy") == .heavyRain)
+        #expect(AccuWeather.condition(42) == .thunderstorm && AccuWeather.condition(22, intensity: "Heavy") == .heavySnow)
+        #expect(AccuWeather.condition(26) == .freezingRain && AccuWeather.condition(29) == .sleet && AccuWeather.condition(32) == .windy)
+        #expect(AccuWeather.condition(nil) == .cloudy)
+    }
+}
+
 struct QuotaTests {
     @Test func aUsedUpQuotaIsntABadKey() {
         #expect(URLSessionWeatherHTTP.saysQuota(Data(#"{"error":{"code":2007,"message":"API key has exceeded calls per month quota."}}"#.utf8)))
@@ -303,6 +399,7 @@ struct WeatherUnitsTests {
         #expect(us.pressure(1013.25) == "29.92 inHg" && metric.pressure(1013.25) == "1013 hPa")
         #expect(us.precipitation(25.4) == "1.00 in" && metric.precipitation(2.34) == "2.3 mm")
         #expect(us.distance(16.09) == "10 mi" && metric.distance(4.25) == "4.2 km")
+        #expect(us.change(-3.3) == "6° cooler" && metric.change(2.6) == "3° warmer" && metric.change(0.2) == "No change")
         #expect(WeatherWords.compass(315) == "NW" && WeatherWords.compass(359) == "N" && WeatherWords.compass(-90) == "W")
         #expect(WeatherWords.uvLevel(1) == "Low" && WeatherWords.uvLevel(7) == "High")
         #expect(WeatherWords.airQuality(us: 32).name == "Good" && WeatherWords.airQuality(us: 151).name == "Unhealthy")
@@ -324,6 +421,10 @@ private final class FixtureHTTP: WeatherHTTP, @unchecked Sendable {
             case "air-quality-api.open-meteo.com": return try fixture("open-meteo-air")
             case "api.weather.gov": if failNWS { throw WeatherError.unavailable(400) } else { return Data(#"{"features":[]}"#.utf8) }
             case "api.weatherapi.com": return try fixture("weatherapi-forecast")
+            case "dataservice.accuweather.com":
+                let path = url.path()
+                return try fixture(path.hasPrefix("/locations/") ? "accuweather-location" : path.hasPrefix("/currentconditions/") ? "accuweather-current"
+                                   : path.contains("/hourly/") ? "accuweather-hourly" : "accuweather-daily")
             default: throw WeatherError.unavailable(404)
             }
         } catch let error as WeatherError {

@@ -52,17 +52,28 @@ private struct WeatherDashboard: View {
                     .padding(.vertical, 12)
             }
             let showsDaily = !hidden.contains(.daily) && !report.daily.isEmpty
+            let showsPollen = !hidden.contains(.pollen) && !report.pollen.isEmpty
             let showsDetails = !hidden.contains(.details) || (!hidden.contains(.airQuality) && report.air != nil)
-            if showsDaily || showsDetails {
+            if showsDaily || showsPollen || showsDetails {
                 Divider()
                 HStack(alignment: .top, spacing: 0) {
-                    if showsDaily {
-                        DailyList(report: report, units: units, times: times)
-                            .padding(.horizontal, 18)
-                            .padding(.vertical, 12)
-                            .frame(width: showsDetails ? WeatherPopupView.width / 2 : WeatherPopupView.width, alignment: .leading)
+                    if showsDaily || showsPollen {
+                        VStack(alignment: .leading, spacing: 0) {
+                            if showsDaily {
+                                DailyList(report: report, units: units, times: times)
+                                    .padding(.horizontal, 18)
+                                    .padding(.vertical, 12)
+                            }
+                            if showsDaily, showsPollen { Divider() }
+                            if showsPollen {
+                                PollenList(pollen: report.pollen)
+                                    .padding(.horizontal, 18)
+                                    .padding(.vertical, 12)
+                            }
+                        }
+                        .frame(width: showsDetails ? WeatherPopupView.width / 2 : WeatherPopupView.width, alignment: .leading)
                     }
-                    if showsDaily, showsDetails { Divider() }
+                    if showsDaily || showsPollen, showsDetails { Divider() }
                     if showsDetails {
                         DetailsGrid(report: report, units: units, times: times, showsDetails: !hidden.contains(.details),
                                     showsAir: !hidden.contains(.airQuality))
@@ -134,7 +145,7 @@ private struct WeatherHeader: View {
                 .monospacedDigit()
             VStack(alignment: .leading, spacing: 3) {
                 Text(current.condition.name).font(.title3.weight(.semibold))
-                Text([current.feelsLike.map { "Feels like \(units.degrees($0))" },
+                Text([current.feelsLike.map { "Feels like \(units.degrees($0))" + Self.inShade(current, units: units) },
                       today.map { "H \(units.degrees($0.high))  L \(units.degrees($0.low))" }]
                     .compactMap { $0 }.joined(separator: "  ·  "))
                     .foregroundStyle(.secondary)
@@ -163,6 +174,12 @@ private struct WeatherHeader: View {
             }
         }
         .accessibilityElement(children: .combine)
+    }
+
+    /// " (58° in shade)", where the provider says and it's not what it feels like anyway.
+    static func inShade(_ current: WeatherReport.Current, units: WeatherUnits) -> String {
+        guard let shade = current.feelsLikeInShade.map(units.degrees), shade != current.feelsLike.map(units.degrees) else { return "" }
+        return " (\(shade) in shade)"
     }
 
     /// What's falling or about to: the sky now, or the next hour that has something falling.
@@ -237,11 +254,17 @@ private struct HourlyStrip: View {
         return columns[1].time.timeIntervalSince(columns[0].time) / 3600
     }
     private var span: ClosedRange<Double> { -columnHours / 2 ... Double(columns.count - 1) * columnHours + columnHours / 2 }
+    /// How many hours the steps reach, up to a day: some providers forecast only 12.
+    private var hoursCovered: Int {
+        guard let first = hours.first, let last = hours.last else { return 24 }
+        let step = hours.count >= 2 ? hours[1].time.timeIntervalSince(first.time) : 3600
+        return min(24, Int((last.time.timeIntervalSince(first.time) + step) / 3600))
+    }
     private func x(_ hour: WeatherReport.Hour) -> Double { hour.time.timeIntervalSince(hours[0].time) / 3600 }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            SectionHeading(title: "Next 24 hours", symbol: "clock")
+            SectionHeading(title: "Next \(hoursCovered) hours", symbol: "clock")
             HStack(spacing: 0) {
                 ForEach(Array(columns.enumerated()), id: \.offset) { index, hour in
                     VStack(spacing: 6) {
@@ -320,7 +343,7 @@ private struct HourlyStrip: View {
     private var highest: Double { hours.map { shown($0.temperature) }.max() ?? 0 }
 
     private var accessibilitySummary: String {
-        "Next 24 hours: " + columns.map { "\(times.hour($0.time)) \(units.degrees($0.temperature)) \($0.condition.name)" }.joined(separator: ", ")
+        "Next \(hoursCovered) hours: " + columns.map { "\(times.hour($0.time)) \(units.degrees($0.temperature)) \($0.condition.name)" }.joined(separator: ", ")
     }
 }
 
@@ -336,6 +359,12 @@ private struct DailyList: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             SectionHeading(title: "\(days.count)-day forecast", symbol: "calendar")
+            if let summary = report.summary {
+                Text(summary)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             let low = days.map(\.low).min() ?? 0
             let high = days.map(\.high).max() ?? 1
             VStack(spacing: 10) {
@@ -405,6 +434,30 @@ private struct RangeBar: View {
     }
 }
 
+/// Today's pollen, kind by kind, each where it falls from low to very high.
+private struct PollenList: View {
+    let pollen: [WeatherReport.Pollen]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            SectionHeading(title: "Pollen today", symbol: "leaf")
+            VStack(spacing: 8) {
+                ForEach(pollen, id: \.kind) { reading in
+                    HStack(spacing: 8) {
+                        Text(reading.kind.name).frame(width: 64, alignment: .leading)
+                        // Pollen's top step is "Very high", the fourth.
+                        LevelBar(fraction: min(Double(reading.rating.level) / 3, 1), colors: [.green, .yellow, .orange, .red])
+                        Text(reading.rating.name)
+                        Spacer(minLength: 0)
+                    }
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("\(reading.kind.name) pollen: \(reading.rating.name)")
+                }
+            }
+        }
+    }
+}
+
 // MARK: - Details
 
 private struct DetailsGrid: View {
@@ -456,6 +509,10 @@ private struct DetailsGrid: View {
                          value: today.precipitation.map { $0 < 0.1 ? "None" : units.precipitation($0) } ?? "\(Int(today.precipitationChance ?? 0))%",
                          note: today.precipitation != nil ? "Today" + (today.precipitationChance.map { ", \(Int($0))% chance" } ?? "") : "Chance today")
                 }
+                if let change = current.changeSinceYesterday {
+                    Tile(title: "Since yesterday", symbol: "clock.arrow.circlepath", value: units.change(change),
+                         note: current.precipitationLast24Hours.map { $0 < 0.1 ? "No precipitation" : "\(units.precipitation($0)) precipitation" })
+                }
                 if let sunrise = today?.sunrise, let sunset = today?.sunset {
                     Tile(title: "Sun", symbol: "sunrise", value: "\(times.time(sunrise))  ·  \(times.time(sunset))",
                          note: "Daylight \(WeatherWords.duration(sunset.timeIntervalSince(sunrise)))")
@@ -464,16 +521,17 @@ private struct DetailsGrid: View {
                 Tile(title: "Moon", symbol: moon.symbol, value: moon.name, note: "\(Int((moon.illumination * 100).rounded()))% lit")
             }
             if showsAir, let air = report.air, let reading = Self.airReading(air) {
-                Tile(title: "Air quality", symbol: "aqi.medium", value: "\(reading.index)  \(reading.name)",
-                     note: air.pm25.map { "PM2.5 \(Int($0.rounded())) µg/m³" }) {
+                Tile(title: "Air quality", symbol: "aqi.medium", value: reading.index.map { "\($0)  \(reading.name)" } ?? reading.name,
+                     note: air.pm25.map { "PM2.5 \(Int($0.rounded())) µg/m³" } ?? air.mainPollutant.map(Self.mostly)) {
                     LevelBar(fraction: min(Double(reading.level) / 5 + 0.08, 1), colors: [.green, .yellow, .orange, .red, .purple, Color(red: 0.5, green: 0, blue: 0.13)])
                 }
             }
         }
     }
 
-    /// The US index where there is one, as most providers give; Europe's otherwise.
-    static func airReading(_ air: WeatherReport.AirQuality) -> (index: Int, name: String, level: Int)? {
+    /// The US index where there is one, as most providers give; Europe's otherwise; or the provider's own
+    /// rating, with no number.
+    static func airReading(_ air: WeatherReport.AirQuality) -> (index: Int?, name: String, level: Int)? {
         if let index = air.usIndex {
             let category = WeatherWords.airQuality(us: index)
             return (index, category.name, category.level)
@@ -482,7 +540,12 @@ private struct DetailsGrid: View {
             let category = WeatherWords.airQuality(european: index)
             return (index, category.name, category.level)
         }
-        return nil
+        return air.rating.map { (nil, $0.name, $0.level) }
+    }
+
+    /// "Mostly ozone", or "Mostly PM2.5": a pollutant's name in lowercase unless it's a formula.
+    static func mostly(_ pollutant: String) -> String {
+        "Mostly " + (pollutant.allSatisfy(\.isLetter) ? pollutant.lowercased() : pollutant)
     }
 }
 
@@ -586,10 +649,24 @@ private struct Footer: View {
     let report: WeatherReport
     let times: WeatherTimes
     let isRefreshing: Bool
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         HStack(spacing: 6) {
-            Link(report.provider.attribution.text, destination: report.provider.attribution.url)
+            let credit = report.provider.attribution
+            if let logo = report.provider.logo(dark: colorScheme == .dark) {
+                Link(destination: credit.url) { Image(nsImage: logo) }
+                    .help(credit.text)
+                    .accessibilityLabel(credit.text)
+                    // Its guidelines ask for clear space of half the sun's height (7 pt) around it.
+                    .padding(.trailing, 2)
+            } else {
+                Link(credit.text, destination: credit.url)
+            }
+            if let page = report.link {
+                Text("·")
+                Link("Full forecast", destination: page)
+            }
             if report.provider == .openMeteo, report.air != nil {
                 // Open-Meteo's air quality comes from Copernicus, which asks to be credited too.
                 Text("·")
@@ -662,7 +739,7 @@ private struct WeatherProblemView: View {
         switch problem {
         case .noLocation: "Use where your Mac is, or choose a city. Nothing is looked up until you do."
         case .locationDenied: "Allow it in System Settings → Privacy & Security → Location Services, or choose a city instead."
-        case .needsKey: "Add your free \(provider.name) key in Settings → Weather, or switch to Open-Meteo, which needs none."
+        case .needsKey: "Add your\(provider.keyIsFree ? " free" : "") \(provider.name) key in Settings → Weather, or switch to Open-Meteo, which needs none."
         case .badKey: "Check the key in Settings → Weather. A new key can take a little while to start working."
         case .offline: "The forecast will load once your Mac is back online."
         case .rateLimited: "Your key has used its lookups for now. The forecast will load again in a while."

@@ -85,9 +85,13 @@ app).
   the entitlement in `HoverEnhance.entitlements`), then gets a `WeatherReport`, always metric, from
   `WeatherService`, which keeps forecasts ten minutes and shows an older one at once while a new one
   loads. Each provider is a `WeatherSource` (`OpenMeteo`, `OpenWeatherMap`, `WeatherAPIcom`,
-  `TomorrowIO`, `PirateWeather`) fetching through `WeatherHTTP`, which turns HTTP failures into
-  `WeatherError`s the popup explains; `NWSAlerts` adds US alerts when a provider has none. Keys are
-  kept in the Keychain, and `WeatherUnits` writes values in the units chosen.
+  `TomorrowIO`, `PirateWeather`, `AccuWeather`) fetching through `WeatherHTTP`, which turns HTTP
+  failures into `WeatherError`s the popup explains; `NWSAlerts` adds US alerts when a provider has
+  none. `AccuWeather` first trades the coordinate for AccuWeather's location key, kept in
+  `AccuWeatherLocations` while the app runs, as every request counts against the user's plan, and
+  asks only for what its cheapest plan includes. Its terms ask for its logo, linked, wherever its data
+  shows, so the popup's footer has it. Keys are kept in the Keychain, and `WeatherUnits` writes
+  values in the units chosen.
   `Tests/HoverEnhanceTests/Fixtures/weather` holds each provider's sample answers.
 - `EmbedPlayer` hosts players in a web view loaded under an HTTPS origin (YouTube needs a
   Referer), with AirPlay and WebRTC off so nothing asks for local network access. Links clicked in a
@@ -139,7 +143,12 @@ installed copies again.
 
 Debug builds check only when asked, so a build from source isn't offered a release over itself.
 
-## Icons
+## Icons and logos
 
 `design/icons/appicon.svg` and `menubar.svg` are the sources; `./bin/render-icons.sh` renders them
-into `Resources/AppIcon.icns` and `Resources/MenuBarIcon.png` with headless Chrome.
+into `Resources/AppIcon.icns` and `Resources/MenuBarIcon.png` with headless Chrome. It also renders
+`design/logos/accuweather.svg` and `accuweather-dark.svg`, AccuWeather's small-space logo for light
+and dark backgrounds from its
+[brand guidelines](https://developer.accuweather.com/documentation/brand-guidelines)
+(`AW_RGB_Small_R.svg` and `AW_RGB_Rev_Small_R.svg`), into `Resources/AccuWeatherLogo.png` and
+`AccuWeatherLogoDark.png`.
