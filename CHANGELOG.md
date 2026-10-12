@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.5.0 - Unreleased
+
+### Fixed
+
+- A YouTube, Vimeo, TikTok, or Twitch video rested on again picks up where it was, instead of stopping on a play button that did nothing when clicked.
+- A video whose preview closed before it started plays on its own the next time.
+
 ## 0.4.0 - 10-12-2026
 
 ### Added
