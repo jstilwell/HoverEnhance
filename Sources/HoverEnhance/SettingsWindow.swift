@@ -3,7 +3,7 @@ import SwiftUI
 
 /// The Settings window's tabs, in order.
 enum SettingsTab: String, CaseIterable, Sendable {
-    case general, previews, video, sites, finder, accounts, advanced
+    case general, previews, video, sites, finder, weather, accounts, advanced
 
     var title: String { rawValue.capitalized }
 
@@ -14,6 +14,7 @@ enum SettingsTab: String, CaseIterable, Sendable {
         case .video: "play.rectangle"
         case .sites: "globe"
         case .finder: "folder"
+        case .weather: "cloud.sun"
         case .accounts: "person.crop.circle"
         case .advanced: "wrench.and.screwdriver"
         }
@@ -38,6 +39,7 @@ final class SettingsWindowController: NSWindowController {
             case .video: host(VideoSettingsView(settings: settings))
             case .sites: host(SitesSettingsView(settings: settings))
             case .finder: host(FinderSettingsView(settings: settings))
+            case .weather: host(WeatherSettingsView(settings: settings))
             case .accounts: host(AccountsSettingsView(account: YouTubeAccount.shared))
             case .advanced: host(AdvancedSettingsView(settings: settings, access: access, updates: Updates.shared))
             }

@@ -26,6 +26,10 @@
 	<string>14.0</string>
 	<key>LSUIElement</key>
 	<true/>
+	<key>NSLocationUsageDescription</key>
+	<string>HoverEnhance shows the weather where you are when you rest the cursor on the Weather item in the menu bar.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>HoverEnhance shows the weather where you are when you rest the cursor on the Weather item in the menu bar.</string>
 	<key>NSHumanReadableCopyright</key>
 	<string>Copyright © 2026 Stilwe LLC. All rights reserved.</string>
 	<key>SUFeedURL</key>

@@ -233,7 +233,7 @@ struct PreviewSizeLimitTests {
 
 struct SettingsTabTests {
     @Test func tabsKeepTheirOrderAndTitles() {
-        #expect(SettingsTab.allCases.map(\.title) == ["General", "Previews", "Video", "Sites", "Finder", "Accounts", "Advanced"])
+        #expect(SettingsTab.allCases.map(\.title) == ["General", "Previews", "Video", "Sites", "Finder", "Weather", "Accounts", "Advanced"])
     }
 }
 

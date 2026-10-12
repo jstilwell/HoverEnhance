@@ -6,6 +6,30 @@ struct PreviewGeometryTests {
     /// A 1920×1080 screen, top-left origin.
     private let visible = CGRect(x: 0, y: 0, width: 1920, height: 1080)
 
+    @Test func menuBarItemsGetTheirPreviewUnderTheMenuBar() throws {
+        // A 1512 × 982 screen with a 37-point menu bar, and the Weather item near its right end.
+        let visible = CGRect(x: 0, y: 37, width: 1512, height: 945)
+        let item = CGRect(x: 1258, y: 3, width: 66, height: 24)
+        let anchor = CGPoint(x: 1290, y: 15)
+        let frame = try #require(PreviewGeometry.dropDownFrame(anchor: anchor, item: item, naturalSize: CGSize(width: 640, height: 560), visible: visible))
+        #expect(frame.minY == 37 + PreviewGeometry.dropGap)
+        // Centered on the cursor would run off the right edge, so it stops there.
+        #expect(frame.maxX == visible.maxX && frame.width == 640 + 2 * PreviewGeometry.padding)
+
+        let notch = PreviewGeometry.dropDownNotchFrame(anchor: anchor, item: item, panelTop: frame.minY)
+        #expect(notch.minY == item.maxY && notch.maxY == frame.minY + 1 && notch.midX == anchor.x)
+        let area = PreviewGeometry.dropDownHoverArea(anchor: anchor, item: item, panelTop: frame.minY)
+        #expect(area.contains(CGPoint(x: item.minX + 1, y: 10)) && area.contains(CGPoint(x: anchor.x, y: frame.minY - 1)))
+        #expect(!area.contains(CGPoint(x: item.minX - 5, y: 10)))
+    }
+
+    @Test func aTallPreviewShrinksToFitUnderTheMenuBar() throws {
+        let visible = CGRect(x: 0, y: 25, width: 1280, height: 775)
+        let frame = try #require(PreviewGeometry.dropDownFrame(anchor: CGPoint(x: 100, y: 10), item: CGRect(x: 80, y: 0, width: 40, height: 24),
+                                                              naturalSize: CGSize(width: 640, height: 1200), visible: visible))
+        #expect(frame.maxY <= visible.maxY && frame.minX == visible.minX)
+    }
+
     @Test func opensOnTheRoomierSide() {
         #expect(PreviewGeometry.placesRight(anchor: CGPoint(x: 400, y: 500), visible: visible))
         #expect(!PreviewGeometry.placesRight(anchor: CGPoint(x: 1500, y: 500), visible: visible))

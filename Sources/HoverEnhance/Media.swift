@@ -22,6 +22,8 @@ enum MediaSource: Sendable, Hashable {
     case youtubeChannel(YouTubeChannelRef)
     /// In Finder: a file or folder, in a window or on the desktop.
     case file(URL, onDesktop: Bool)
+    /// The Weather menu bar item, at `item`: its frame, for hanging the forecast under it.
+    case weather(item: CGRect)
 }
 
 extension MediaSource {
@@ -29,7 +31,7 @@ extension MediaSource {
     var isPost: Bool {
         switch self {
         case .redditGallery, .tweet, .blueskyPost, .instagram: true
-        case .images, .video, .streamable, .embed, .youtubeChannel, .file: false
+        case .images, .video, .streamable, .embed, .youtubeChannel, .file, .weather: false
         }
     }
 }
@@ -45,6 +47,8 @@ enum MediaItem: Sendable, Equatable {
     case channel(YouTubeChannel)
     /// A card about a file or folder.
     case file(URL)
+    /// The forecast, under the menu bar item at `item`.
+    case weather(item: CGRect)
 }
 
 /// Resolved media: a single item, or an album.
@@ -73,7 +77,7 @@ struct Media: Sendable, Equatable {
                 return web.isEmpty ? nil : .image(web)
             case .video(let url, _):
                 return isWeb(url) ? item : nil
-            case .embed, .channel, .file:
+            case .embed, .channel, .file, .weather:
                 return item
             }
         }
@@ -87,6 +91,9 @@ enum MediaResolver {
     static let smallestWatchableVideo = CGSize(width: 120, height: 90)
 
     static func source(for info: HoverInfo) -> MediaSource? {
+        if WeatherTrigger.matches(info), let frame = info.frame {
+            return .weather(item: frame)
+        }
         if let file = info.fileURL {
             // A card would cover Quick Look's panel, or the name being edited.
             return info.finderIsBusy ? nil : .file(file, onDesktop: info.fileIsOnDesktop)
