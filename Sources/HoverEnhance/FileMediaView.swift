@@ -22,12 +22,13 @@ enum FileMediaKind: Equatable, Sendable {
     }
 }
 
-/// A Finder image, video, or audio file shown large, with its card beside or below it.
+/// A Finder image, video, or audio file shown large, with its card beside or below it. Songs and videos
+/// have their controls under them.
 struct FileMediaCardView: View {
     enum Content {
         case image(NSImage)
-        case video(AVPlayer)
-        case audio(artwork: NSImage?, model: AudioPreviewModel)
+        case video(AVPlayer, MediaTransport)
+        case audio(artwork: NSImage?, transport: MediaTransport)
     }
 
     static let detailsWidth: CGFloat = 340
@@ -44,9 +45,14 @@ struct FileMediaCardView: View {
             ? AnyLayout(HStackLayout(alignment: .top, spacing: 0))
             : AnyLayout(VStackLayout(alignment: .leading, spacing: 0))
         stack {
-            media
-                .frame(width: mediaSize.width, height: mediaSize.height)
-                .clipShape(RoundedRectangle(cornerRadius: 8))
+            VStack(spacing: 0) {
+                media
+                    .frame(width: mediaSize.width, height: mediaSize.height)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                if let transport {
+                    TransportBar(transport: transport).frame(width: mediaSize.width)
+                }
+            }
             // Below the media they're as wide as it, rather than a narrow column under it.
             FileCardView(card: card, showsImage: false, width: layout == .below ? max(Self.detailsWidth, mediaSize.width) : Self.detailsWidth)
         }
@@ -57,21 +63,32 @@ struct FileMediaCardView: View {
         switch content {
         case .image(let image):
             Image(nsImage: image).resizable().interpolation(.high).aspectRatio(contentMode: .fit)
-        case .video(let player):
-            PlayerView(player: player)
-        case .audio(let artwork, let model):
-            AudioArtworkView(artwork: artwork, model: model)
+        case .video(let player, let transport):
+            // A click on the picture plays or pauses, as in QuickTime Player.
+            PlayerView(player: player).overlay {
+                Color.clear.contentShape(Rectangle()).onTapGesture { transport.toggle() }.accessibilityHidden(true)
+            }
+        case .audio(let artwork, let transport):
+            AudioArtworkView(artwork: artwork).contentShape(Rectangle()).onTapGesture { transport.toggle() }
+        }
+    }
+
+    private var transport: MediaTransport? {
+        switch content {
+        case .image: nil
+        case .video(_, let transport), .audio(_, let transport): transport
         }
     }
 }
 
-/// The preview's video player, with its own controls.
+/// The preview's video picture. Its controls are the `TransportBar` under it: AVKit's show only while
+/// the cursor is on the video, and here it's in Finder.
 private struct PlayerView: NSViewRepresentable {
     let player: AVPlayer
 
     func makeNSView(context: Context) -> AVPlayerView {
         let view = AVPlayerView()
-        view.controlsStyle = .floating
+        view.controlsStyle = .none
         view.showsFullScreenToggleButton = false
         view.allowsPictureInPicturePlayback = false
         view.player = player
@@ -87,21 +104,9 @@ private struct PlayerView: NSViewRepresentable {
     }
 }
 
-/// Whether a song in a preview is playing, and the button's action.
-@MainActor @Observable
-final class AudioPreviewModel {
-    var isPlaying = false
-    @ObservationIgnored let toggle: @MainActor () -> Void
-
-    init(toggle: @escaping @MainActor () -> Void) {
-        self.toggle = toggle
-    }
-}
-
-/// A song's artwork, or a note in its place, with a play button.
+/// A song's artwork, or a note in its place.
 private struct AudioArtworkView: View {
     let artwork: NSImage?
-    let model: AudioPreviewModel
 
     var body: some View {
         ZStack {
@@ -111,19 +116,6 @@ private struct AudioArtworkView: View {
                 Rectangle().fill(.quaternary)
                 Image(systemName: "music.note").font(.system(size: 64, weight: .light)).foregroundStyle(.secondary)
             }
-        }
-        .overlay(alignment: .bottomLeading) {
-            Button { model.toggle() } label: {
-                Image(systemName: model.isPlaying ? "pause.circle.fill" : "play.circle.fill")
-                    .font(.system(size: 44))
-                    .symbolRenderingMode(.palette)
-                    .foregroundStyle(.white, Color.black.opacity(0.55))
-                    .shadow(radius: 3)
-            }
-            .buttonStyle(.plain)
-            .help(model.isPlaying ? "Pause" : "Play")
-            .accessibilityLabel(model.isPlaying ? "Pause" : "Play")
-            .padding(12)
         }
     }
 }

@@ -16,9 +16,6 @@ final class VideoPlayback {
     /// Called on the main thread when the player's volume or mute changes, by scrolling or its controls.
     var onVolumeChange: (@MainActor (_ level: Float, _ muted: Bool) -> Void)?
 
-    /// Called on the main thread when playback starts or stops, as at the end of a song.
-    var onPlayingChange: (@MainActor (_ playing: Bool) -> Void)?
-
     /// The player's volume and mute, while there's a player.
     var volume: (level: Float, muted: Bool)? {
         player.map { ($0.volume, $0.isMuted) }
@@ -55,10 +52,6 @@ final class VideoPlayback {
                     AppSettings.shared.videoVolume = Double(level)
                     self?.onVolumeChange?(level, muted)
                 }
-            },
-            player.observe(\.timeControlStatus) { [weak self] player, _ in
-                let playing = player.timeControlStatus != .paused
-                Task { @MainActor in self?.onPlayingChange?(playing) }
             },
         ]
         if settings.loopVideos, !audioOnly {
@@ -117,7 +110,8 @@ final class VideoPlayback {
         }
     }
 
-    private static func clock(_ seconds: Double) -> String {
+    /// "1:23", or "1:02:03" from an hour on.
+    static func clock(_ seconds: Double) -> String {
         let total = Int(seconds.rounded(.down))
         return total >= 3600
             ? String(format: "%d:%02d:%02d", total / 3600, total / 60 % 60, total % 60)
