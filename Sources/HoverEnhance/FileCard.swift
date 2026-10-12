@@ -95,6 +95,7 @@ final class FileCard {
     func loadUsers() async {
         guard options.shows(.users), users == nil else { return }
         let found = await FileUsers.find(url)
+        guard !Task.isCancelled else { return }
         for user in found {
             // Commands get the Unix executable icon. Their own file's icon depends on its name, and
             // Claude Code's, named for its version ("2.1.296"), looks like an unknown document.
