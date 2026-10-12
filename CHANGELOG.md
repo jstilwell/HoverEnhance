@@ -7,6 +7,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - Press Esc to close any preview.
+- A preview that couldn't load says so for a moment, instead of its spinner just vanishing.
 
 ### Changed
 

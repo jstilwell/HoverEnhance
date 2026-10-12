@@ -19,6 +19,8 @@ final class PreviewController {
     /// The album position being shown, or being loaded after a scroll.
     private var index = 0
     private var task: Task<Void, Never>?
+    /// Whether the current load failed, as opposed to finding nothing worth showing.
+    private var loadFailed = false
     /// The album image being fetched ahead, so showing it waits for that download instead of starting another.
     private var prefetching: (position: Int, task: Task<Void, Never>)?
     /// The item on screen, which decides what the scroll wheel does.
@@ -106,8 +108,13 @@ final class PreviewController {
             spinnerDelay = delay + .milliseconds(max(settings.finderDelay - settings.hoverDelay, 0))
         }
         task = Task {
+            loadFailed = false
             let shown = await withLoadingIndicator(after: spinnerDelay, for: newTarget) {
-                guard let fetched = await fetcher.media(for: source), let media = AppSettings.shared.filter.apply(to: fetched),
+                guard let fetched = await fetcher.media(for: source) else {
+                    loadFailed = true
+                    return false
+                }
+                guard let media = AppSettings.shared.filter.apply(to: fetched),
                       !Task.isCancelled, target == newTarget, !shownLarge || media.items.count > 1 else { return false }
                 self.media = media
                 // An album opens at the photo the page shows, as in a carousel stepped partway through.
@@ -115,8 +122,14 @@ final class PreviewController {
                 // A lone image isn't worth showing unless it's meaningfully bigger than it already appears.
                 return await display(start, unlessSmallerThan: media.items.count == 1 ? elementFrame?.size : nil)
             }
-            // Nothing to show after all: take the spinner down.
-            if !shown, target == newTarget { panel.hide() }
+            // Nothing to show after all: take the spinner down, after saying why if the load failed.
+            guard !shown, target == newTarget, !Task.isCancelled else { return }
+            if loadFailed, panel.isShowingLoading {
+                panel.showFailure(anchor: newTarget.anchor)
+                try? await Task.sleep(for: .seconds(1.5))
+                guard !Task.isCancelled, target == newTarget, showing == nil else { return }
+            }
+            panel.hide()
         }
     }
 
@@ -281,14 +294,18 @@ final class PreviewController {
                 panel.show(card, counter: counter, anchor: requested.anchor)
                 log.infoPrivateInRelease("preview \(position + 1)/\(media.items.count): over the size limit, \(url.absoluteString)")
             case .failed:
+                loadFailed = true
                 return false
             }
 
         case .video(let url, let reportedSize):
             // Keyed by source and position, so the same video resumes however it was reached.
             let key = "\(requested.source)#\(position)"
-            guard let size = await playback.start(url, key: key), !Task.isCancelled, self.target == requested,
-                  let player = playback.player else { return false }
+            guard let size = await playback.start(url, key: key) else {
+                loadFailed = true
+                return false
+            }
+            guard !Task.isCancelled, self.target == requested, let player = playback.player else { return false }
             panel.show(player, videoSize: reportedSize ?? size, counter: counter, anchor: requested.anchor)
             if let volume = playback.volume { panel.showVolume(level: volume.level, muted: volume.muted) }
             log.infoPrivateInRelease("preview \(position + 1)/\(media.items.count): video \(url.absoluteString)")
