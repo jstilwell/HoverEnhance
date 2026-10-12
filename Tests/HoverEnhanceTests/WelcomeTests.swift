@@ -31,6 +31,13 @@ struct AccessibilityWatcherTests {
         #expect(changes == [true, false])
     }
 
+    @Test func theDiskImageIsNoPlaceToRunFrom() {
+        #expect(AppLocation.isTemporary("/Volumes/HoverEnhance/HoverEnhance.app", onReadOnlyVolume: true))
+        #expect(AppLocation.isTemporary("/private/var/folders/x/T/AppTranslocation/1A2B/d/HoverEnhance.app", onReadOnlyVolume: true))
+        #expect(!AppLocation.isTemporary("/Volumes/External/Applications/HoverEnhance.app", onReadOnlyVolume: false))
+        #expect(!AppLocation.isTemporary("/Applications/HoverEnhance.app", onReadOnlyVolume: false))
+    }
+
     @Test func startsWithTheCurrentAnswer() {
         #expect(AccessibilityWatcher { true }.isGranted)
     }
