@@ -231,7 +231,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         return item
     }
 
-    /// Never shown for a menu bar app, but it gives the Settings window ⌘, ⌘W, and ⌘Q.
+    /// Never shown for a menu bar app, but it gives the Settings window ⌘, ⌘W, and ⌘Q, and its text
+    /// fields cut, copy, paste, and undo, which AppKit finds through the Edit menu.
     private func installMainMenu() {
         let appMenu = NSMenu()
         let aboutItem = NSMenuItem(title: "About HoverEnhance", action: #selector(showAbout), keyEquivalent: "")
@@ -243,11 +244,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             settingsItem, .separator(),
             NSMenuItem(title: "Quit HoverEnhance", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"),
         ]
+        let editMenu = NSMenu(title: "Edit")
+        let redo = NSMenuItem(title: "Redo", action: Selector(("redo:")), keyEquivalent: "z")
+        redo.keyEquivalentModifierMask = [.command, .shift]
+        editMenu.items = [
+            NSMenuItem(title: "Undo", action: Selector(("undo:")), keyEquivalent: "z"), redo, .separator(),
+            NSMenuItem(title: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x"),
+            NSMenuItem(title: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c"),
+            NSMenuItem(title: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v"),
+            NSMenuItem(title: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a"),
+        ]
         let windowMenu = NSMenu(title: "Window")
         windowMenu.items = [NSMenuItem(title: "Close", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")]
 
         let main = NSMenu()
-        for submenu in [appMenu, windowMenu] {
+        for submenu in [appMenu, editMenu, windowMenu] {
             let item = NSMenuItem()
             item.submenu = submenu
             main.addItem(item)

@@ -130,6 +130,15 @@ struct AppSettingsTests {
         #expect(settings.previewsAllowed(holding: [.option]))
     }
 
+    @Test func aGreyedOutKeyRequirementDoesntApply() {
+        let settings = AppSettings(defaults: freshDefaults())
+        settings.previewsInOtherApps = true
+        settings.otherAppsNeedKey = true
+        #expect(settings.otherApps.needsKey)
+        settings.activation = .unlessHoldingKey
+        #expect(!settings.otherApps.needsKey)
+    }
+
     @Test func theHoverDelayIsNeverZero() {
         let defaults = freshDefaults()
         defaults.set(0.0, forKey: "hoverDelay")
