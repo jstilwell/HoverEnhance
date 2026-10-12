@@ -14,6 +14,7 @@ All notable changes to this project will be documented in this file.
 - A web page can no longer lead HoverEnhance to your router, printer, or other things on your local network or this Mac, which browsers already refuse.
 - Resting on a link made with an absurdly long video time or post number no longer crashes HoverEnhance.
 - An image whose server claims an impossible size no longer crashes HoverEnhance.
+- Resting on a file that's only in iCloud, or in Dropbox and the like, no longer downloads it; its card shows what macOS already knows.
 - Large images download faster.
 - An image too large to decode safely is skipped instead of stalling HoverEnhance, and an animation with huge frames shows as a still.
 - Multi-page TIFFs and icon files show their largest picture, sized to fit like any other image.

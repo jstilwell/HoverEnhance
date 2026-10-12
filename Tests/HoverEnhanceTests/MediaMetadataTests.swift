@@ -134,6 +134,18 @@ struct FileMediaKindTests {
         #expect(await kind(try fixture("clip", "mov")) == .video)
     }
 
+    @Test func filesOnlyInTheCloudArentReadOrShownLarge() async throws {
+        let url = try fixture("tagged", "mp3")
+        #expect(!FileDetails.isOnlyInTheCloud(url))
+        var details = FileDetails.load(url, options: FileCardOptions())
+        details.isCloudOnly = true
+        await details.addMedia(from: url, options: FileCardOptions(), forPreview: true)
+        #expect(details.media == nil && FileMediaKind(details: details) == nil)
+
+        FileDetails.neverDownloadOnRead()
+        #expect(getiopolicy_np(IOPOL_TYPE_VFS_MATERIALIZE_DATALESS_FILES, IOPOL_SCOPE_PROCESS) == IOPOL_MATERIALIZE_DATALESS_FILES_OFF)
+    }
+
     @Test func imagesAreImagesAndOtherFilesArentMedia() async throws {
         let folder = FileManager.default.temporaryDirectory.appending(path: "HoverEnhanceTests-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)

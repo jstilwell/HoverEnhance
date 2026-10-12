@@ -1,5 +1,6 @@
 import AppKit
 
+FileDetails.neverDownloadOnRead()
 let delegate = AppDelegate()
 let app = NSApplication.shared
 app.delegate = delegate

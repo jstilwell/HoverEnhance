@@ -44,6 +44,8 @@ struct FileDetails: Sendable, Equatable {
     var contentType: UTType?
     var app: AppBundleInfo?
     var git: GitRepository?
+    /// Its contents are only in the cloud, so none of it was read; see `isOnlyInTheCloud(_:)`.
+    var isCloudOnly = false
 
     /// A detail looked up after the card appears.
     enum Lookup<Value: Sendable & Equatable>: Sendable, Equatable {
@@ -75,6 +77,7 @@ struct FileDetails: Sendable, Equatable {
             .contentModificationDateKey,
         ])
         details.contentType = values?.contentType
+        details.isCloudOnly = FileDetails.isOnlyInTheCloud(url)
         if options.shows(.kind) { details.kind = values?.localizedTypeDescription }
         if options.shows(.size), values?.isDirectory != true { details.size = values?.fileSize.map(Int64.init) }
         if options.shows(.created) { details.created = values?.creationDate }
@@ -84,8 +87,8 @@ struct FileDetails: Sendable, Equatable {
         if options.shows(.tags) { details.tags = tags(of: url) ?? [] }
         if options.shows(.cloud) { details.cloud = cloudStatus(of: url) }
 
-        if options.shows(.archive), url.pathExtension.lowercased() == "zip" { details.archive = ZipSummary.read(url) }
-        if values?.isPackage == true, [.appVersion, .bundleID, .architectures, .minimumSystem, .signature].contains(where: options.shows),
+        if options.shows(.archive), !details.isCloudOnly, url.pathExtension.lowercased() == "zip" { details.archive = ZipSummary.read(url) }
+        if values?.isPackage == true, !details.isCloudOnly, [.appVersion, .bundleID, .architectures, .minimumSystem, .signature].contains(where: options.shows),
            var app = AppBundleInfo.read(url) {
             if !options.shows(.appVersion) { app.version = nil }
             if !options.shows(.bundleID) { app.bundleID = nil }
@@ -93,7 +96,7 @@ struct FileDetails: Sendable, Equatable {
             if !options.shows(.minimumSystem) { app.minimumSystem = nil }
             details.app = app
         }
-        if values?.isDirectory == true, values?.isPackage != true, options.shows(.gitBranch) {
+        if values?.isDirectory == true, values?.isPackage != true, !details.isCloudOnly, options.shows(.gitBranch) {
             details.git = GitRepository.read(url)
         }
 
@@ -153,7 +156,7 @@ struct FileDetails: Sendable, Equatable {
     /// `forPreview` reads it even with those details off, since a large preview needs the tracks and artwork.
     mutating func addMedia(from url: URL, options: FileCardOptions, forPreview: Bool = false) async {
         let fields: [FileCardField] = [.music, .recording, .mediaFormat, .dimensions, .duration, .thumbnail]
-        guard contentType?.conforms(to: .audiovisualContent) == true, forPreview || fields.contains(where: options.shows),
+        guard !isCloudOnly, contentType?.conforms(to: .audiovisualContent) == true, forPreview || fields.contains(where: options.shows),
               var media = await MediaMetadata.read(url) else { return }
         if !options.shows(.music) {
             if !media.hasVideo { media.title = nil }

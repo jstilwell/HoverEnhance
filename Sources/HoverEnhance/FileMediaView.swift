@@ -10,7 +10,8 @@ enum FileMediaKind: Equatable, Sendable {
     /// Audio and video need what their tracks say, from `FileDetails.addMedia`, to tell them apart:
     /// an .mp4 can hold sound alone.
     init?(details: FileDetails) {
-        guard let type = details.contentType else { return nil }
+        // Showing it large would mean downloading it.
+        guard !details.isCloudOnly, let type = details.contentType else { return nil }
         if type.conforms(to: .image) {
             self = .image
         } else if type.conforms(to: .audiovisualContent), let media = details.media {

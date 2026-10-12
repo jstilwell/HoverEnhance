@@ -74,7 +74,8 @@ final class FileCard {
 
     /// Folders and files Quick Look can't draw keep their icon.
     func loadThumbnail() async {
-        guard options.shows(.thumbnail), thumbnail == nil else { return }
+        // Quick Look would read the file, and one that's only in the cloud would download for it.
+        guard options.shows(.thumbnail), !details.isCloudOnly, thumbnail == nil else { return }
         let request = QLThumbnailGenerator.Request(fileAt: url, size: CGSize(width: Self.imageSize, height: Self.imageSize),
                                                    scale: NSScreen.main?.backingScaleFactor ?? 2, representationTypes: .thumbnail)
         thumbnail = try? await QLThumbnailGenerator.shared.generateBestRepresentation(for: request).nsImage
