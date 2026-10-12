@@ -62,6 +62,13 @@ struct UpdatesTests {
         #expect(info["SUFeedURL"] as? String == "https://github.com/jstilwell/HoverEnhance/releases/latest/download/appcast.xml")
         #expect(info["CFBundleIconFile"] as? String == "AppIcon")
     }
+
+    @Test func locationIsExplainedAndAllowedUnderTheHardenedRuntime() throws {
+        let info = try #require(NSDictionary(contentsOfFile: "Resources/Info.plist") as? [String: Any])
+        #expect((info["NSLocationUsageDescription"] as? String)?.contains("weather") == true)
+        let entitlements = try #require(NSDictionary(contentsOfFile: "HoverEnhance.entitlements") as? [String: Any])
+        #expect(entitlements["com.apple.security.personal-information.location"] as? Bool == true)
+    }
 }
 
 struct OwnWindowsTests {

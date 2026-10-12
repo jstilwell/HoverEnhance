@@ -2,13 +2,13 @@ import ServiceManagement
 import SwiftUI
 import UniformTypeIdentifiers
 
-private let settingsWidth: CGFloat = 540
+let settingsWidth: CGFloat = 540
 /// Every tab is the same size, so the window doesn't jump between tabs, and short enough for a
 /// 1280 × 800 screen; longer tabs scroll.
-private let settingsHeight: CGFloat = 600
+let settingsHeight: CGFloat = 600
 
 /// Section footers in grouped forms trail-align by default; settings text reads better leading.
-private struct Footnote: View {
+struct Footnote: View {
     let text: String
 
     init(_ text: String) { self.text = text }

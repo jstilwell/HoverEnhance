@@ -40,6 +40,8 @@ final class PreviewController {
         /// The hovered element, for zooming into the part of an image the cursor is on.
         let element: CGRect?
         let page: URL?
+        /// For a menu bar item: its frame, which the preview hangs under.
+        var item: CGRect?
     }
 
     init() {
@@ -99,7 +101,14 @@ final class PreviewController {
 
         reset(because: "new target")
         let elementFrame = info.imageFrame ?? info.frame
-        let newTarget = Target(source: source, anchor: cursor, notch: panel.notchFrame(at: cursor), element: elementFrame, page: info.pageURL)
+        var item: CGRect?
+        if case .weather(let frame) = source {
+            // The item's frame, if it's where the cursor is: on a second display's menu bar it may be
+            // reported on the main one's, and then a stand-in around the cursor will do.
+            item = frame.insetBy(dx: -4, dy: -4).contains(cursor) ? frame : CGRect(x: cursor.x - 16, y: cursor.y - 12, width: 32, height: 24)
+        }
+        let notch = item.map { panel.dropDownHoverArea(at: cursor, item: $0) } ?? panel.notchFrame(at: cursor)
+        let newTarget = Target(source: source, anchor: cursor, notch: notch, element: elementFrame, page: info.pageURL, item: item)
         target = newTarget
         // File cards wait longer on purpose; the spinner counts only time past that. A post shown large
         // may turn out to hold nothing more, so it gets no spinner.
@@ -141,7 +150,7 @@ final class PreviewController {
         let indicator = Task { [weak self] in
             try? await Task.sleep(for: delay)
             guard !Task.isCancelled, let self, self.target == target, showing == nil else { return }
-            panel.showLoading(anchor: target.anchor)
+            panel.showLoading(anchor: target.anchor, item: target.item)
         }
         defer { indicator.cancel() }
         return await load()
@@ -241,7 +250,7 @@ final class PreviewController {
                 // The rocker shows the new level.
                 if input.up != 0 { playback.changeVolume(by: input.isPrecise ? input.up * 0.005 : (input.up > 0 ? 0.05 : -0.05)) }
             }
-        case .embed, .channel:
+        case .embed, .channel, .weather:
             // On the player or card, scrolling belongs to it; on the notch, it mustn't move the page away.
             return !panel.isOnPreview(input.location)
         case .file:
@@ -318,6 +327,27 @@ final class PreviewController {
             panel.show(view, size: embed.size, counter: counter, anchor: requested.anchor)
             log.infoPrivateInRelease("preview \(position + 1)/\(media.items.count): embed \(String(describing: embed))")
             logPlaybackState(of: view, after: .seconds(5))
+
+        case .weather(let item):
+            let model = WeatherPopupModel(settings: settings)
+            await model.load()
+            guard !Task.isCancelled, self.target == requested else { return false }
+            let view = CardHostingView(rootView: WeatherPopupView(
+                model: model,
+                useCurrentLocation: {
+                    AppSettings.shared.weatherLocation = .current
+                    Task { await model.use(.current) }
+                },
+                openSettings: { NotificationCenter.default.post(name: .showSettingsTab, object: SettingsTab.weather) },
+                retry: { Task { await model.retry() } }
+            ))
+            // A newer forecast, or a retry, changes its size.
+            view.onSizeChange = { [weak self, weak view] in
+                Task { @MainActor in if let self, let view { self.panel.refit(view) } }
+            }
+            playback.stop()
+            panel.show(view, counter: nil, anchor: requested.anchor, item: item)
+            log.info("preview: weather")
 
         case .channel(let channel):
             let card = NSHostingView(rootView: CreatorCardView(channel: channel))
