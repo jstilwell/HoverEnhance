@@ -37,6 +37,54 @@ struct ImageDecoderTests {
         #expect(decodedWidth(image) == 300)
     }
 
+    private func image(width: Int, height: Int) throws -> CGImage {
+        let context = try #require(CGContext(
+            data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
+            space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ))
+        context.setFillColor(red: 0, green: 1, blue: 0, alpha: 1)
+        context.fill(CGRect(x: 0, y: 0, width: width, height: height))
+        return try #require(context.makeImage())
+    }
+
+    private func file(_ type: UTType, frames: [CGImage]) throws -> Data {
+        let data = NSMutableData()
+        let destination = try #require(CGImageDestinationCreateWithData(data, type.identifier as CFString, frames.count, nil))
+        for frame in frames { CGImageDestinationAddImage(destination, frame, nil) }
+        #expect(CGImageDestinationFinalize(destination))
+        return data as Data
+    }
+
+    private func picture(_ data: Data, largestStill: Int = ImageDecoder.Picture.largestStill,
+                         largestFrame: Int = ImageDecoder.Picture.largestFrame) throws -> ImageDecoder.Picture {
+        let source = try #require(CGImageSourceCreateWithData(data as CFData, nil))
+        return try #require(ImageDecoder.Picture(source, largestStill: largestStill, largestFrame: largestFrame))
+    }
+
+    @Test func refusesPicturesTooLargeToDecode() throws {
+        // A real one takes hundreds of megabytes to make; the limit is lowered instead.
+        let still = try picture(try png(width: 2000, height: 1000), largestStill: 1_000_000)
+        #expect(still.pixelSize == CGSize(width: 2000, height: 1000) && !still.isDecodable)
+        #expect(try picture(try png(width: 2000, height: 1000)).isDecodable)
+
+        // An animation with frames too large to play is shown as a still of its first.
+        let gif = try file(.gif, frames: [image(width: 400, height: 300), image(width: 400, height: 300)])
+        let frames = try picture(gif, largestFrame: 100_000)
+        #expect(!frames.isAnimation && frames.isDecodable && frames.index == 0)
+    }
+
+    @Test func playsAnimationsButDownsamplesOtherMultiPictureFiles() throws {
+        let gif = try file(.gif, frames: [image(width: 40, height: 30), image(width: 40, height: 30)])
+        #expect(try picture(gif).isAnimation)
+
+        // A TIFF's pages aren't an animation: the largest is shown, downsampled like any still.
+        let tiff = try file(.tiff, frames: [image(width: 40, height: 30), image(width: 2000, height: 1000)])
+        let pages = try picture(tiff)
+        #expect(!pages.isAnimation && pages.index == 1 && pages.pixelSize == CGSize(width: 2000, height: 1000))
+        let decoded = try #require(ImageDecoder.decode(tiff, from: URL(string: "https://example.com/pages.tiff")!, maxPixelSize: 500))
+        #expect(decodedWidth(decoded) == 500)
+    }
+
     @Test func rejectsNonImages() {
         let html = Data("<html><body>Sign in</body></html>".utf8)
         #expect(ImageDecoder.decode(html, from: URL(string: "https://example.com/a.jpg")!, maxPixelSize: 500) == nil)

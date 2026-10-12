@@ -1,5 +1,6 @@
 import AppKit
 import ImageIO
+import UniformTypeIdentifiers
 
 /// A decoded image ready to display.
 struct LoadedImage: Sendable {
@@ -100,25 +101,23 @@ actor ImageLoader {
 }
 
 enum ImageDecoder {
-    /// Decodes `data`, downsampling stills so the long edge is at most `maxPixelSize`. Animated
-    /// images are kept whole so `NSImageView` can play them.
+    /// Decodes `data`, downsampling stills so the long edge is at most `maxPixelSize`. Animations are kept
+    /// whole so `NSImageView` can play them. Nil for an image too large to decode safely.
     static func decode(_ data: Data, from url: URL, maxPixelSize: Int) -> LoadedImage? {
-        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
-              let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
-              let width = properties[kCGImagePropertyPixelWidth] as? Int,
-              let height = properties[kCGImagePropertyPixelHeight] as? Int else {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil), let picture = Picture(source) else {
             // Not something ImageIO reads (SVG, for one); NSImage may still manage.
             return NSImage(data: data).map { LoadedImage(url: url, image: $0, pixelSize: $0.size) }
         }
-        // EXIF orientations 5–8 turn the image 90°.
-        let orientation = properties[kCGImagePropertyOrientation] as? Int ?? 1
-        let pixelSize = orientation >= 5 ? CGSize(width: height, height: width) : CGSize(width: width, height: height)
-
-        if CGImageSourceGetCount(source) > 1, let image = NSImage(data: data) {
-            image.size = pixelSize
-            return LoadedImage(url: url, image: image, pixelSize: pixelSize)
+        guard picture.isDecodable else { return nil }
+        if picture.isAnimation, let image = NSImage(data: data) {
+            image.size = picture.pixelSize
+            return LoadedImage(url: url, image: image, pixelSize: picture.pixelSize)
         }
+        return thumbnail(of: picture, in: source, maxPixelSize: maxPixelSize).map { LoadedImage(url: url, image: $0, pixelSize: picture.pixelSize) }
+    }
 
+    /// The picture at `picture.index`, its long edge at most `maxPixelSize`, decoded on this thread.
+    static func thumbnail(of picture: Picture, in source: CGImageSource, maxPixelSize: Int) -> NSImage? {
         let options: [CFString: Any] = [
             kCGImageSourceCreateThumbnailFromImageAlways: true,
             kCGImageSourceCreateThumbnailWithTransform: true,
@@ -126,8 +125,53 @@ enum ImageDecoder {
             // Decode now, on this thread, rather than lazily on the main thread at first draw.
             kCGImageSourceShouldCacheImmediately: true,
         ]
-        guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else { return nil }
-        let image = NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
-        return LoadedImage(url: url, image: image, pixelSize: pixelSize)
+        guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, picture.index, options as CFDictionary) else { return nil }
+        return NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
+    }
+
+    /// What an image file holds, read from its properties without decoding it. A file a few megabytes
+    /// long can describe a picture that takes gigabytes to decode, so sizes are checked first.
+    struct Picture {
+        /// More than any camera makes.
+        static let largestStill = 250_000_000
+        /// Animations play whole, a frame decoded on the main thread as each is drawn: frames up to about
+        /// twice 4K, and not so many that keeping them takes more than a few gigabytes.
+        static let largestFrame = 16_000_000
+        static let largestAnimation = 1_000_000_000
+
+        /// The picture to show: the first, or for an icon file of several sizes, the largest.
+        let index: Int
+        /// Its size in pixels as shown, after its EXIF orientation.
+        let pixelSize: CGSize
+        let isAnimation: Bool
+        let isDecodable: Bool
+
+        init?(_ source: CGImageSource, largestStill: Int = Picture.largestStill, largestFrame: Int = Picture.largestFrame) {
+            func size(at index: Int) -> (width: Int, height: Int, orientation: Int)? {
+                guard let properties = CGImageSourceCopyPropertiesAtIndex(source, index, nil) as? [CFString: Any],
+                      let width = properties[kCGImagePropertyPixelWidth] as? Int,
+                      let height = properties[kCGImagePropertyPixelHeight] as? Int, width > 0, height > 0 else { return nil }
+                return (width, height, properties[kCGImagePropertyOrientation] as? Int ?? 1)
+            }
+            guard let first = size(at: 0) else { return nil }
+            let count = CGImageSourceGetCount(source)
+            let type = CGImageSourceGetType(source) as String?
+            let animatable = [UTType.gif.identifier, UTType.png.identifier, UTType.webP.identifier, "public.heics"].contains(type)
+            let pixels = first.width * first.height
+            isAnimation = count > 1 && animatable && pixels <= largestFrame && count * pixels <= Self.largestAnimation
+
+            var chosen = (index: 0, size: first)
+            if count > 1, !animatable {
+                // An icon file, or a TIFF of several pages; a handful is plenty to look through.
+                for index in 1 ..< min(count, 16) {
+                    if let size = size(at: index), size.width * size.height > chosen.size.width * chosen.size.height { chosen = (index, size) }
+                }
+            }
+            index = chosen.index
+            // EXIF orientations 5–8 turn the image 90°.
+            let (width, height) = (chosen.size.width, chosen.size.height)
+            pixelSize = chosen.size.orientation >= 5 ? CGSize(width: height, height: width) : CGSize(width: width, height: height)
+            isDecodable = isAnimation || width * height <= largestStill
+        }
     }
 }
