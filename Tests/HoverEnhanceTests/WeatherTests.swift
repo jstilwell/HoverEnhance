@@ -235,6 +235,22 @@ struct WeatherModelTests {
         #expect(hourlyOnly.nextHourPrecipitation(from: now) == .chance(70))
     }
 
+    @Test func theNextDayIsTwentyFourHoursOfSteps() {
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        func report(step: TimeInterval, count: Int) -> WeatherReport {
+            var report = WeatherReport(provider: .openMeteo, fetched: now, timeZone: .current, current: .init(time: now, condition: .clear, temperature: 10))
+            report.hourly = (0..<count).map { .init(time: now.addingTimeInterval(Double($0) * step - step / 2), condition: .clear, temperature: 10) }
+            return report
+        }
+        #expect(report(step: 3600, count: 48).nextDay(from: now).count == 25)
+        #expect(report(step: 3 * 3600, count: 40).nextDay(from: now).count == 9)
+    }
+
+    @Test func whatsFallingIsNamed() {
+        #expect(WeatherCondition.heavySnow.precipitationWord == "Snow" && WeatherCondition.thunderstorm.precipitationWord == "Rain")
+        #expect(WeatherCondition.freezingRain.precipitationWord == "Freezing rain")
+    }
+
     @Test func pressureTrendsComeFromTheHours() {
         let now = Date(timeIntervalSince1970: 1_000_000)
         var report = WeatherReport(provider: .openMeteo, fetched: now, timeZone: .current, current: .init(time: now, condition: .clear, temperature: 10))

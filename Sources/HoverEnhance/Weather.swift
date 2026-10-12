@@ -130,7 +130,8 @@ struct WeatherReport: Sendable, Equatable {
     /// what the provider gives.
     func nextDay(from now: Date = Date()) -> [Hour] {
         let upcoming = hourly.drop { $0.time.addingTimeInterval(stepLength) <= now }
-        return Array(upcoming.prefix { $0.time <= now.addingTimeInterval(24 * 3600 + stepLength / 2) })
+        guard let start = upcoming.first?.time else { return [] }
+        return Array(upcoming.prefix { $0.time <= start.addingTimeInterval(24 * 3600) })
     }
 
     /// Seconds between forecast steps: an hour, or three.
@@ -235,6 +236,17 @@ enum WeatherCondition: String, Sendable, CaseIterable {
     /// The most notable of several, as a day's worth of steps is summed up.
     static func worst(_ conditions: [WeatherCondition]) -> WeatherCondition {
         conditions.max { $0.severity < $1.severity } ?? .cloudy
+    }
+
+    /// What's falling, in a word, for "Rain starting around…": snow or sleet where the sky says so.
+    var precipitationWord: String {
+        switch self {
+        case .snow, .heavySnow: "Snow"
+        case .sleet: "Sleet"
+        case .freezingRain: "Freezing rain"
+        case .hail: "Hail"
+        default: "Rain"
+        }
     }
 
     /// Whether anything is falling.
