@@ -43,7 +43,7 @@ struct GeneralSettingsView: View {
                 .disabled(!settings.usesActivationKey)
                 LabeledContent("Hover delay") {
                     HStack {
-                        Slider(value: $settings.hoverDelay, in: 0...600, step: 25)
+                        Slider(value: $settings.hoverDelay, in: AppSettings.shortestHoverDelay...600, step: 25)
                         Text("\(Int(settings.hoverDelay)) ms").monospacedDigit().frame(width: 56, alignment: .trailing)
                     }
                 }

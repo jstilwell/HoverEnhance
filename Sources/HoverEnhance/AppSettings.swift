@@ -159,8 +159,10 @@ final class AppSettings {
     var previewsEnabled: Bool { didSet { defaults.set(previewsEnabled, forKey: Key.previewsEnabled) } }
     var activation: Activation { didSet { defaults.set(activation.rawValue, forKey: Key.activation) } }
     var activationKey: ModifierKey { didSet { defaults.set(activationKey.rawValue, forKey: Key.activationKey) } }
-    /// Milliseconds the cursor rests before a preview starts.
+    /// Milliseconds the cursor rests before a preview starts. At least `shortestHoverDelay`: shorter, and
+    /// the cursor would be looked under between every two moves it makes.
     var hoverDelay: Double { didSet { defaults.set(hoverDelay, forKey: Key.hoverDelay) } }
+    static let shortestHoverDelay = 50.0
     var excludedApps: [ExcludedApp] {
         didSet { defaults.set(try? JSONEncoder().encode(excludedApps), forKey: Key.excludedApps) }
     }
@@ -270,7 +272,7 @@ final class AppSettings {
         previewsEnabled = defaults.bool(forKey: Key.previewsEnabled)
         activation = defaults.string(forKey: Key.activation).flatMap(Activation.init(rawValue:)) ?? .always
         activationKey = defaults.string(forKey: Key.activationKey).flatMap(ModifierKey.init(rawValue:)) ?? .option
-        hoverDelay = defaults.double(forKey: Key.hoverDelay)
+        hoverDelay = max(defaults.double(forKey: Key.hoverDelay), Self.shortestHoverDelay)
         excludedApps = defaults.data(forKey: Key.excludedApps).flatMap { try? JSONDecoder().decode([ExcludedApp].self, from: $0) } ?? []
         previewsInOtherApps = defaults.bool(forKey: Key.previewsInOtherApps)
         otherAppsSkipEmail = defaults.bool(forKey: Key.otherAppsSkipEmail)
@@ -360,6 +362,17 @@ final class AppSettings {
         case .muted: true
         case .unmuted: false
         }
+    }
+
+    /// What the inspector needs to know. With the inspector on, every app is looked at in full.
+    var inspectionPolicy: InspectionPolicy {
+        showsInspector ? InspectionPolicy() : InspectionPolicy(skipped: Set(excludedApps.map(\.bundleID)), includesOtherApps: previewsInOtherApps)
+    }
+
+    /// Whether resting the cursor is worth a look now: not while previews wait for a key that isn't held,
+    /// or one that is, unless the inspector wants to see.
+    func inspectsOnRest(holding flags: NSEvent.ModifierFlags) -> Bool {
+        showsInspector || (previewsEnabled && previewsAllowed(holding: flags))
     }
 
     func isExcluded(_ bundleID: String?) -> Bool {

@@ -129,6 +129,35 @@ struct AppSettingsTests {
         settings.activation = .always
         #expect(settings.previewsAllowed(holding: [.option]))
     }
+
+    @Test func theHoverDelayIsNeverZero() {
+        let defaults = freshDefaults()
+        defaults.set(0.0, forKey: "hoverDelay")
+        #expect(AppSettings(defaults: defaults).hoverDelay == AppSettings.shortestHoverDelay)
+    }
+
+    @Test func restingIsLookedAtOnlyWhenAPreviewCouldFollow() {
+        let settings = AppSettings(defaults: freshDefaults())
+        settings.activationKey = .option
+        settings.activation = .whileHoldingKey
+        #expect(!settings.inspectsOnRest(holding: []))
+        #expect(settings.inspectsOnRest(holding: [.option]))
+        settings.previewsEnabled = false
+        #expect(!settings.inspectsOnRest(holding: [.option]))
+        settings.showsInspector = true
+        #expect(settings.inspectsOnRest(holding: []))
+    }
+
+    @Test func theInspectorSkipsExcludedAppsAndOtherAppsWhenOff() {
+        let settings = AppSettings(defaults: freshDefaults())
+        settings.excludedApps = [ExcludedApp(bundleID: "com.google.Chrome", name: "Chrome")]
+        #expect(settings.inspectionPolicy == InspectionPolicy(skipped: ["com.google.Chrome"], includesOtherApps: false))
+        settings.previewsInOtherApps = true
+        #expect(settings.inspectionPolicy.includesOtherApps)
+        // The inspector shows everything it finds.
+        settings.showsInspector = true
+        #expect(settings.inspectionPolicy == InspectionPolicy())
+    }
 }
 
 struct PreviewFilterTests {

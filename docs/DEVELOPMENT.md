@@ -27,12 +27,16 @@ after every build (the welcome window explains how to remove and re-add the app)
 
 - `AccessibilityWatcher` follows whether the app has Accessibility access; `WelcomeWindowController`
   shows the guide until it does, and `AppDelegate` starts everything else once it has.
-- `HoverMonitor` listens for global mouse-moved events and waits for the cursor to rest (150 ms).
-  On a web page it looks again a few times over the next two seconds while the cursor stays put,
-  since Chromium fills in its accessibility tree after scrolling and loading; a second look can
-  start a preview but never ends one, and clicks and key presses stop them.
+- `HoverMonitor` listens for global mouse-moved events and waits for the cursor to rest (150 ms;
+  never under 50). It doesn't look while previews wait for a key that isn't held, and stops listening
+  while paused. On a web page it looks again a few times over the next two seconds while the cursor
+  stays put, since Chromium fills in its accessibility tree after scrolling and loading, unless the
+  first look found plain text; a second look can start a preview but never ends one, and clicks and
+  key presses stop them.
 - `HoverInspector` hit-tests with `AXUIElementCopyElementAtPosition` on a background queue (AX
   calls are synchronous IPC into the target app) and walks up to the enclosing link and web area.
+  A look the cursor has moved on from is dropped before its slow parts, and excluded apps
+  (`InspectionPolicy`) get only the hit-test.
 - `MediaResolver` turns the hovered image or link into a `MediaSource` (`ImageRules` for
   full-size image URLs, `SiteLinks` for posts and videos), following `file:` URLs only from local
   pages, and to the local network (`LocalNetwork`: loopback, private ranges, `.local`) only from local
@@ -79,9 +83,11 @@ after every build (the welcome window explains how to remove and re-add the app)
   offscreen WebKit view and shares the cookie with URLSession.
 - Chromium browsers and Electron apps only expose web content to accessibility on request, so the
   inspector sets `AXEnhancedUserInterface` (Chromium) or `AXManualAccessibility` (Electron) on them
-  the first time it sees them. Chrome ignores `AXManualAccessibility`, so it gets the VoiceOver switch,
+  the first time it sees them, if previews could appear there (not excluded; Electron apps only with
+  previews in other apps on). Chrome ignores `AXManualAccessibility`, so it gets the VoiceOver switch,
   which makes AppKit animate window moves made through accessibility; window managers such as
-  Rectangle work around that.
+  Rectangle work around that. The inspector switches it back off when previews pause, the app is
+  excluded, or HoverEnhance quits, unless VoiceOver is running or the switch was on before.
 
 ## Releases and updates
 

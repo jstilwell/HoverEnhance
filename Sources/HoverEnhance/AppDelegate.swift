@@ -30,6 +30,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// Whether the app proper is up: the menu bar item and the hover monitor. It waits for access.
     private var isRunning = false
     private var lastInfo: HoverInfo?
+    /// Whether the activation key was down at the last modifier change, so other modifiers are ignored.
+    private var activationKeyHeld = false
 
     private var versionItem: NSMenuItem!
     private var grantItem: NSMenuItem!
@@ -62,6 +64,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         monitor.onClick = { [weak self] in self?.preview.dismiss() }
         monitor.onModifiersChanged = { [weak self] flags in self?.modifiersChanged(flags) }
         monitor.onKeyDown = { [weak self] in self?.preview.keyPressed() }
+        monitor.policy = { AppSettings.shared.inspectionPolicy }
+        monitor.shouldInspect = { AppSettings.shared.inspectsOnRest(holding: NSEvent.modifierFlags) }
         monitor.start()
 
         NotificationCenter.default.addObserver(forName: .showSettingsTab, object: nil, queue: .main) { [weak self] note in
@@ -81,6 +85,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             updateActivity()
         }
         updateActivity()
+        whenChanged({ AppSettings.shared.inspectionPolicy }) { [weak self] _ in self?.monitor.settingsChanged() }
         whenChanged({ Updates.shared.waitingVersion }) { [weak self] version in
             self?.statusItem?.button?.image = MenuBarIcon.image(badged: version != nil)
         }
@@ -91,8 +96,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     /// Inspects only while something uses what's found, and dims the menu bar icon while previews are off.
     private func updateActivity() {
-        monitor.isPaused = !settings.previewsEnabled && !settings.showsInspector
+        let paused = !settings.previewsEnabled && !settings.showsInspector
+        if paused != monitor.isPaused {
+            monitor.isPaused = paused
+            monitor.settingsChanged()
+        }
         statusItem?.button?.appearsDisabled = !settings.previewsEnabled
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        if isRunning { monitor.stop() }
     }
 
     private func accessChanged(_ granted: Bool) {
@@ -156,6 +169,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// With an activation key in use, pressing or releasing it shows or hides the preview without
     /// waiting for the mouse to move.
     private func modifiersChanged(_ flags: NSEvent.ModifierFlags) {
+        // Only the activation key going down or up counts, not ⌘ for a shortcut, say.
+        let held = flags.contains(settings.activationKey.flag)
+        guard held != activationKeyHeld else { return }
+        activationKeyHeld = held
         guard settings.usesActivationKey else { return }
         if settings.previewsAllowed(holding: flags) {
             monitor.inspectNow()
