@@ -42,6 +42,10 @@ struct HoverInfo: Sendable, Equatable {
     /// Roles from the element up to its web area or window, innermost first.
     var ancestry: [String] = []
 
+    /// On text outside any link or image: the page's tree is built here, and there's nothing to preview,
+    /// so a second look would find nothing more.
+    var isPlainText: Bool { role == "AXStaticText" && linkURL == nil && imageURL == nil && postURL == nil }
+
     var summary: String {
         var lines = [[appName ?? "pid \(pid)", bundleID.map { "(\($0))" }].compactMap { $0 }.joined(separator: " ")]
         func add(_ key: String, _ value: String?) {

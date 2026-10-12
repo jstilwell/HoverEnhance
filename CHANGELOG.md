@@ -6,11 +6,16 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
+- Pausing previews, quitting, or excluding Chrome or an Electron app switches off the accessibility mode HoverEnhance turned on there, so window managers like Rectangle move its windows without animating again.
+- Excluded apps, and apps that can't show previews, are no longer looked into at all.
+- The shortest hover delay is 50 ms.
 - Finder cards no longer count a Git repository's uncommitted changes, so hovering a folder never runs Git, which a downloaded repository could use to run its own commands.
 - Load Anyway stops at 1 GB, so an image that never finishes downloading can't fill memory.
 
 ### Fixed
 
+- HoverEnhance asks the browser about a resting cursor less often, drops looks the cursor has moved on from, and doesn't look at all while previews wait for a key you aren't holding.
+- Pressing ⌘ or another modifier no longer counts as the activation key.
 - A web page can no longer lead HoverEnhance to your router, printer, or other things on your local network or this Mac, which browsers already refuse.
 - Resting on a link made with an absurdly long video time or post number no longer crashes HoverEnhance.
 - An image whose server claims an impossible size no longer crashes HoverEnhance.

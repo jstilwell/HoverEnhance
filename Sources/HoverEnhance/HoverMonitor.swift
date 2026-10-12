@@ -1,13 +1,27 @@
 import AppKit
+import os
 
 /// Watches the mouse and inspects whatever it comes to rest on.
 @MainActor
 final class HoverMonitor {
     /// How long the cursor must stay still before we inspect. Keeps AX traffic to one query per stop.
     var dwell: TimeInterval { AppSettings.shared.hoverDelay / 1000 }
+    /// Nothing is watched while paused: no event monitors, no inspections.
     var isPaused = false {
-        didSet { if isPaused { dwellTimer?.invalidate() } }
+        didSet {
+            guard isPaused != oldValue else { return }
+            if isPaused {
+                dwellTimer?.invalidate()
+                removeEventMonitors()
+            } else if isStarted {
+                addEventMonitors()
+            }
+        }
     }
+    /// What the settings ask of the inspector right now.
+    var policy: () -> InspectionPolicy = { InspectionPolicy() }
+    /// Whether a rest is worth a look at all, as it isn't while previews need a key that isn't held.
+    var shouldInspect: () -> Bool = { true }
     /// Each inspection, and whether it's a second look at the same spot (see `lookAgain`).
     var onResult: ((Result<HoverInfo, InspectionError>, _ again: Bool) -> Void)?
     /// Every mouse move, with the cursor in global top-left-origin coordinates.
@@ -21,13 +35,64 @@ final class HoverMonitor {
     var onKeyDown: (() -> Void)?
 
     private let inspector = HoverInspector()
+    private var isStarted = false
     private var eventMonitors: [Any] = []
     private var activationObserver: NSObjectProtocol?
     private var dwellTimer: Timer?
     /// Bumped on every mouse move so results that arrive after the cursor has moved on are dropped.
-    private var generation = 0
+    private var generation = 0 {
+        didSet {
+            let current = generation
+            latestGeneration.withLock { $0 = current }
+        }
+    }
+    /// `generation`, for the inspector's queue to drop looks that are no longer wanted.
+    private let latestGeneration = OSAllocatedUnfairLock(initialState: 0)
 
     func start() {
+        isStarted = true
+        if !isPaused { addEventMonitors() }
+
+        // Switch on Chromium/Electron trees as apps come forward, so the first hover finds content.
+        activationObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main
+        ) { [weak self] notification in
+            if let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication {
+                MainActor.assumeIsolated { self?.prepare(app) }
+            }
+        }
+        if let frontmost = NSWorkspace.shared.frontmostApplication { prepare(frontmost) }
+    }
+
+    /// Makes the event monitors again after Accessibility access comes back: monitors that outlived
+    /// the loss aren't sure to hear key events again.
+    func restart() {
+        removeEventMonitors()
+        if let activationObserver { NSWorkspace.shared.notificationCenter.removeObserver(activationObserver) }
+        start()
+    }
+
+    /// The settings changed: switches web trees back off in apps that can't show previews now, or in all
+    /// of them while paused, and on in the app in front if it can.
+    func settingsChanged() {
+        let voiceOver = NSWorkspace.shared.isVoiceOverEnabled
+        inspector.switchOff(unlessKeptBy: isPaused ? nil : policy(), voiceOverIsRunning: voiceOver)
+        if let frontmost = NSWorkspace.shared.frontmostApplication { prepare(frontmost) }
+    }
+
+    /// Leaves apps as they were found, as HoverEnhance quits.
+    func stop() {
+        removeEventMonitors()
+        inspector.switchOff(unlessKeptBy: nil, voiceOverIsRunning: NSWorkspace.shared.isVoiceOverEnabled, wait: true)
+    }
+
+    private func prepare(_ app: NSRunningApplication) {
+        guard !isPaused else { return }
+        inspector.prepare(pid: app.processIdentifier, policy: policy())
+    }
+
+    private func addEventMonitors() {
+        guard eventMonitors.isEmpty else { return }
         // Global monitors don't see events while our own app is active, so add a local one too.
         let events: NSEvent.EventTypeMask = [.mouseMoved, .scrollWheel, .leftMouseDown, .rightMouseDown, .otherMouseDown, .flagsChanged, .keyDown]
         eventMonitors = [
@@ -39,27 +104,11 @@ final class HoverMonitor {
                 return event
             },
         ].compactMap { $0 }
-
-        // Switch on Chromium/Electron trees as apps come forward, so the first hover finds content.
-        activationObserver = NSWorkspace.shared.notificationCenter.addObserver(
-            forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main
-        ) { [inspector] notification in
-            if let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication {
-                inspector.prepare(pid: app.processIdentifier)
-            }
-        }
-        if let frontmost = NSWorkspace.shared.frontmostApplication {
-            inspector.prepare(pid: frontmost.processIdentifier)
-        }
     }
 
-    /// Makes the event monitors again after Accessibility access comes back: monitors that outlived
-    /// the loss aren't sure to hear key events again.
-    func restart() {
+    private func removeEventMonitors() {
         eventMonitors.forEach(NSEvent.removeMonitor)
         eventMonitors = []
-        if let activationObserver { NSWorkspace.shared.notificationCenter.removeObserver(activationObserver) }
-        start()
     }
 
     private func handle(_ event: NSEvent) {
@@ -110,6 +159,7 @@ final class HoverMonitor {
     }
 
     private func mouseSettled() {
+        guard shouldInspect() else { return }
         // CGEvent reports the cursor in the same top-left-origin space the AX API uses.
         guard let point = CGEvent(source: nil)?.location else { return }
         // Accessibility questions about this app's own windows are answered in this process, on the
@@ -120,12 +170,14 @@ final class HoverMonitor {
             return
         }
         let requested = generation
+        let policy = policy()
+        let isWanted: @Sendable () -> Bool = { [latestGeneration] in latestGeneration.withLock { $0 } == requested }
         Task {
-            let result = await inspector.inspect(at: point)
+            let result = await inspector.inspect(at: point, policy: policy, isWanted: isWanted)
             guard requested == generation, !isPaused else { return }
             onResult?(result, false)
-            if case .success(let info) = result, info.pageURL != nil {
-                await lookAgain(at: point, generation: requested)
+            if case .success(let info) = result, info.pageURL != nil, !info.isPlainText {
+                await lookAgain(at: point, generation: requested, policy: policy, isWanted: isWanted)
             }
         }
     }
@@ -133,11 +185,12 @@ final class HoverMonitor {
     /// A page can still be building what's under a cursor that just stopped: Chromium fills in its
     /// accessibility tree after scrolling and loading, so a first look can come up short. While the
     /// cursor stays put, look a few more times over the next two seconds, until a preview is up.
-    private func lookAgain(at point: CGPoint, generation requested: Int) async {
+    private func lookAgain(at point: CGPoint, generation requested: Int, policy: InspectionPolicy,
+                           isWanted: @escaping @Sendable () -> Bool) async {
         for delay in [0.2, 0.3, 0.5, 1.0] {
             try? await Task.sleep(for: .seconds(delay))
             guard requested == generation, !isPaused, !OwnWindows.areInFront(at: point) else { return }
-            let result = await inspector.inspect(at: point)
+            let result = await inspector.inspect(at: point, policy: policy, isWanted: isWanted)
             guard requested == generation, !isPaused else { return }
             onResult?(result, true)
         }

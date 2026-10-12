@@ -46,6 +46,14 @@ struct MediaResolverTests {
         #expect(MediaResolver.source(for: info) == .redditGallery(id: "1q2w3er"))
     }
 
+    @Test func plainTextGetsNoSecondLook() {
+        var info = HoverInfo(pid: 1)
+        info.role = "AXStaticText"
+        #expect(info.isPlainText)
+        info.linkURL = URL(string: "https://example.com/")
+        #expect(!info.isPlainText)
+    }
+
     @Test func plainImagesStillResolve() {
         var info = HoverInfo(pid: 1)
         info.imageURL = URL(string: "https://example.com/a.png")
