@@ -31,6 +31,12 @@ struct GeneralSettingsView: View {
         Form {
             Section {
                 Toggle("Show previews", isOn: $settings.previewsEnabled)
+                LabeledContent {
+                    ShortcutRecorder(shortcut: $settings.pauseShortcut)
+                } label: {
+                    Text("Shortcut")
+                    Text("Shows or hides previews from any app")
+                }
                 LaunchAtLoginToggle()
             }
             Section {
@@ -170,12 +176,66 @@ struct OtherAppsSheet: View {
 }
 
 /// Registers the app as a login item. The system keeps this state, not UserDefaults.
+/// Records a key combination: click, then press it. Esc stops without changing it.
+private struct ShortcutRecorder: View {
+    @Binding var shortcut: Shortcut?
+    @State private var monitor: Any?
+    @State private var refused = false
+
+    var body: some View {
+        HStack(spacing: 6) {
+            if refused {
+                Text("Use ⌘, ⌥, or ⌃").font(.callout).foregroundStyle(.secondary)
+            }
+            Button(monitor != nil ? "Press a shortcut…" : shortcut?.label ?? "Record Shortcut") {
+                if monitor != nil { stop() } else { start() }
+            }
+            .accessibilityHint(monitor != nil ? "Press the keys, or Escape to stop" : "Click, then press the keys")
+            if let shortcut, monitor == nil {
+                Button {
+                    self.shortcut = nil
+                } label: {
+                    Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
+                }
+                .buttonStyle(.borderless)
+                .help("Remove \(shortcut.label)")
+                .accessibilityLabel("Remove the shortcut")
+            }
+        }
+        .onDisappear(perform: stop)
+    }
+
+    private func start() {
+        refused = false
+        monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            MainActor.assumeIsolated {
+                if event.keyCode == 53 {
+                    stop()
+                } else if let recorded = Shortcut(event: event) {
+                    shortcut = recorded
+                    stop()
+                } else {
+                    refused = true
+                }
+            }
+            return nil
+        }
+    }
+
+    private func stop() {
+        if let monitor { NSEvent.removeMonitor(monitor) }
+        monitor = nil
+    }
+}
+
 private struct LaunchAtLoginToggle: View {
     @State private var isOn = SMAppService.mainApp.status == .enabled
     @State private var note: String?
 
     var body: some View {
         Toggle("Open at login", isOn: Binding(get: { isOn }, set: update))
+            // It can be changed in System Settings too, while this window stays open.
+            .onAppear { isOn = SMAppService.mainApp.status == .enabled }
         if let note {
             Text(note).font(.callout).foregroundStyle(.secondary)
         }
@@ -215,6 +275,7 @@ private struct ExcludedAppsEditor: View {
                 }
                 .buttonStyle(.borderless)
                 .help("Remove \(app.name)")
+                .accessibilityLabel("Remove \(app.name)")
             }
         }
         Menu("Add App") {
@@ -399,9 +460,59 @@ struct SitesSettingsView: View {
             } footer: {
                 Footnote("Images and video links on other sites follow the Previews settings.")
             }
+            Section {
+                SkippedWebsitesEditor(domains: $settings.skippedWebsites)
+            } header: {
+                Text("Skipped websites")
+            } footer: {
+                Footnote("No previews appear on these websites' pages, or their subdomains'. The menu bar menu can skip the one you're on.")
+            }
         }
         .formStyle(.grouped)
         .frame(width: settingsWidth, height: settingsHeight)
+    }
+}
+
+/// The websites previews skip, with a field to add another.
+private struct SkippedWebsitesEditor: View {
+    @Binding var domains: [String]
+    @State private var entry = ""
+
+    var body: some View {
+        if domains.isEmpty {
+            Text("None").foregroundStyle(.secondary)
+        }
+        ForEach(domains, id: \.self) { domain in
+            HStack {
+                Text(domain)
+                Spacer()
+                Button {
+                    domains.removeAll { $0 == domain }
+                } label: {
+                    Image(systemName: "minus.circle.fill").foregroundStyle(.secondary)
+                }
+                .buttonStyle(.borderless)
+                .help("Remove \(domain)")
+                .accessibilityLabel("Remove \(domain)")
+            }
+        }
+        HStack {
+            TextField("Website", text: $entry, prompt: Text("Website to skip, such as example.com"))
+                .labelsHidden()
+                .textFieldStyle(.roundedBorder)
+                .onSubmit(add)
+            Button("Add", action: add).disabled(newDomain == nil)
+        }
+    }
+
+    private var newDomain: String? {
+        SkippedWebsites.domain(from: entry).flatMap { domains.contains($0) ? nil : $0 }
+    }
+
+    private func add() {
+        guard let domain = newDomain else { return }
+        domains.append(domain)
+        entry = ""
     }
 }
 

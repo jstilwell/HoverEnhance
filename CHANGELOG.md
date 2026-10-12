@@ -7,6 +7,8 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - Press Esc to close any preview.
+- Set a shortcut in Settings → General to show or hide previews from any app.
+- Skip previews on websites you choose, in Settings → Sites, or from the menu bar for the one you're on.
 - A preview that couldn't load says so for a moment, instead of its spinner just vanishing.
 
 ### Changed

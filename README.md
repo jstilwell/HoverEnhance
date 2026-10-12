@@ -42,8 +42,9 @@ what's under the cursor. Requires macOS 14 or later.
 
 ## Settings
 
-From the menu bar icon: when previews appear (always, or while holding a key), the hover delay,
-apps and sites to skip, what file cards show, preview size, and video playback.
+From the menu bar icon: a shortcut that pauses previews from any app, when they appear (always, or
+while holding a key), the hover delay, apps and websites to skip, what file cards show, preview size,
+and video playback. The menu can also skip the website you're on.
 
 ## Building from source
 

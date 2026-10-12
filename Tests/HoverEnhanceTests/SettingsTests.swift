@@ -130,6 +130,21 @@ struct AppSettingsTests {
         #expect(settings.previewsAllowed(holding: [.option]))
     }
 
+    @Test func skippedWebsitesAndTheShortcutPersist() {
+        let defaults = freshDefaults()
+        let settings = AppSettings(defaults: defaults)
+        #expect(settings.skippedWebsites.isEmpty && settings.pauseShortcut == nil)
+        settings.skippedWebsites = ["bank.example"]
+        settings.pauseShortcut = Shortcut(keyCode: 35, modifiers: [.command, .option], key: "P")
+        let reloaded = AppSettings(defaults: defaults)
+        #expect(reloaded.skippedWebsites == ["bank.example"])
+        #expect(reloaded.pauseShortcut?.label == "⌥⌘P")
+        #expect(reloaded.skips(page: URL(string: "https://login.bank.example/home")))
+        #expect(!reloaded.skips(page: URL(string: "https://notbank.example/")))
+        reloaded.pauseShortcut = nil
+        #expect(AppSettings(defaults: defaults).pauseShortcut == nil)
+    }
+
     @Test func aGreyedOutKeyRequirementDoesntApply() {
         let settings = AppSettings(defaults: freshDefaults())
         settings.previewsInOtherApps = true
@@ -219,5 +234,36 @@ struct PreviewSizeLimitTests {
 struct SettingsTabTests {
     @Test func tabsKeepTheirOrderAndTitles() {
         #expect(SettingsTab.allCases.map(\.title) == ["General", "Previews", "Video", "Sites", "Finder", "Accounts", "Advanced"])
+    }
+}
+
+struct SkippedWebsitesTests {
+    @Test func domainsComeFromWhateverIsTypedOrPasted() {
+        #expect(SkippedWebsites.domain(from: "https://www.Bank.example/login?next=1") == "bank.example")
+        #expect(SkippedWebsites.domain(from: "  news.example.com  ") == "news.example.com")
+        #expect(SkippedWebsites.domain(from: "localhost:3000") == "localhost")
+        #expect(SkippedWebsites.domain(from: "not a website") == nil)
+        #expect(SkippedWebsites.domain(from: "") == nil)
+    }
+
+    @Test func aDomainCoversItsSubdomains() {
+        #expect(SkippedWebsites.contains(URL(string: "https://bank.example/"), in: ["bank.example"]))
+        #expect(SkippedWebsites.contains(URL(string: "https://www.bank.example/a"), in: ["bank.example"]))
+        #expect(!SkippedWebsites.contains(URL(string: "https://bank.example.evil.test/"), in: ["bank.example"]))
+        #expect(!SkippedWebsites.contains(nil, in: ["bank.example"]))
+    }
+}
+
+struct ShortcutTests {
+    private func key(_ characters: String, code: UInt16, _ flags: NSEvent.ModifierFlags) -> NSEvent {
+        NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: flags, timestamp: 0, windowNumber: 0, context: nil,
+                         characters: characters, charactersIgnoringModifiers: characters, isARepeat: false, keyCode: code)!
+    }
+
+    @Test func aShortcutNeedsCommandOptionOrControl() {
+        #expect(Shortcut(event: key("p", code: 35, [.control, .option, .command]))?.label == "⌃⌥⌘P")
+        #expect(Shortcut(event: key(" ", code: 49, [.option]))?.label == "⌥Space")
+        #expect(Shortcut(event: key("p", code: 35, [])) == nil)
+        #expect(Shortcut(event: key("P", code: 35, [.shift])) == nil)
     }
 }
