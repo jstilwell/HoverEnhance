@@ -16,6 +16,8 @@ All notable changes to this project will be documented in this file.
 - An image whose server claims an impossible size no longer crashes HoverEnhance.
 - Resting on a file that's only in iCloud, or in Dropbox and the like, no longer downloads it; its card shows what macOS already knows.
 - Large images download faster.
+- A video player in a preview can no longer swap itself for some other web page.
+- A paused video player lets go of its memory a few minutes after its preview closes.
 - An image too large to decode safely is skipped instead of stalling HoverEnhance, and an animation with huge frames shows as a still.
 - Multi-page TIFFs and icon files show their largest picture, sized to fit like any other image.
 
