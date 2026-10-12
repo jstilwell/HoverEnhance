@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## 0.3.0 - Unreleased
 
+### Added
+
+- Press Esc to close any preview.
+
 ### Changed
 
 - Pausing previews, quitting, or excluding Chrome or an Electron app switches off the accessibility mode HoverEnhance turned on there, so window managers like Rectangle move its windows without animating again.
@@ -16,6 +20,7 @@ All notable changes to this project will be documented in this file.
 
 - HoverEnhance asks the browser about a resting cursor less often, drops looks the cursor has moved on from, and doesn't look at all while previews wait for a key you aren't holding.
 - Pressing ⌘ or another modifier no longer counts as the activation key.
+- Switching Spaces closes the preview instead of leaving it over the new one.
 - Cut, copy, paste, and undo work in Settings' text fields, such as the YouTube client ID and secret.
 - Previews in other apps no longer stop for good when "Only while holding" is on there and previews appear except while holding a key.
 - A preview whose site doesn't answer gives up after about 10 seconds instead of a minute.

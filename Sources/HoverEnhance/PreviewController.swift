@@ -12,6 +12,7 @@ final class PreviewController {
     private let panel = PreviewPanel()
     private let scrollTap = ScrollTap()
     private var activationObserver: NSObjectProtocol?
+    private var spaceObserver: NSObjectProtocol?
 
     private var target: Target?
     private var media: Media?
@@ -47,6 +48,12 @@ final class PreviewController {
             forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main
         ) { [weak self] _ in
             MainActor.assumeIsolated { self?.reset(because: "app switched") }
+        }
+        // The preview shows on every Space, so it would stay over whatever the new one shows.
+        spaceObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.activeSpaceDidChangeNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.reset(because: "space switched") }
         }
     }
 
@@ -141,9 +148,14 @@ final class PreviewController {
         if Date().timeIntervalSince(lastScrollHandled) > 0.3 { reset(because: "scrolled") }
     }
 
-    /// A key press in Finder (Space for Quick Look, Return to rename, typing to find a file) means
-    /// the card is in the way; it stays closed until the cursor moves to another item.
-    func keyPressed() {
+    /// Esc closes any preview. Any other key press in Finder (Space for Quick Look, Return to rename,
+    /// typing to find a file) means the card is in the way. Either way it stays closed until the cursor
+    /// moves to something else.
+    func keyPressed(isEscape: Bool) {
+        if isEscape {
+            dismiss()
+            return
+        }
         guard case .file = target?.source, AppSettings.shared.finderClosesOnKeyPress else { return }
         dismiss()
     }

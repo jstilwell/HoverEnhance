@@ -18,7 +18,8 @@ extension needed.
   videos' own tags say. Click any detail to copy it.
 
 Images the page already shows large are left alone unless their post has more photos, as are videos
-it's already playing. Move away, click, or switch apps, and the preview is gone.
+it's already playing. Move away, click, press Esc, or switch apps or Spaces, and the preview is
+gone.
 
 ## Install
 
