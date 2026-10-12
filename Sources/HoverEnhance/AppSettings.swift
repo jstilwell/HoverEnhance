@@ -98,6 +98,23 @@ enum PathStyle: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
+/// Parts of the weather popup that can be turned off.
+enum WeatherSection: String, CaseIterable, Identifiable, Sendable {
+    case hourly, daily, details, airQuality, alerts
+
+    var id: Self { self }
+
+    var name: String {
+        switch self {
+        case .hourly: "Next 24 hours"
+        case .daily: "Daily forecast"
+        case .details: "Wind, humidity, pressure, UV, and more"
+        case .airQuality: "Air quality"
+        case .alerts: "Weather alerts"
+        }
+    }
+}
+
 struct ExcludedApp: Codable, Hashable, Identifiable, Sendable {
     let bundleID: String
     let name: String
@@ -153,6 +170,12 @@ final class AppSettings {
         static let finderOffersQuit = "finderOffersQuit"
         static let finderMediaPreviews = "finderMediaPreviews"
         static let finderAutoplayAudio = "finderAutoplayAudio"
+        static let weatherEnabled = "weatherEnabled"
+        static let weatherProvider = "weatherProvider"
+        static let weatherLocation = "weatherLocation"
+        static let weatherUnits = "weatherUnits"
+        static let weatherHiddenSections = "weatherHiddenSections"
+        static let weatherUsesNWSAlerts = "weatherUsesNWSAlerts"
     }
 
     @ObservationIgnored private let defaults: UserDefaults
@@ -233,6 +256,21 @@ final class AppSettings {
     /// Audio in a large preview plays at once, rather than on its play button.
     var finderAutoplayAudio: Bool { didSet { defaults.set(finderAutoplayAudio, forKey: Key.finderAutoplayAudio) } }
 
+    // Weather
+    /// The weather popup for the Weather menu bar item.
+    var weatherEnabled: Bool { didSet { defaults.set(weatherEnabled, forKey: Key.weatherEnabled) } }
+    var weatherProvider: WeatherProviderID { didSet { defaults.set(weatherProvider.rawValue, forKey: Key.weatherProvider) } }
+    /// Nil until one is chosen; nothing is looked up before then.
+    var weatherLocation: WeatherLocationChoice? {
+        didSet { defaults.set(weatherLocation.flatMap { try? JSONEncoder().encode($0) }, forKey: Key.weatherLocation) }
+    }
+    var weatherUnits: WeatherUnits { didSet { defaults.set(try? JSONEncoder().encode(weatherUnits), forKey: Key.weatherUnits) } }
+    var weatherHiddenSections: Set<WeatherSection> {
+        didSet { defaults.set(weatherHiddenSections.map(\.rawValue).sorted(), forKey: Key.weatherHiddenSections) }
+    }
+    /// US alerts from the National Weather Service, for providers without alerts of their own.
+    var weatherUsesNWSAlerts: Bool { didSet { defaults.set(weatherUsesNWSAlerts, forKey: Key.weatherUsesNWSAlerts) } }
+
     // Advanced
     var showsInspector: Bool { didSet { defaults.set(showsInspector, forKey: Key.showsInspector) } }
 
@@ -275,6 +313,9 @@ final class AppSettings {
             Key.finderOffersQuit: true,
             Key.finderMediaPreviews: true,
             Key.finderAutoplayAudio: false,
+            Key.weatherEnabled: true,
+            Key.weatherProvider: WeatherProviderID.openMeteo.rawValue,
+            Key.weatherUsesNWSAlerts: true,
         ])
         self.defaults = defaults
         previewsEnabled = defaults.bool(forKey: Key.previewsEnabled)
@@ -319,11 +360,18 @@ final class AppSettings {
         finderOffersQuit = defaults.bool(forKey: Key.finderOffersQuit)
         finderMediaPreviews = defaults.bool(forKey: Key.finderMediaPreviews)
         finderAutoplayAudio = defaults.bool(forKey: Key.finderAutoplayAudio)
+        weatherEnabled = defaults.bool(forKey: Key.weatherEnabled)
+        weatherProvider = defaults.string(forKey: Key.weatherProvider).flatMap(WeatherProviderID.init(rawValue:)) ?? .openMeteo
+        weatherLocation = defaults.data(forKey: Key.weatherLocation).flatMap { try? JSONDecoder().decode(WeatherLocationChoice.self, from: $0) }
+        weatherUnits = defaults.data(forKey: Key.weatherUnits).flatMap { try? JSONDecoder().decode(WeatherUnits.self, from: $0) } ?? .forLocale()
+        weatherHiddenSections = Set((defaults.stringArray(forKey: Key.weatherHiddenSections) ?? []).compactMap(WeatherSection.init(rawValue:)))
+        weatherUsesNWSAlerts = defaults.bool(forKey: Key.weatherUsesNWSAlerts)
     }
 
     var filter: PreviewFilter {
         PreviewFilter(images: showImages, albums: showAlbums, videos: showVideos, embeds: showEmbeds, cards: showCards,
-                      files: finderCards, filesOnDesktop: finderOnDesktop, folders: finderForFolders, disabledSites: disabledSites)
+                      files: finderCards, filesOnDesktop: finderOnDesktop, folders: finderForFolders, weather: weatherEnabled,
+                      disabledSites: disabledSites)
     }
 
     var otherApps: OtherAppsPolicy {

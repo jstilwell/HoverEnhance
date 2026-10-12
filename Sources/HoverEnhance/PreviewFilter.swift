@@ -71,7 +71,7 @@ extension MediaSource {
         case .blueskyPost: .bluesky
         case .instagram: .instagram
         case .youtubeChannel: .youtube
-        case .file: nil
+        case .file, .weather: nil
         case .embed(let embed):
             switch embed.site {
             case .youtube: .youtube
@@ -96,6 +96,8 @@ struct PreviewFilter: Sendable, Equatable {
     var filesOnDesktop = true
     /// Cards for folders, as opposed to files and packages such as apps.
     var folders = true
+    /// The forecast under the Weather menu bar item.
+    var weather = true
     var disabledSites: Set<MediaSite> = []
 
     /// Whether to look this source up at all.
@@ -106,6 +108,7 @@ struct PreviewFilter: Sendable, Equatable {
         case .video, .streamable: return videos
         case .embed: return embeds
         case .youtubeChannel: return cards
+        case .weather: return weather
         case .file(let url, let onDesktop):
             // Finder writes folder URLs with a trailing slash and packages, like apps, without.
             return files && (filesOnDesktop || !onDesktop) && (folders || !url.hasDirectoryPath)
@@ -122,6 +125,7 @@ struct PreviewFilter: Sendable, Equatable {
             case .video: videos
             case .embed: embeds
             case .channel: cards
+            case .weather: weather
             case .file: files
             }
         }
@@ -143,7 +147,12 @@ struct OtherAppsPolicy: Sendable, Equatable {
     var needsKey = false
 
     func allows(_ source: MediaSource, in app: AppKind, keyHeld: Bool) -> Bool {
-        if case .file = source { return true }
+        // Neither loads anything from what's hovered: Finder's cards read the disk, the forecast comes
+        // from the provider chosen in Settings.
+        switch source {
+        case .file, .weather: return true
+        default: break
+        }
         if app == .browser { return true }
         guard enabled, !(skipsEmail && app == .email) else { return false }
         if knownSitesOnly, source.site == nil { return false }
