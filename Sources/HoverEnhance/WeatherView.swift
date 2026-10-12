@@ -658,6 +658,8 @@ private struct Footer: View {
                 Link(destination: credit.url) { Image(nsImage: logo) }
                     .help(credit.text)
                     .accessibilityLabel(credit.text)
+                    // Its guidelines ask for clear space of half the sun's height (7 pt) around it.
+                    .padding(.trailing, 2)
             } else {
                 Link(credit.text, destination: credit.url)
             }

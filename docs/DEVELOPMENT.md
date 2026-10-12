@@ -143,7 +143,12 @@ installed copies again.
 
 Debug builds check only when asked, so a build from source isn't offered a release over itself.
 
-## Icons
+## Icons and logos
 
 `design/icons/appicon.svg` and `menubar.svg` are the sources; `./bin/render-icons.sh` renders them
-into `Resources/AppIcon.icns` and `Resources/MenuBarIcon.png` with headless Chrome.
+into `Resources/AppIcon.icns` and `Resources/MenuBarIcon.png` with headless Chrome. It also renders
+`design/logos/accuweather.svg` and `accuweather-dark.svg`, AccuWeather's small-space logo for light
+and dark backgrounds from its
+[brand guidelines](https://developer.accuweather.com/documentation/brand-guidelines)
+(`AW_RGB_Small_R.svg` and `AW_RGB_Rev_Small_R.svg`), into `Resources/AccuWeatherLogo.png` and
+`AccuWeatherLogoDark.png`.
