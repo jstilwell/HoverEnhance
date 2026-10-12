@@ -93,9 +93,8 @@ struct FileDetails: Sendable, Equatable {
             if !options.shows(.minimumSystem) { app.minimumSystem = nil }
             details.app = app
         }
-        if values?.isDirectory == true, values?.isPackage != true, options.shows(.gitBranch) || options.shows(.gitChanges) {
+        if values?.isDirectory == true, values?.isPackage != true, options.shows(.gitBranch) {
             details.git = GitRepository.read(url)
-            if !options.shows(.gitBranch) { details.git?.head = nil; details.git?.remote = nil }
         }
 
         let spotlightFields: [FileCardField] = [.opened, .dimensions, .duration, .pages, .whereFrom, .camera, .exposure, .codecs, .music]
@@ -173,8 +172,8 @@ struct FileDetails: Sendable, Equatable {
     }
 
     /// The card's lines for these details, in the order of `FileCardField`. Kind, size, and path are
-    /// shown elsewhere on the card; `signature` and `changes` are looked up after it appears.
-    func rows(pathStyle: PathStyle, signature: Lookup<String>? = nil, changes: Lookup<Int>? = nil) -> [DetailRow] {
+    /// shown elsewhere on the card; `signature` is looked up after it appears.
+    func rows(pathStyle: PathStyle, signature: Lookup<String>? = nil) -> [DetailRow] {
         var rows: [DetailRow] = []
         func add(_ field: FileCardField, _ label: String, _ text: String?, copy: String? = nil) {
             guard let text else { return }
@@ -248,9 +247,6 @@ struct FileDetails: Sendable, Equatable {
                 let value: DetailRow.Value = GitRepository.webPage(of: remote).map { .link(shown, $0) } ?? .text(shown)
                 rows.append(DetailRow(field: .gitBranch, label: "Remote", value: value, copyText: remote))
             }
-        }
-        addLookup(.gitChanges, "Changes", changes) { count in
-            count == 0 ? "None" : "\(count) uncommitted change\(count == 1 ? "" : "s")"
         }
         return rows
     }
