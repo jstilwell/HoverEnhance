@@ -56,7 +56,8 @@ after every build (the welcome window explains how to remove and re-add the app)
 - In Finder, `FinderItem` finds the hovered item: each one is an element with `AXFilename` and a file
   reference `AXURL`, reached from other cells of a list row or the label under an icon through the row
   or the item's group. `FileDetails` reads the card's details from Spotlight and Finder's records
-  first, so protected folders aren't opened just to describe a file; `FileStatus` covers tags, iCloud,
+  first, so protected folders aren't opened just to describe a file, and reads nothing of a file that's
+  only in the cloud (the app also turns off downloading such files on read, in `main.swift`); `FileStatus` covers tags, iCloud,
   quarantine, and aliases, `ZipSummary` reads a zip's central directory, `AppBundleInfo` an app's
   Info.plist and signature, and `GitRepository` a repository's branch and remote from its `.git`. Git
   itself is never run: a repository's settings can make it run commands, and a hovered folder can come

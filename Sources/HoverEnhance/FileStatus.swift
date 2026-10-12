@@ -54,6 +54,19 @@ extension FileDetails {
         }
     }
 
+    /// Whether the file's contents are only in the cloud: iCloud Drive's, or another provider's such as
+    /// Dropbox. Reading such a file downloads all of it first, so a card about it reads none of it.
+    static func isOnlyInTheCloud(_ url: URL) -> Bool {
+        var info = stat()
+        return lstat(url.path(percentEncoded: false), &info) == 0 && info.st_flags & UInt32(SF_DATALESS) != 0
+    }
+
+    /// Makes reading a file that's only in the cloud fail, for this whole app, rather than download it.
+    /// HoverEnhance only ever looks at what's under the cursor; that's no reason to fetch gigabytes.
+    static func neverDownloadOnRead() {
+        setiopolicy_np(IOPOL_TYPE_VFS_MATERIALIZE_DATALESS_FILES, IOPOL_SCOPE_PROCESS, IOPOL_MATERIALIZE_DATALESS_FILES_OFF)
+    }
+
     /// Whether a cloud-synced file (iCloud Drive, or Desktop and Documents in iCloud) is on this Mac.
     /// Nil for files that aren't synced.
     static func cloudStatus(of url: URL) -> CloudStatus? {

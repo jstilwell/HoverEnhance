@@ -36,7 +36,8 @@ what's under the cursor. Requires macOS 14 or later.
 - **Not your network**: a web page can't make it reach your router, printer, or anything else on your
   local network.
 - **Browsers by default**: links in other apps, like Mail, load nothing unless you allow it in Settings.
-- **No surprise downloads**: images over 25 MB (adjustable) wait for you to click Load Anyway.
+- **No surprise downloads**: images over 25 MB (adjustable) wait for you to click Load Anyway, and
+  files only in iCloud stay there.
 
 ## Settings
 
