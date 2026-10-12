@@ -31,8 +31,8 @@ final class HoverMonitor {
     var onClick: (() -> Void)?
     /// A modifier key went down or up (for the activation key setting).
     var onModifiersChanged: ((NSEvent.ModifierFlags) -> Void)?
-    /// Any other key went down. Only that a key was pressed is passed on, never which.
-    var onKeyDown: (() -> Void)?
+    /// Any other key went down. Only whether it was Esc is passed on, never which key it was.
+    var onKeyDown: ((_ isEscape: Bool) -> Void)?
 
     private let inspector = HoverInspector()
     private var isStarted = false
@@ -126,7 +126,7 @@ final class HoverMonitor {
             onModifiersChanged?(event.modifierFlags)
         case .keyDown:
             stopLookingAgain()
-            onKeyDown?()
+            onKeyDown?(event.keyCode == 53)
         default:
             stopLookingAgain()
             onClick?()

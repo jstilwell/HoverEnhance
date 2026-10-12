@@ -52,9 +52,9 @@ after every build (the welcome window explains how to remove and re-add the app)
   `LimitedDownloader`, which stops at the size limit, and downsampled off the main thread), videos
   via `VideoPlayback` (AVPlayer). A spinner stands in for a preview that takes a moment. A small
   click-through notch sits under the cursor and joins it to the preview (`PreviewGeometry`); moving
-  off the notch any way but onto the preview ends the hover at once. Clicking and switching apps end
-  it too, as does scrolling anywhere else. `ScrollTap` (an active event tap) hands scroll events over
-  the notch or preview to the controller and swallows the ones it uses: on the notch, a video's
+  off the notch any way but onto the preview ends the hover at once. Clicking, Esc, and switching
+  apps or Spaces end it too, as does scrolling anywhere else. `ScrollTap` (an active event tap) hands
+  scroll events over the notch or preview to the controller and swallows the ones it uses: on the notch, a video's
   volume, shown on `VolumeRockerView` above the notch, whose space counts as the notch; on the video,
   its position.
 - In Finder, `FinderItem` finds the hovered item: each one is an element with `AXFilename` and a file
