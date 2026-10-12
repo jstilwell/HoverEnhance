@@ -19,8 +19,8 @@ Release builds keep hover details out of the log; debug builds log them for `mak
 
 Nothing runs without Accessibility access. On first launch a welcome window opens the Accessibility
 settings, adding the app to the list there (`AXIsProcessTrustedWithOptions`), and offers its icon to
-drag in should it be missing; it warns when the app runs from the disk image; the app starts once access is on, and the
-window comes back if access is turned off. The bundle is signed with your first Apple Development /
+drag in should it be missing; it warns when the app runs from the disk image. The app starts once
+access is on, and the window comes back if access is turned off. The bundle is signed with your first Apple Development /
 Developer ID identity so the grant survives rebuilds. With ad-hoc signing you'd have to re-grant
 after every build (the welcome window explains how to remove and re-add the app).
 
@@ -107,7 +107,9 @@ signed DMG, notarizes and staples it, signs the update and the appcast, and publ
 GitHub release tagged at the commit it built (as a draft first, so the latest release never lacks
 either file). Without `--upload` it stops before publishing and prints the command that would.
 
-It needs, once: a Developer ID Application certificate; notary credentials saved with
+It needs, once: a Developer ID Application certificate for team `G65RD22S57` (`TEAM_ID` in the
+Makefile and the script; the release is refused if it's signed by any other team, and is signed by the
+certificate's hash, so a renewed one alongside the old works); notary credentials saved with
 `xcrun notarytool store-credentials notarytool-profile` (shared with LockAudio); the GitHub CLI,
 signed in; a public repository, since release downloads from a private one need a GitHub login; and
 the update signing key, in the login keychain under the account `HoverEnhance`
