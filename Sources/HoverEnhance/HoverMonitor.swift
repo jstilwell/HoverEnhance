@@ -48,6 +48,8 @@ final class HoverMonitor {
     }
     /// `generation`, for the inspector's queue to drop looks that are no longer wanted.
     private let latestGeneration = OSAllocatedUnfairLock(initialState: 0)
+    /// Chromium's tree lags behind a scroll, so a first look just after one can land on stale text.
+    private var lastScroll = Date.distantPast
 
     func start() {
         isStarted = true
@@ -112,14 +114,16 @@ final class HoverMonitor {
     }
 
     private func handle(_ event: NSEvent) {
-        // Clicks and scrolls in our own windows (an interactive preview) are for that window.
-        if event.window != nil, event.type != .mouseMoved { return }
+        // Clicks and scrolls in our own windows (an interactive preview) are for that window. Modifier
+        // keys still count, so the activation key's state stays right.
+        if event.window != nil, event.type != .mouseMoved, event.type != .flagsChanged { return }
         switch event.type {
         case .mouseMoved:
             if let point = CGEvent(source: nil)?.location { onMouseMoved?(point) }
             restartDwell()
         case .scrollWheel:
             // Scrolling changes what's under the cursor, so it counts as movement for the dwell.
+            lastScroll = Date()
             onScroll?()
             restartDwell()
         case .flagsChanged:
@@ -176,7 +180,8 @@ final class HoverMonitor {
             let result = await inspector.inspect(at: point, policy: policy, isWanted: isWanted)
             guard requested == generation, !isPaused else { return }
             onResult?(result, false)
-            if case .success(let info) = result, info.pageURL != nil, !info.isPlainText {
+            // Plain text needs no second look, unless the page just scrolled and the tree may be behind.
+            if case .success(let info) = result, info.pageURL != nil, !info.isPlainText || Date().timeIntervalSince(lastScroll) < 2 {
                 await lookAgain(at: point, generation: requested, policy: policy, isWanted: isWanted)
             }
         }

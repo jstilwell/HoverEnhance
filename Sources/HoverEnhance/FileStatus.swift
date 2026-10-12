@@ -56,9 +56,12 @@ extension FileDetails {
 
     /// Whether the file's contents are only in the cloud: iCloud Drive's, or another provider's such as
     /// Dropbox. Reading such a file downloads all of it first, so a card about it reads none of it.
+    /// A symbolic link counts if what it points to is: reading through it would download that.
     static func isOnlyInTheCloud(_ url: URL) -> Bool {
-        var info = stat()
-        return lstat(url.path(percentEncoded: false), &info) == 0 && info.st_flags & UInt32(SF_DATALESS) != 0
+        let path = url.path(percentEncoded: false)
+        var link = stat(), target = stat()
+        let dataless = UInt32(SF_DATALESS)
+        return (lstat(path, &link) == 0 && link.st_flags & dataless != 0) || (stat(path, &target) == 0 && target.st_flags & dataless != 0)
     }
 
     /// Makes reading a file that's only in the cloud fail, for this whole app, rather than download it.
