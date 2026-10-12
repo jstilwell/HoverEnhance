@@ -15,6 +15,8 @@ All notable changes to this project will be documented in this file.
 - Resting on a link made with an absurdly long video time or post number no longer crashes HoverEnhance.
 - An image whose server claims an impossible size no longer crashes HoverEnhance.
 - Large images download faster.
+- An image too large to decode safely is skipped instead of stalling HoverEnhance, and an animation with huge frames shows as a still.
+- Multi-page TIFFs and icon files show their largest picture, sized to fit like any other image.
 
 ## 0.2.0 - 10-11-2026
 
