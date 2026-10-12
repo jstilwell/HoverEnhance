@@ -35,7 +35,8 @@ after every build (the welcome window explains how to remove and re-add the app)
   calls are synchronous IPC into the target app) and walks up to the enclosing link and web area.
 - `MediaResolver` turns the hovered image or link into a `MediaSource` (`ImageRules` for
   full-size image URLs, `SiteLinks` for posts and videos), following `file:` URLs only from local
-  pages. `MediaFetcher` does any lookup the site needs (`SiteAPIs`, `RedditGallery`), giving `Media`:
+  pages, and to the local network (`LocalNetwork`: loopback, private ranges, `.local`) only from local
+  pages, redirects included. `MediaFetcher` does any lookup the site needs (`SiteAPIs`, `RedditGallery`), giving `Media`:
   one item or an album, with web addresses only. Nothing is previewed over a video the page shows
   (WebKit gives videos their URL; Chromium shows them as plain groups, found through its search for
   graphics), or over an image it already shows about as large as a preview could be, unless it's from
