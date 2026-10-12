@@ -1,10 +1,11 @@
 import Foundation
 
 /// Addresses on this Mac or the local network: loopback, private and link-local ranges, carrier-grade
-/// NAT, `localhost`, Bonjour's `.local`, and single-label names, which only a local resolver answers.
-/// A web page mustn't lead HoverEnhance there: a hover would reach a router or printer the page itself
-/// can't, and ask macOS for local network access. Only names and address literals are checked; a public
-/// name that resolves to a local address isn't caught.
+/// NAT, `localhost`, Bonjour's `.local`, the home and private-use names (`.home.arpa`, `.internal`,
+/// `.lan`), and single-label names, which only a local resolver answers. A web page mustn't lead
+/// HoverEnhance there: a hover would reach a router or printer the page itself can't, and ask macOS for
+/// local network access. Only names and address literals are checked, so a public name that resolves to
+/// a local address isn't caught, and a video's redirects aren't either: AVPlayer follows them itself.
 enum LocalNetwork {
     static func contains(_ url: URL?) -> Bool {
         guard let url, ["http", "https"].contains(url.scheme?.lowercased()), let host = url.host(percentEncoded: false) else { return false }
@@ -23,7 +24,7 @@ enum LocalNetwork {
         var v4 = in_addr()
         if inet_aton(host, &v4) == 1 { return contains(UInt32(bigEndian: v4.s_addr)) }
 
-        if host == "localhost" || host.hasSuffix(".localhost") || host.hasSuffix(".local") { return true }
+        if host == "localhost" || [".localhost", ".local", ".home.arpa", ".internal", ".lan"].contains(where: host.hasSuffix) { return true }
         return !host.contains(".")
     }
 

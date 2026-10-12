@@ -42,15 +42,15 @@ app).
 - `MediaResolver` turns the hovered image or link into a `MediaSource` (`ImageRules` for full-size
   image URLs, `SiteLinks` for posts and videos), following `file:` URLs only from local pages, and
   to the local network (`LocalNetwork`: loopback, private ranges, `.local`) only from local pages,
-  redirects included. `MediaFetcher` does any lookup the site needs (`SiteAPIs`, `RedditGallery`),
-  giving `Media`: one item or an album, with web addresses only; lookups that fail are remembered
-  for a minute. Nothing is previewed over a video
-  the page shows (WebKit gives videos their URL; Chromium shows them as plain groups, found through
-  its search for graphics), or over an image it already shows about as large as a preview could be,
-  unless it's from a post holding more. A photo outside any link, as in Instagram's feed, takes its
-  post from the nearest link to one before it in the page (the time in the post's header), through
-  the engine's search for links. `AppKind` tells browsers and email apps apart from what they
-  declare they open, and `OtherAppsPolicy` decides what may load outside browsers.
+  redirects included, apart from a video's, which AVPlayer follows itself. `MediaFetcher` does any
+  lookup the site needs (`SiteAPIs`, `RedditGallery`), giving `Media`: one item or an album, with
+  web addresses only; lookups that fail are remembered for a minute. Nothing is previewed over a
+  video the page shows (WebKit gives videos their URL; Chromium shows them as plain groups, found
+  through its search for graphics), or over an image it already shows about as large as a preview
+  could be, unless it's from a post holding more. A photo outside any link, as in Instagram's feed,
+  takes its post from the nearest link to one before it in the page (the time in the post's header),
+  through the engine's search for links. `AppKind` tells browsers and email apps apart from what
+  they declare they open, and `OtherAppsPolicy` decides what may load outside browsers.
 - `PreviewController` shows items in `PreviewPanel`: images via `ImageLoader` (downloaded through
   `LimitedDownloader`, which stops at the size limit, sized up before decoding by
   `ImageDecoder.Picture`, and downsampled off the main thread), videos

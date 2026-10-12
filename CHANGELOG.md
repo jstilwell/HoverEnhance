@@ -26,7 +26,7 @@ All notable changes to this project will be documented in this file.
 
 - Resting on a link made with an absurdly long video time or post number no longer crashes HoverEnhance.
 - An image whose server claims an impossible size no longer crashes HoverEnhance.
-- A web page can no longer lead HoverEnhance to your router, printer, or anything else on your local network, which browsers already refuse.
+- Links and images on a web page that point at your router, printer, or anything else on your local network no longer load, as browsers already refuse.
 - Resting on a file that's only in iCloud, or in Dropbox and the like, no longer downloads it.
 - An image too large to decode safely is skipped instead of stalling HoverEnhance, and an animation with huge frames shows as a still.
 - A video player in a preview can no longer turn itself into some other web page.

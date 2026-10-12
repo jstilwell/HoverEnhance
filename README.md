@@ -35,8 +35,8 @@ or later.
 - **Only what you hover**: HoverEnhance reads the thing under the cursor, never what you type.
 - **Only where you point**: it contacts the sites behind what you hover, GitHub to check for
   updates, and Google only if you sign in to subscribe to YouTube channels.
-- **Not your network**: a web page can't make it reach your router, printer, or anything else on your
-  local network.
+- **Not your network**: links and images on a web page that point at your router, printer, or anything
+  else on your local network are left alone.
 - **Browsers by default**: links in other apps, like Mail, load nothing unless you allow it in Settings.
 - **No surprise downloads**: images over 25 MB (adjustable) wait for you to click Load Anyway, and
   files only in iCloud stay there.

@@ -99,7 +99,8 @@ struct LocalNetworkTests {
     @Test func localAddressesAndNames() {
         for host in ["localhost", "app.localhost", "printer.local", "router", "127.0.0.1", "10.0.0.8", "172.20.1.1", "192.168.1.1",
                      "169.254.10.1", "100.100.1.1", "0.0.0.0", "224.0.0.251", "::1", "[::1]", "fe80::1", "fd12:3456::1",
-                     "::ffff:192.168.1.1", "printer.local.", "3232235777", "0xC0A80101", "0300.0250.1.1", "10.1"] {
+                     "::ffff:192.168.1.1", "printer.local.", "3232235777", "0xC0A80101", "0300.0250.1.1", "10.1",
+                     "router.home.arpa", "nas.internal", "printer.lan"] {
             #expect(LocalNetwork.contains(host: host), "\(host)")
         }
     }
