@@ -158,6 +158,13 @@ struct FileMediaLayoutTests {
         #expect(size == CGSize(width: 200, height: 150))
     }
 
+    @Test func controlsUnderTheMediaTakeTheirHeightFromIt() {
+        let (_, plain) = FileMediaLayout.choose(media: CGSize(width: 900, height: 1600), details: details, room: room)
+        let (_, size) = FileMediaLayout.choose(media: CGSize(width: 900, height: 1600), details: details, room: room, controls: 32)
+        #expect(size.height + 32 <= room.height)
+        #expect(size.height < plain.height)
+    }
+
     @Test func detailsTallerThanTheRoomLeaveNoRoomForMedia() {
         // Neither way fits; the caller shows the plain card instead.
         let (_, size) = FileMediaLayout.choose(media: CGSize(width: 300, height: 300), details: CGSize(width: 340, height: 1200),

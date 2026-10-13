@@ -75,7 +75,9 @@ app).
   (`CardHostingView`). `MediaMetadata` reads audio and video files' own tags (ID3, iTunes,
   QuickTime) and tracks with AVFoundation, since Spotlight often hasn't. Images, videos, and audio
   show large in `FileMediaCardView`, with the card beside or below them as `FileMediaLayout`
-  decides; songs play through `VideoPlayback` too. `Tests/HoverEnhanceTests/Fixtures` holds tiny
+  decides; songs play through `VideoPlayback` too. Songs and videos have a `TransportBar` under them,
+  following the player through a `MediaTransport`; AVKit's own controls show only while the cursor is
+  on the video, and there it's in Finder. `Tests/HoverEnhanceTests/Fixtures` holds tiny
   tagged media for the tests, with the commands that made them.
 - The weather popup: `WeatherTrigger` matches Apple's Weather menu bar item, and `PreviewController`
   hangs a `WeatherPopupView` under it rather than beside the cursor
@@ -93,10 +95,18 @@ app).
   shows, so the popup's footer has it. Keys are kept in the Keychain, and `WeatherUnits` writes
   values in the units chosen.
   `Tests/HoverEnhanceTests/Fixtures/weather` holds each provider's sample answers.
+- On YouTube itself, a link gets `CreatorCardView`, in YouTube's colors (`YouTubeTheme`). For a video,
+  `MediaFetcher` reads its watch page (`YouTube.video(inPage:)`: `ytInitialPlayerResponse`, whose
+  microformat has plain views, likes, and dates), which names its channel; oEmbed names it when that
+  page can't be read. The channel's page gives the rest (`YouTube.channel(inPage:)`: `ytInitialData`,
+  with the banner and verified check in its header). Subscribing goes through `YouTubeAPI` with the
+  user's own Google client (`YouTubeAccount`). YouTube shows dislike counts only to a video's owner.
 - `EmbedPlayer` hosts players in a web view loaded under an HTTPS origin (YouTube needs a
   Referer), with AirPlay and WebRTC off so nothing asks for local network access. Links clicked in a
   player open in the browser, and nothing else can take the page around the player elsewhere. A
-  paused player is kept three minutes, for hovering its link again.
+  paused player is kept three minutes, for hovering its link again; one whose video never started
+  (a script in an isolated world reports `playing`) is let go, since WebKit refuses its autoplay
+  once suspended. WebKit counts suspensions, so each player is suspended once at most.
 - `Updates` wraps Sparkle's updater; the Makefile bundles `Sparkle.framework` into the app (without
   the XPC services, which only sandboxed apps use) and signs it from the inside out.
 - `GlobalShortcut` registers the pause shortcut as a Carbon hot key, which needs no further

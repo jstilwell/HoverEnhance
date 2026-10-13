@@ -4,8 +4,12 @@ import WebKit
 /// preview closes, so hovering the same link again picks up where it left off. Links clicked in a
 /// player, such as its title or "Watch on YouTube", open in the browser.
 @MainActor
-final class EmbedPlayer: NSObject, WKNavigationDelegate, WKUIDelegate {
-    private var current: (embed: Embed, view: WKWebView)?
+final class EmbedPlayer: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandler {
+    /// `started` once its video has played at all.
+    private var current: (embed: Embed, view: WKWebView, started: Bool)?
+    /// WebKit counts suspensions: each needs its own resume, or the player refuses to play, even at a
+    /// click on its play button. So the current player is suspended once at most.
+    private var isSuspended = false
     /// How long a paused player is kept. Its web content process holds a hundred megabytes or more.
     private static let pausedPlayerLifetime: Duration = .seconds(180)
     private var discardLater: Task<Void, Never>?
@@ -14,7 +18,8 @@ final class EmbedPlayer: NSObject, WKNavigationDelegate, WKUIDelegate {
         discardLater?.cancel()
         discardLater = nil
         if let current, current.embed == embed {
-            current.view.setAllMediaPlaybackSuspended(false)
+            if isSuspended { current.view.setAllMediaPlaybackSuspended(false) }
+            isSuspended = false
             return current.view
         }
         discard()
@@ -29,13 +34,21 @@ final class EmbedPlayer: NSObject, WKNavigationDelegate, WKUIDelegate {
         // (WebRTC is also a favorite of fingerprinting scripts), which makes macOS prompt for access.
         configuration.allowsAirPlayForMediaPlayback = false
         configuration.userContentController.addUserScript(Self.disableWebRTC)
+        // In a world of its own, which the player's scripts can't see or post to.
+        configuration.userContentController.addUserScript(Self.reportStart)
+        configuration.userContentController.add(self, contentWorld: .defaultClient, name: Self.startMessage)
         let view = WKWebView(frame: CGRect(origin: .zero, size: embed.size), configuration: configuration)
         view.underPageBackgroundColor = .black
         view.navigationDelegate = self
         view.uiDelegate = self
         view.loadHTMLString(Self.page(embedding: url), baseURL: Embed.origin)
-        current = (embed, view)
+        current = (embed, view, false)
         return view
+    }
+
+    /// The player's video started.
+    func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
+        if message.webView === current?.view { current?.started = true }
     }
 
     // MARK: - Links in players
@@ -67,10 +80,13 @@ final class EmbedPlayer: NSObject, WKNavigationDelegate, WKUIDelegate {
         NSWorkspace.shared.open(url)
     }
 
-    /// Pauses the current embed without losing its place, for a while.
+    /// Pauses the current embed without losing its place, for a while. One whose video hasn't started is
+    /// let go instead: it has no place to keep, and its autoplay, refused while suspended, wouldn't come back.
     func suspend() {
         guard let current else { return }
-        current.view.setAllMediaPlaybackSuspended(true)
+        guard current.started else { discard(); return }
+        if !isSuspended { current.view.setAllMediaPlaybackSuspended(true) }
+        isSuspended = true
         guard discardLater == nil else { return }
         discardLater = Task { [weak self] in
             try? await Task.sleep(for: Self.pausedPlayerLifetime)
@@ -79,12 +95,14 @@ final class EmbedPlayer: NSObject, WKNavigationDelegate, WKUIDelegate {
         }
     }
 
+    /// Silences the current player and lets it go. A preview fading out keeps showing it until it's gone.
     private func discard() {
         discardLater?.cancel()
         discardLater = nil
+        if let current, !isSuspended { current.view.setAllMediaPlaybackSuspended(true) }
         current?.view.stopLoading()
-        current?.view.removeFromSuperview()
         current = nil
+        isSuspended = false
     }
 
     private static let disableWebRTC = WKUserScript(
@@ -95,6 +113,18 @@ final class EmbedPlayer: NSObject, WKNavigationDelegate, WKUIDelegate {
         """,
         injectionTime: .atDocumentStart,
         forMainFrameOnly: false
+    )
+
+    private static let startMessage = "started"
+
+    /// Media events don't bubble, so this listens as they pass the document on the way down.
+    private static let reportStart = WKUserScript(
+        source: """
+        document.addEventListener("playing", () => webkit.messageHandlers.\(startMessage).postMessage(null), { capture: true, once: true });
+        """,
+        injectionTime: .atDocumentStart,
+        forMainFrameOnly: false,
+        in: .defaultClient
     )
 
     private static let safariUserAgentSuffix: String = {

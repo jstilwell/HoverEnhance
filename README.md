@@ -12,15 +12,17 @@ extension needed.
 - **Videos**: Reddit, X, Bluesky, Instagram, Streamable, and Imgur clips play in the preview;
   YouTube, Vimeo, TikTok, and Twitch play in their own players. Scroll on the notch under the cursor
   for the volume, shown beside it, and on the video to move through it.
-- **YouTube creators**: on YouTube, rest on a video title or channel name to see who made it.
+- **YouTube cards**: on YouTube, rest on a video title for its length, views, likes, date, and who
+  made it, or on a channel name for the channel's banner and numbers.
 - **Weather**: rest on the Weather item in the menu bar for the forecast it doesn't show: the next 24
   hours, ten days, wind, humidity, pressure, UV, air quality, sun and moon, and alerts. Open-Meteo by
   default, or OpenWeatherMap, WeatherAPI.com, Tomorrow.io, Pirate Weather, or AccuWeather with your
   own key. AccuWeather adds pollen, the temperature in the shade, the change since yesterday, and a
   forecaster's summary; its key needs a paid plan after a 14-day trial.
 - **Finder**: rest on a file or folder for its path, size, dates, where it came from, and which apps
-  are using it. Images, videos, and audio show large beside their details, including what songs' and
-  videos' own tags say. Click any detail to copy it.
+  are using it. Images, songs, and videos show large beside their details, including what songs' and
+  videos' own tags say, with play, mute, and a scrubber showing the time under songs and videos.
+  Click any detail to copy it.
 
 Images the page already shows large are left alone unless their post has more photos, as are videos
 it's already playing. Move away, click, press Esc, or switch apps or Spaces, and the preview is

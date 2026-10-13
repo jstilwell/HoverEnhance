@@ -49,6 +49,7 @@ struct YouTubePageTests {
             ]],
             "header": ["pageHeaderRenderer": ["content": ["rows": [
                 ["parts": [["text": ["content": "@RickAstleyYT"]], ["text": ["content": "4.55M subscribers"]], ["text": ["content": "437 videos"]]]],
+                ["accessibility": ["label": "4.55 million subscribers"]],
             ]]]],
         ])
         let channel = try #require(YouTube.channel(inPage: html))
@@ -63,6 +64,32 @@ struct YouTubePageTests {
     @Test func plainObjectFormAlsoWorks() {
         let html = #"<script>var ytInitialData = {"metadata":{"channelMetadataRenderer":{"title":"T","externalId":"UC1","description":""}}};</script>"#
         #expect(YouTube.channel(inPage: html)?.title == "T")
+    }
+
+    @Test func channelHeaderGivesTheBannerAndCheck() throws {
+        let html = try page(with: [
+            "metadata": ["channelMetadataRenderer": ["title": "Lex Clips", "externalId": "UCJIfeSCssxSC_Dhc5s7woww", "description": ""]],
+            "header": ["pageHeaderRenderer": ["content": ["pageHeaderViewModel": [
+                "title": ["dynamicTextViewModel": ["text": ["content": "Lex Clips", "attachmentRuns": [
+                    ["element": ["type": ["imageType": ["image": ["sources": [["clientResource": ["imageName": "CHECK_CIRCLE_FILLED"]]]]]]]],
+                ]]]],
+                "banner": ["imageBannerViewModel": ["image": ["sources": [
+                    ["url": "https://yt3.example/banner=w1707", "width": 1707],
+                    ["url": "https://yt3.example/banner=w1060", "width": 1060],
+                    ["url": "https://yt3.example/banner=w640", "width": 640],
+                ]]]],
+            ]]]],
+        ])
+        let channel = try #require(YouTube.channel(inPage: html))
+        #expect(channel.isVerified)
+        // The smallest that's sharp on a Retina display.
+        #expect(channel.banner?.absoluteString == "https://yt3.example/banner=w1060")
+    }
+
+    @Test func channelsWithoutBannerOrCheck() {
+        let html = #"<script>var ytInitialData = {"metadata":{"channelMetadataRenderer":{"title":"T","externalId":"UC1","description":""}}};</script>"#
+        let channel = YouTube.channel(inPage: html)
+        #expect(channel?.banner == nil && channel?.isVerified == false)
     }
 
     @Test func oEmbedNamesTheChannel() {
@@ -99,5 +126,67 @@ struct YouTubeHoverRuleTests {
     @Test func cardsCanBeTurnedOff() {
         #expect(!PreviewFilter(cards: false).allows(.youtubeChannel(.video("dQw4w9WgXcQ"))))
         #expect(!PreviewFilter(disabledSites: [.youtube]).allows(.youtubeChannel(.video("dQw4w9WgXcQ"))))
+    }
+}
+
+struct YouTubeWatchPageTests {
+    private func page(details: [String: Any], micro: [String: Any]) throws -> String {
+        let response: [String: Any] = ["videoDetails": details, "microformat": ["playerMicroformatRenderer": micro]]
+        let json = String(decoding: try JSONSerialization.data(withJSONObject: response), as: UTF8.self)
+        // More script follows the object on the same line, as on YouTube's pages.
+        return "<script>var ytInitialPlayerResponse = \(json);var meta = document.createElement('meta');</script>"
+    }
+
+    private let details: [String: Any] = [
+        "videoId": "-qRc7qou6XY", "title": "George Hotz: I'd put money on Mark Zuckerberg", "lengthSeconds": "369",
+        "viewCount": "37852", "channelId": "UCJIfeSCssxSC_Dhc5s7woww", "allowRatings": true,
+        "shortDescription": "Full episode: https://example.com/{not json}\n",
+    ]
+    private let micro: [String: Any] = [
+        "likeCount": "630", "publishDate": "2023-06-29T23:52:58-07:00", "category": "Science & Technology",
+        "thumbnail": ["thumbnails": [["url": "https://i.ytimg.com/vi/-qRc7qou6XY/maxresdefault.jpg", "width": 1280, "height": 720]]],
+    ]
+
+    @Test func watchPageYieldsTheVideoAndItsChannel() throws {
+        let (video, channelPage) = try #require(YouTube.video(inPage: try page(details: details, micro: micro)))
+        #expect(video == YouTubeVideo(
+            id: "-qRc7qou6XY", title: "George Hotz: I'd put money on Mark Zuckerberg", length: 369, isLive: false,
+            views: 37852, likes: 630, published: Date(timeIntervalSince1970: 1_688_107_978), category: "Science & Technology",
+            description: "Full episode: https://example.com/{not json}",
+            thumbnail: URL(string: "https://i.ytimg.com/vi/-qRc7qou6XY/maxresdefault.jpg")
+        ))
+        #expect(channelPage?.absoluteString == "https://www.youtube.com/channel/UCJIfeSCssxSC_Dhc5s7woww")
+    }
+
+    @Test func hiddenRatingsAndLiveStreamsLeaveThoseOut() throws {
+        var live = details
+        live["allowRatings"] = false
+        live["isLive"] = true
+        live["lengthSeconds"] = "0"
+        let (video, _) = try #require(YouTube.video(inPage: try page(details: live, micro: micro)))
+        #expect(video.likes == nil && video.length == nil && video.isLive)
+    }
+
+    @Test func oddChannelIDsAndLocalImagesAreDropped() throws {
+        var odd = details
+        odd["channelId"] = "UC/../../elsewhere?x=1"
+        var local = micro
+        local["thumbnail"] = ["thumbnails": [["url": "http://192.168.1.1/thumb.jpg", "width": 1280]]]
+        let (video, channelPage) = try #require(YouTube.video(inPage: try page(details: odd, micro: local)))
+        #expect(channelPage == nil && video.thumbnail == nil)
+    }
+
+    @Test func objectLiteralsEndAtTheirOwnBrace() {
+        #expect(YouTube.objectLiteral(atStartOf: #"{"a":"}\"{","b":{"c":1}};var x = {};"#[...]) == #"{"a":"}\"{","b":{"c":1}}"#)
+        #expect(YouTube.objectLiteral(atStartOf: #"{"unterminated":"#[...]) == nil)
+    }
+
+    @Test func countsAndAgesReadLikeYouTube() {
+        let us = Locale(identifier: "en_US")
+        #expect(YouTubeFormat.count(630, locale: us) == "630")
+        #expect(YouTubeFormat.count(1_640_000, locale: us) == "1.6M")
+        let now = Date(timeIntervalSince1970: 1_791_841_947)
+        #expect(YouTubeFormat.age(Date(timeIntervalSince1970: 1_688_107_978), relativeTo: now, locale: us) == "3 years ago")
+        #expect(YouTubeFormat.length(369) == "6:09")
     }
 }

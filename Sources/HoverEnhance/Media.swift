@@ -43,8 +43,8 @@ enum MediaItem: Sendable, Equatable {
     /// A file or HLS stream AVFoundation can play, with its size when the site reports it.
     case video(URL, size: CGSize?)
     case embed(Embed)
-    /// A card about a YouTube creator.
-    case channel(YouTubeChannel)
+    /// A card about a YouTube creator, and the video when the link was to one.
+    case channel(YouTubeChannel, video: YouTubeVideo?)
     /// A card about a file or folder.
     case file(URL)
     /// The forecast, under the menu bar item at `item`.
