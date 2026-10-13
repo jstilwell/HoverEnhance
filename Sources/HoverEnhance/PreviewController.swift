@@ -26,8 +26,8 @@ final class PreviewController {
     /// The item on screen, which decides what the scroll wheel does.
     private var showing: MediaItem?
     private var albumSteps = StepAccumulator()
-    /// The play button of a song in a large Finder preview.
-    private var audioModel: AudioPreviewModel?
+    /// The controls under a song or video in a large Finder preview.
+    private var transport: MediaTransport?
     /// When the scroll wheel last acted on the preview; those scrolls never reach the page.
     private var lastScrollHandled = Date.distantPast
 
@@ -47,7 +47,6 @@ final class PreviewController {
     init() {
         scrollTap.handler = { [weak self] input in self?.scroll(input) ?? false }
         playback.onVolumeChange = { [weak self] level, muted in self?.panel.updateVolume(level: level, muted: muted) }
-        playback.onPlayingChange = { [weak self] playing in self?.audioModel?.isPlaying = playing }
         activationObserver = NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main
         ) { [weak self] _ in
@@ -208,7 +207,8 @@ final class PreviewController {
         panel.hide()
         scrollTap.isEnabled = false
         showing = nil
-        audioModel = nil
+        transport?.detach()
+        transport = nil
         albumSteps.reset()
         playback.stop()
         embeds.suspend()
@@ -349,8 +349,8 @@ final class PreviewController {
             panel.show(view, counter: nil, anchor: requested.anchor, item: item)
             log.info("preview: weather")
 
-        case .channel(let channel):
-            let card = NSHostingView(rootView: CreatorCardView(channel: channel))
+        case .channel(let channel, let video):
+            let card = NSHostingView(rootView: CreatorCardView(channel: channel, video: video))
             playback.stop()
             panel.show(card, counter: counter, anchor: requested.anchor)
             log.infoPrivateInRelease("preview: creator card for \(channel.title)")
@@ -413,7 +413,8 @@ final class PreviewController {
             natural = FileMediaCardView.artworkSize
         }
         guard !Task.isCancelled, target == requested else { return nil }
-        let (layout, mediaSize) = FileMediaLayout.choose(media: natural, details: detailsSize, room: room)
+        let (layout, mediaSize) = FileMediaLayout.choose(media: natural, details: detailsSize, room: room,
+                                                         controls: kind == .image ? 0 : TransportBar.height)
         guard mediaSize.width >= 120, mediaSize.height >= 90 else {
             playback.stop()
             return nil
@@ -429,11 +430,16 @@ final class PreviewController {
             content = .image(image)
         case .video:
             guard let player = playback.player else { return nil }
-            content = .video(player)
+            let transport = MediaTransport(duration: details.media?.duration ?? details.duration)
+            transport.loadDuration(of: url)
+            transport.attach(player)
+            self.transport = transport
+            content = .video(player, transport)
         case .audio:
-            let model = AudioPreviewModel { [weak self] in self?.toggleAudio(url) }
-            audioModel = model
-            content = .audio(artwork: details.media?.artwork.flatMap(NSImage.init(data:)), model: model)
+            let transport = MediaTransport(duration: details.media?.duration ?? details.duration) { [weak self] in self?.playAudio(url) }
+            transport.loadDuration(of: url)
+            self.transport = transport
+            content = .audio(artwork: details.media?.artwork.flatMap(NSImage.init(data:)), transport: transport)
         }
         let view = CardHostingView(rootView: FileMediaCardView(card: card, content: content, layout: layout, mediaSize: mediaSize))
         // The list of apps using the file fills in after the card appears.
@@ -454,12 +460,9 @@ final class PreviewController {
         }
     }
 
-    /// The play button of a song in a large preview: starts it, or pauses and resumes it.
-    private func toggleAudio(_ url: URL) {
-        if let player = playback.player {
-            if player.timeControlStatus == .paused { player.play() } else { player.pause() }
-            return
-        }
+    /// The play button of a song in a large preview that isn't playing yet. Once it is, its controls
+    /// work its player directly.
+    private func playAudio(_ url: URL) {
         Task {
             // Now it plays, the scroll wheel acts on it as on a video.
             if await startAudio(url) { showing = .video(url, size: nil) }
@@ -468,7 +471,9 @@ final class PreviewController {
 
     /// Plays a song in a large preview, with the volume rocker beside the notch. Returns whether it started.
     private func startAudio(_ url: URL) async -> Bool {
-        guard await playback.start(url, key: Self.playbackKey(url), audioOnly: true) != nil, let volume = playback.volume else { return false }
+        guard await playback.start(url, key: Self.playbackKey(url), audioOnly: true) != nil, let player = playback.player,
+              let volume = playback.volume else { return false }
+        transport?.attach(player)
         panel.showVolume(level: volume.level, muted: volume.muted)
         return true
     }
