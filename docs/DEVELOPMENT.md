@@ -95,6 +95,20 @@ app).
   shows, so the popup's footer has it. Keys are kept in the Keychain, and `WeatherUnits` writes
   values in the units chosen.
   `Tests/HoverEnhanceTests/Fixtures/weather` holds each provider's sample answers.
+- The network popup: `SystemMenuExtra` matches the system's own menu bar items by `AXIdentifier`
+  (`com.apple.menuextra.wifi`), in whichever Apple process hosts them (MenuBarAgent on macOS 27, Control
+  Center before), and hangs `NetworkPopupView` under the Wi-Fi item as the weather hangs under its own.
+  `NetworkReader` reads a `NetworkSnapshot` from configd (`SCDynamicStore`: the primary interface, router,
+  DNS, addresses) and CoreWLAN (signal, noise, channel, rate, standard, security; the network's name only
+  with Location Services), describing the connection under a VPN when a tunnel carries the traffic.
+  `NetworkTraffic` turns the routing socket's 64-bit interface counters (`InterfaceCounters`) into speeds
+  once a second while the popup is open, keeping a minute between hovers. `PublicAddressService` asks
+  addr.fyi's `/json` for the public address, timing the TCP handshake of a fresh connection for the
+  latency, and keeps the answer five minutes or until the network changes. Clicking a menu bar item opens
+  its own menu, so `MenuBarClicks` keeps that item's popup away until a click elsewhere, a second click on
+  it, or Esc closes the menu; this applies to the weather popup too. Settings → macOS
+  (`MacOSSettingsView`) is where popups for the other system items (Sound, Control Center, the clock)
+  will go.
 - On YouTube itself, a link gets `CreatorCardView`, in YouTube's colors (`YouTubeTheme`). For a video,
   `MediaFetcher` reads its watch page (`YouTube.video(inPage:)`: `ytInitialPlayerResponse`, whose
   microformat has plain views, likes, and dates), which names its channel; oEmbed names it when that

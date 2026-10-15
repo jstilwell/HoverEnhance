@@ -42,6 +42,17 @@ struct AppSettingsTests {
         #expect(reloaded.activation == .always && reloaded.usesActivationKey)
     }
 
+    @Test func networkDetailsStartOnAndPersist() {
+        let defaults = freshDefaults()
+        let settings = AppSettings(defaults: defaults)
+        #expect(settings.networkEnabled && settings.networkLooksUpPublicAddress)
+        settings.networkEnabled = false
+        settings.networkLooksUpPublicAddress = false
+        let reloaded = AppSettings(defaults: defaults)
+        #expect(!reloaded.networkEnabled && !reloaded.networkLooksUpPublicAddress)
+        #expect(!reloaded.filter.network)
+    }
+
     @Test func finderDefaultsShowEverything() {
         let settings = AppSettings(defaults: freshDefaults())
         #expect(settings.finderCards)
@@ -233,7 +244,7 @@ struct PreviewSizeLimitTests {
 
 struct SettingsTabTests {
     @Test func tabsKeepTheirOrderAndTitles() {
-        #expect(SettingsTab.allCases.map(\.title) == ["General", "Previews", "Video", "Sites", "Finder", "Weather", "Accounts", "Advanced"])
+        #expect(SettingsTab.allCases.map(\.title) == ["General", "Previews", "Video", "Sites", "Finder", "Weather", "macOS", "Accounts", "Advanced"])
     }
 }
 

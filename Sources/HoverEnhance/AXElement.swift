@@ -28,6 +28,7 @@ struct AXElement {
 
     var role: String? { string(kAXRoleAttribute) }
     var subrole: String? { string(kAXSubroleAttribute) }
+    var identifier: String? { string(kAXIdentifierAttribute) }
     var title: String? { string(kAXTitleAttribute) }
     var label: String? { string(kAXDescriptionAttribute) }
     var value: String? { string(kAXValueAttribute) }
