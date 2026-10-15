@@ -177,6 +177,8 @@ final class AppSettings {
         static let weatherUnits = "weatherUnits"
         static let weatherHiddenSections = "weatherHiddenSections"
         static let weatherUsesNWSAlerts = "weatherUsesNWSAlerts"
+        static let networkEnabled = "networkEnabled"
+        static let networkLooksUpPublicAddress = "networkLooksUpPublicAddress"
     }
 
     @ObservationIgnored private let defaults: UserDefaults
@@ -272,6 +274,14 @@ final class AppSettings {
     /// US alerts from the National Weather Service, for providers without alerts of their own.
     var weatherUsesNWSAlerts: Bool { didSet { defaults.set(weatherUsesNWSAlerts, forKey: Key.weatherUsesNWSAlerts) } }
 
+    // macOS
+    /// The network popup for the Wi-Fi menu bar item.
+    var networkEnabled: Bool { didSet { defaults.set(networkEnabled, forKey: Key.networkEnabled) } }
+    /// Whether the network popup asks addr.fyi for the public address.
+    var networkLooksUpPublicAddress: Bool {
+        didSet { defaults.set(networkLooksUpPublicAddress, forKey: Key.networkLooksUpPublicAddress) }
+    }
+
     // Advanced
     var showsInspector: Bool { didSet { defaults.set(showsInspector, forKey: Key.showsInspector) } }
 
@@ -317,6 +327,8 @@ final class AppSettings {
             Key.weatherEnabled: true,
             Key.weatherProvider: WeatherProviderID.openMeteo.rawValue,
             Key.weatherUsesNWSAlerts: true,
+            Key.networkEnabled: true,
+            Key.networkLooksUpPublicAddress: true,
         ])
         self.defaults = defaults
         previewsEnabled = defaults.bool(forKey: Key.previewsEnabled)
@@ -367,12 +379,14 @@ final class AppSettings {
         weatherUnits = defaults.data(forKey: Key.weatherUnits).flatMap { try? JSONDecoder().decode(WeatherUnits.self, from: $0) } ?? .forLocale()
         weatherHiddenSections = Set((defaults.stringArray(forKey: Key.weatherHiddenSections) ?? []).compactMap(WeatherSection.init(rawValue:)))
         weatherUsesNWSAlerts = defaults.bool(forKey: Key.weatherUsesNWSAlerts)
+        networkEnabled = defaults.bool(forKey: Key.networkEnabled)
+        networkLooksUpPublicAddress = defaults.bool(forKey: Key.networkLooksUpPublicAddress)
     }
 
     var filter: PreviewFilter {
         PreviewFilter(images: showImages, albums: showAlbums, videos: showVideos, embeds: showEmbeds, cards: showCards,
                       files: finderCards, filesOnDesktop: finderOnDesktop, folders: finderForFolders, weather: weatherEnabled,
-                      disabledSites: disabledSites)
+                      network: networkEnabled, disabledSites: disabledSites)
     }
 
     var otherApps: OtherAppsPolicy {

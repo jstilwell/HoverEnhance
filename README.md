@@ -19,6 +19,9 @@ extension needed.
   default, or OpenWeatherMap, WeatherAPI.com, Tomorrow.io, Pirate Weather, or AccuWeather with your
   own key. AccuWeather adds pollen, the temperature in the shade, the change since yesterday, and a
   forecaster's summary; its key needs a paid plan after a 14-day trial.
+- **Network**: rest on the Wi-Fi item in the menu bar for the connection, live download and upload
+  speeds, local and public IP addresses, router, DNS, provider, latency, and the Wi-Fi signal, channel,
+  and security. Click any of it to copy it.
 - **Finder**: rest on a file or folder for its path, size, dates, where it came from, and which apps
   are using it. Images, songs, and videos show large beside their details, including what songs' and
   videos' own tags say, with play, mute, and a scrubber showing the time under songs and videos.
@@ -41,12 +44,15 @@ or later.
 
 - **Only what you hover**: HoverEnhance reads the thing under the cursor, never what you type.
 - **Only where you point**: it contacts the sites behind what you hover, GitHub to check for
-  updates, and Google only if you sign in to subscribe to YouTube channels.
+  updates, addr.fyi for the network popup's public address, and Google only if you sign in to
+  subscribe to YouTube channels.
 - **Not your network**: links and images on a web page that point at your router, printer, or anything
   else on your local network are left alone.
 - **Weather where you say**: nothing is looked up until you pick a place or allow your location, which
   goes to the weather provider you choose rounded to about a kilometer (and, in the US, to the
   National Weather Service for alerts when your provider has none, unless you turn that off).
+- **Network from the Mac**: the network popup reads everything from your Mac except the public IP
+  address, which comes from [addr.fyi](https://addr.fyi) (it sees only that address; turn it off in Settings).
 - **Browsers by default**: links in other apps, like Mail, load nothing unless you allow it in Settings.
 - **No surprise downloads**: images over 25 MB (adjustable) wait for you to click Load Anyway, and
   files only in iCloud stay there.
@@ -55,7 +61,7 @@ or later.
 
 From the menu bar icon: a shortcut that pauses previews from any app, when they appear (always, or
 while holding a key), the hover delay, apps and websites to skip, what file cards show, preview size,
-video playback, and the weather's provider, place, and units. The menu can also skip the website
+video playback, the weather's provider, place, and units, and in a macOS tab, the network popup. The menu can also skip the website
 you're on.
 
 ## Building from source

@@ -147,11 +147,17 @@ final class HoverInspector: @unchecked Sendable {
     }
 
     private func describe(_ element: AXElement, pid: pid_t, at point: CGPoint) -> HoverInfo {
+        var element = element
+        // A system menu bar item sits in a view a little taller than itself; at its edge, that's what's hit.
+        if element.subrole == "AXHostingView", let item = element.children.first(where: { $0.subrole == "AXMenuExtra" }) {
+            element = item
+        }
         let app = NSRunningApplication(processIdentifier: pid)
         var info = HoverInfo(pid: pid, appName: app?.localizedName, bundleID: app?.bundleIdentifier)
         info.appKind = app?.bundleURL.map(AppKind.of(appAt:)) ?? .other
         info.role = element.role
         info.subrole = element.subrole
+        info.identifier = element.identifier
         info.title = element.title
         info.label = element.label
         info.value = element.value.map { $0.count > 200 ? $0.prefix(200) + "…" : $0 }
