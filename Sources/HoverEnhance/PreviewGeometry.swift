@@ -169,3 +169,34 @@ enum ScreenSpace {
         return NSScreen.screens.first { NSMouseInRect(appKitPoint, $0.frame, false) } ?? NSScreen.main
     }
 }
+
+/// Clicks on menu bar items. Clicking one opens its own menu, which its popup would cover, so the popup
+/// stays away until the menu closes: on a click anywhere else, a second click on the item, or Esc.
+struct MenuBarClicks: Equatable {
+    /// The last click, until something closes the menu it may have opened.
+    private var lastClick: CGPoint?
+    /// The item whose menu is open, once known.
+    private var openItem: CGRect?
+
+    mutating func clicked(at point: CGPoint, on shownItem: CGRect? = nil) {
+        // A second click on the item closes its menu.
+        if let openItem, openItem.contains(point) {
+            closed()
+            return
+        }
+        lastClick = point
+        openItem = shownItem.flatMap { $0.contains(point) ? $0 : nil }
+    }
+
+    /// Whether `item`'s menu is open: the last click was on it.
+    mutating func menuIsOpen(for item: CGRect) -> Bool {
+        guard let lastClick, item.contains(lastClick) else { return false }
+        openItem = item
+        return true
+    }
+
+    mutating func closed() {
+        lastClick = nil
+        openItem = nil
+    }
+}
