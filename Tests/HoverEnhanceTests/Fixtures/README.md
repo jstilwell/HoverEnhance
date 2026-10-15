@@ -36,3 +36,8 @@ The keyed providers' samples come from their documentation, as no key was used t
 with made-up values to their published schemas. `accuweather-*.json` follow AccuWeather's published
 schemas (for New York, location key 349727, its documentation's example) with made-up values, asked as
 `AccuWeather` asks: details on, forecasts in metric.
+
+## Network
+
+`network/addr-fyi.json` is addr.fyi's `/json` answer, as it came on 2026-10-15, with the address swapped for
+one from the documentation range (203.0.113.0/24).

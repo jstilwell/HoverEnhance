@@ -227,7 +227,7 @@ private struct ConditionSymbol: View {
 }
 
 /// A tile or section's small capitals heading, as Weather has.
-private struct SectionHeading: View {
+struct SectionHeading: View {
     let title: String
     let symbol: String
 
@@ -549,7 +549,7 @@ private struct DetailsGrid: View {
     }
 }
 
-private struct Tile<Accessory: View>: View {
+struct Tile<Accessory: View>: View {
     let title: String
     let symbol: String
     let value: String
@@ -584,7 +584,7 @@ extension Tile where Accessory == EmptyView {
 }
 
 /// Where a reading falls on its scale, as a dot on a colored bar.
-private struct LevelBar: View {
+struct LevelBar: View {
     let fraction: Double
     let colors: [Color]
 

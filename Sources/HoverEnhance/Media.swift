@@ -24,6 +24,8 @@ enum MediaSource: Sendable, Hashable {
     case file(URL, onDesktop: Bool)
     /// The Weather menu bar item, at `item`: its frame, for hanging the forecast under it.
     case weather(item: CGRect)
+    /// The Wi-Fi menu bar item, at `item`: its frame, for hanging the network's details under it.
+    case network(item: CGRect)
 }
 
 extension MediaSource {
@@ -31,7 +33,15 @@ extension MediaSource {
     var isPost: Bool {
         switch self {
         case .redditGallery, .tweet, .blueskyPost, .instagram: true
-        case .images, .video, .streamable, .embed, .youtubeChannel, .file, .weather: false
+        case .images, .video, .streamable, .embed, .youtubeChannel, .file, .weather, .network: false
+        }
+    }
+
+    /// For a menu bar item: its frame, which the popup hangs under.
+    var menuBarItem: CGRect? {
+        switch self {
+        case .weather(let item), .network(let item): item
+        default: nil
         }
     }
 }
@@ -49,6 +59,8 @@ enum MediaItem: Sendable, Equatable {
     case file(URL)
     /// The forecast, under the menu bar item at `item`.
     case weather(item: CGRect)
+    /// The network's details, under the menu bar item at `item`.
+    case network(item: CGRect)
 }
 
 /// Resolved media: a single item, or an album.
@@ -77,7 +89,7 @@ struct Media: Sendable, Equatable {
                 return web.isEmpty ? nil : .image(web)
             case .video(let url, _):
                 return isWeb(url) ? item : nil
-            case .embed, .channel, .file, .weather:
+            case .embed, .channel, .file, .weather, .network:
                 return item
             }
         }
@@ -93,6 +105,9 @@ enum MediaResolver {
     static func source(for info: HoverInfo) -> MediaSource? {
         if WeatherTrigger.matches(info), let frame = info.frame {
             return .weather(item: frame)
+        }
+        if SystemMenuExtra(info) == .network, let frame = info.frame {
+            return .network(item: frame)
         }
         if let file = info.fileURL {
             // A card would cover Quick Look's panel, or the name being edited.
