@@ -104,7 +104,9 @@ app).
   `NetworkTraffic` turns the routing socket's 64-bit interface counters (`InterfaceCounters`) into speeds
   once a second while the popup is open, keeping a minute between hovers. `PublicAddressService` asks
   addr.fyi's `/json` for the public address, timing the TCP handshake of a fresh connection for the
-  latency, and keeps the answer five minutes or until the network changes. Settings → macOS
+  latency, and keeps the answer five minutes or until the network changes. Clicking a menu bar item opens
+  its own menu, so `MenuBarClicks` keeps that item's popup away until a click elsewhere, a second click on
+  it, or Esc closes the menu; this applies to the weather popup too. Settings → macOS
   (`MacOSSettingsView`) is where popups for the other system items (Sound, Control Center, the clock)
   will go.
 - On YouTube itself, a link gets `CreatorCardView`, in YouTube's colors (`YouTubeTheme`). For a video,

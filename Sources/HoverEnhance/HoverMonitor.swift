@@ -28,7 +28,8 @@ final class HoverMonitor {
     var onMouseMoved: ((CGPoint) -> Void)?
     /// Content moved under the cursor.
     var onScroll: (() -> Void)?
-    var onClick: (() -> Void)?
+    /// A click, with where it was in global top-left-origin coordinates.
+    var onClick: ((CGPoint?) -> Void)?
     /// A modifier key went down or up (for the activation key setting).
     var onModifiersChanged: ((NSEvent.ModifierFlags) -> Void)?
     /// Any other key went down. Only whether it was Esc is passed on, never which key it was.
@@ -133,7 +134,7 @@ final class HoverMonitor {
             onKeyDown?(event.keyCode == 53)
         default:
             stopLookingAgain()
-            onClick?()
+            onClick?(event.cgEvent?.location ?? CGEvent(source: nil)?.location)
         }
     }
 

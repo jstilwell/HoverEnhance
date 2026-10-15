@@ -144,3 +144,42 @@ struct SystemMenuExtraTests {
         #expect(source.menuBarItem == .zero && MediaSource.weather(item: .zero).menuBarItem == .zero)
     }
 }
+
+struct MenuBarClicksTests {
+    private let wifi = CGRect(x: 1518, y: 4, width: 22, height: 22)
+    private let weather = CGRect(x: 1258, y: 3, width: 69, height: 24)
+
+    private func isOpen(_ clicks: inout MenuBarClicks, _ item: CGRect) -> Bool { clicks.menuIsOpen(for: item) }
+
+    @Test func aClickedItemKeepsItsPopupAwayWhileItsMenuIsOpen() {
+        var clicks = MenuBarClicks()
+        #expect(!isOpen(&clicks, wifi))
+        // Clicked before its popup appeared, or while it showed.
+        clicks.clicked(at: CGPoint(x: 1529, y: 14))
+        #expect(isOpen(&clicks, wifi))
+        #expect(isOpen(&clicks, wifi), "still open while the cursor wanders over it")
+        #expect(!isOpen(&clicks, weather), "another item's popup still shows")
+        var showing = MenuBarClicks()
+        showing.clicked(at: CGPoint(x: 1529, y: 14), on: wifi)
+        #expect(isOpen(&showing, wifi))
+    }
+
+    @Test func theMenuClosesOnAClickElsewhereASecondClickOrEsc() {
+        var elsewhere = MenuBarClicks()
+        elsewhere.clicked(at: CGPoint(x: 1529, y: 14))
+        _ = isOpen(&elsewhere, wifi)
+        elsewhere.clicked(at: CGPoint(x: 1500, y: 200))
+        #expect(!isOpen(&elsewhere, wifi))
+
+        var again = MenuBarClicks()
+        again.clicked(at: CGPoint(x: 1529, y: 14))
+        _ = isOpen(&again, wifi)
+        again.clicked(at: CGPoint(x: 1530, y: 12))
+        #expect(!isOpen(&again, wifi))
+
+        var escape = MenuBarClicks()
+        escape.clicked(at: CGPoint(x: 1529, y: 14), on: wifi)
+        escape.closed()
+        #expect(!isOpen(&escape, wifi))
+    }
+}
