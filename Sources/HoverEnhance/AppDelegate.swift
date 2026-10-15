@@ -65,7 +65,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         monitor.onResult = { [weak self] result, again in self?.handle(result, again: again) }
         monitor.onMouseMoved = { [weak self] point in self?.preview.mouseMoved(to: point) }
         monitor.onScroll = { [weak self] in self?.preview.scrolled() }
-        monitor.onClick = { [weak self] in self?.preview.dismiss() }
+        monitor.onClick = { [weak self] point in self?.preview.clicked(at: point) }
         monitor.onModifiersChanged = { [weak self] flags in self?.modifiersChanged(flags) }
         monitor.onKeyDown = { [weak self] isEscape in self?.preview.keyPressed(isEscape: isEscape) }
         monitor.policy = { AppSettings.shared.inspectionPolicy }

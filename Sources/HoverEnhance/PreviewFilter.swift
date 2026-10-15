@@ -71,7 +71,7 @@ extension MediaSource {
         case .blueskyPost: .bluesky
         case .instagram: .instagram
         case .youtubeChannel: .youtube
-        case .file, .weather: nil
+        case .file, .weather, .network: nil
         case .embed(let embed):
             switch embed.site {
             case .youtube: .youtube
@@ -98,6 +98,8 @@ struct PreviewFilter: Sendable, Equatable {
     var folders = true
     /// The forecast under the Weather menu bar item.
     var weather = true
+    /// The network's details under the Wi-Fi menu bar item.
+    var network = true
     var disabledSites: Set<MediaSite> = []
 
     /// Whether to look this source up at all.
@@ -109,6 +111,7 @@ struct PreviewFilter: Sendable, Equatable {
         case .embed: return embeds
         case .youtubeChannel: return cards
         case .weather: return weather
+        case .network: return network
         case .file(let url, let onDesktop):
             // Finder writes folder URLs with a trailing slash and packages, like apps, without.
             return files && (filesOnDesktop || !onDesktop) && (folders || !url.hasDirectoryPath)
@@ -126,6 +129,7 @@ struct PreviewFilter: Sendable, Equatable {
             case .embed: embeds
             case .channel: cards
             case .weather: weather
+            case .network: network
             case .file: files
             }
         }
@@ -147,10 +151,10 @@ struct OtherAppsPolicy: Sendable, Equatable {
     var needsKey = false
 
     func allows(_ source: MediaSource, in app: AppKind, keyHeld: Bool) -> Bool {
-        // Neither loads anything from what's hovered: Finder's cards read the disk, the forecast comes
-        // from the provider chosen in Settings.
+        // None loads anything from what's hovered: Finder's cards read the disk, the forecast comes
+        // from the provider chosen in Settings, and the network's details from the Mac and addr.fyi.
         switch source {
-        case .file, .weather: return true
+        case .file, .weather, .network: return true
         default: break
         }
         if app == .browser { return true }

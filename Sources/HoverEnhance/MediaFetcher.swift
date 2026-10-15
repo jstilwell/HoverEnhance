@@ -55,6 +55,8 @@ actor MediaFetcher {
             return .found(Media(items: [.file(url)]))
         case .weather(let item):
             return .found(Media(items: [.weather(item: item)]))
+        case .network(let item):
+            return .found(Media(items: [.network(item: item)]))
         case .redditGallery(let id):
             lookedUp = await redditGallery(id: id, requests)
         case .streamable(let id):

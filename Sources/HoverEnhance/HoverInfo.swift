@@ -10,6 +10,8 @@ struct HoverInfo: Sendable, Equatable {
 
     var role: String?
     var subrole: String?
+    /// `AXIdentifier`, which tells the system's menu bar items apart.
+    var identifier: String?
     var title: String?
     /// `AXDescription`; for web images this is usually the alt text.
     var label: String?
@@ -58,6 +60,7 @@ struct HoverInfo: Sendable, Equatable {
         }
         add("kind", appKind == .other ? nil : appKind.rawValue)
         add("role", [role, subrole].compactMap { $0 }.joined(separator: " / "))
+        add("id", identifier)
         add("title", title)
         add("label", label)
         add("value", value)

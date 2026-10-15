@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.6.0 - Unreleased
+
+### Added
+
+- Rest on the Wi-Fi item in the menu bar to see your network at a glance: the connection, live download and upload speeds with the last minute charted, local and public IP addresses, router, DNS, internet provider, latency, and the Wi-Fi signal, noise, channel, rate, standard, and security.
+- Click any address or name in the network popup to copy it.
+- A new macOS tab in Settings turns the network popup on or off, and the public IP lookup from addr.fyi.
+
+### Fixed
+
+- Clicking the Weather item in the menu bar opens its menu without the forecast popup appearing over it.
+
 ## 0.5.0 - 10-12-2026
 
 ### Added

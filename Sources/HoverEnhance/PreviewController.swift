@@ -30,6 +30,8 @@ final class PreviewController {
     private var transport: MediaTransport?
     /// When the scroll wheel last acted on the preview; those scrolls never reach the page.
     private var lastScrollHandled = Date.distantPast
+    /// A menu bar item clicked opens its own menu, and its popup stays away until that closes.
+    private var menuBarClicks = MenuBarClicks()
 
     private struct Target: Equatable {
         let source: MediaSource
@@ -93,6 +95,11 @@ final class PreviewController {
             noPreview(because: "already shown large")
             return
         }
+        let item = source.menuBarItem.map { Self.itemFrame($0, cursor: cursor) }
+        if let item, menuBarClicks.menuIsOpen(for: item) {
+            noPreview(because: "its menu is open")
+            return
+        }
         // Still on the same thing: it's loading, showing, or was dismissed by a click.
         if target?.source == source { return }
         // A second look doesn't replace what's already on screen.
@@ -100,12 +107,6 @@ final class PreviewController {
 
         reset(because: "new target")
         let elementFrame = info.imageFrame ?? info.frame
-        var item: CGRect?
-        if case .weather(let frame) = source {
-            // The item's frame, if it's where the cursor is: on a second display's menu bar it may be
-            // reported on the main one's, and then a stand-in around the cursor will do.
-            item = frame.insetBy(dx: -4, dy: -4).contains(cursor) ? frame : CGRect(x: cursor.x - 16, y: cursor.y - 12, width: 32, height: 24)
-        }
         let notch = item.map { panel.dropDownHoverArea(at: cursor, item: $0) } ?? panel.notchFrame(at: cursor)
         let newTarget = Target(source: source, anchor: cursor, notch: notch, element: elementFrame, page: info.pageURL, item: item)
         target = newTarget
@@ -155,6 +156,12 @@ final class PreviewController {
         return await load()
     }
 
+    /// A menu bar item's frame, if it's where the cursor is: on a second display's menu bar it may be
+    /// reported on the main one's, and then a stand-in around the cursor will do.
+    static func itemFrame(_ frame: CGRect, cursor: CGPoint) -> CGRect {
+        frame.insetBy(dx: -4, dy: -4).contains(cursor) ? frame : CGRect(x: cursor.x - 16, y: cursor.y - 12, width: 32, height: 24)
+    }
+
     /// Ends the hover the moment the cursor leaves the notch, unless it moves onto the preview.
     func mouseMoved(to point: CGPoint) {
         guard let target else { return }
@@ -176,10 +183,18 @@ final class PreviewController {
     /// moves to something else.
     func keyPressed(isEscape: Bool) {
         if isEscape {
+            // Esc closes a menu bar item's menu too.
+            menuBarClicks.closed()
             dismiss()
             return
         }
         guard case .file = target?.source, AppSettings.shared.finderClosesOnKeyPress else { return }
+        dismiss()
+    }
+
+    /// A click hides the preview. On a menu bar item, it also opens the item's menu, which keeps the popup away.
+    func clicked(at point: CGPoint?) {
+        if let point { menuBarClicks.clicked(at: point, on: target?.item) }
         dismiss()
     }
 
@@ -250,7 +265,7 @@ final class PreviewController {
                 // The rocker shows the new level.
                 if input.up != 0 { playback.changeVolume(by: input.isPrecise ? input.up * 0.005 : (input.up > 0 ? 0.05 : -0.05)) }
             }
-        case .embed, .channel, .weather:
+        case .embed, .channel, .weather, .network:
             // On the player or card, scrolling belongs to it; on the notch, it mustn't move the page away.
             return !panel.isOnPreview(input.location)
         case .file:
@@ -348,6 +363,22 @@ final class PreviewController {
             playback.stop()
             panel.show(view, counter: nil, anchor: requested.anchor, item: item)
             log.info("preview: weather")
+
+        case .network(let item):
+            let model = NetworkPopupModel(settings: settings)
+            await model.load()
+            guard !Task.isCancelled, self.target == requested else { return false }
+            let view = CardHostingView(rootView: NetworkPopupView(
+                model: model,
+                openSettings: { NotificationCenter.default.post(name: .showSettingsTab, object: SettingsTab.macOS) }
+            ))
+            // Wi-Fi joining or leaving, or the public address arriving, changes its size.
+            view.onSizeChange = { [weak self, weak view] in
+                Task { @MainActor in if let self, let view { self.panel.refit(view) } }
+            }
+            playback.stop()
+            panel.show(view, counter: nil, anchor: requested.anchor, item: item)
+            log.info("preview: network")
 
         case .channel(let channel, let video):
             let card = NSHostingView(rootView: CreatorCardView(channel: channel, video: video))
