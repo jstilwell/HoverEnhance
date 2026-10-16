@@ -150,7 +150,7 @@ latest GitHub release (`SUFeedURL`, through `releases/latest/download/appcast.xm
 update only if it's signed with the key whose public half is `SUPublicEDKey`. To release:
 
 1. Raise `CFBundleShortVersionString` in `Resources/Info.plist` and add a dated entry for it to
-   `CHANGELOG.md` (its bullets become the release notes).
+   `CHANGELOG.md` (its bullets become the release notes, as HTML-escaped plain text in Sparkle's window).
 2. Commit, then run `./bin/build-release.sh --upload`.
 3. Bring [hoverenhance.com](https://hoverenhance.com) up to date: the `FALLBACK` release in its
    `src/routes/+page.server.ts`, and anything else the release changes. Merging doesn't publish it;
