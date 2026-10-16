@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- Previews are off on webmail, such as Gmail, Outlook, and iCloud Mail, so a link in an email can't tell its sender you read it; turn them back on under Settings → Sites.
+
 ### Fixed
 
 - Images from sites other than the ones under Settings → Sites no longer get or keep cookies, so an image host can't use a cookie to follow you from site to site.

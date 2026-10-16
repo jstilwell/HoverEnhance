@@ -57,6 +57,8 @@ or later.
   address, which comes from [addr.fyi](https://addr.fyi), also run by HoverEnhance's maintainer (it sees
   only that address; turn it off in Settings).
 - **Browsers by default**: links in other apps, like Mail, load nothing unless you allow it in Settings.
+- **Not your email**: no previews on webmail, like Gmail or Outlook, where a link can tell its sender
+  you read the message. Settings can turn them back on.
 - **No surprise downloads**: images over 25 MB (adjustable) wait for you to click Load Anyway, and
   files only in iCloud stay there.
 
