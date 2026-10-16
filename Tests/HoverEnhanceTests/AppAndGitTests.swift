@@ -49,6 +49,13 @@ struct AppBundleInfoTests {
         #expect(AppBundleInfo.signature(of: unsigned) == "Not signed")
     }
 
+    @Test func onlyAppleIssuedCertificatesVouchForTheirName() throws {
+        // A tiny program signed with a self-signed certificate named like a Developer ID; see Fixtures/README.md.
+        let fake = try #require(Bundle.module.url(forResource: "fake-developer-id", withExtension: nil, subdirectory: "Fixtures/signing"))
+        let signature = try #require(AppBundleInfo.signature(of: fake))
+        #expect(signature.hasPrefix("Unverified certificate “Developer ID Application: Fake Developer (ABCDE12345)”"), "\(signature)")
+    }
+
     @Test func signaturesCheckEveryFile() throws {
         let scratch = try Scratch()
         func app(_ name: String) throws -> URL {
