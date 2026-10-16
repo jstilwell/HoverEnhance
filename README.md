@@ -95,6 +95,8 @@ Requires macOS 14 or later. Signed, notarized, and updates itself.
   subscribe to YouTube channels.
 - **Not your network**: links and images on a web page that point at your router, printer, or
   anything else on your local network are left alone.
+- **No tracking cookies**: images from anywhere but the sites under Settings → Sites load without
+  cookies, so they can't follow you from site to site.
 - **Weather where you say**: nothing is looked up until you pick a place or allow your location,
   which goes to the weather provider you choose rounded to about a kilometer (and, in the US, to the
   National Weather Service for alerts when your provider has none, unless you turn that off).
@@ -103,6 +105,8 @@ Requires macOS 14 or later. Signed, notarized, and updates itself.
   sees only that address; turn it off in Settings).
 - **Browsers by default**: links in other apps, like Mail, load nothing unless you allow it in
   Settings.
+- **Not your email**: no previews on webmail, like Gmail or Outlook, where a link can tell its sender
+  you read the message. Settings can turn them back on.
 - **No surprise downloads**: images over 25 MB (adjustable) wait for you to click Load Anyway, and
   files only in iCloud stay there.
 
@@ -114,7 +118,7 @@ From the menu bar icon:
   holding a key), the hover delay, links in other apps, and apps to skip.
 - **Previews and Video**: what to preview, the largest image to download, the notch, scrolling, and
   playback.
-- **Sites**: websites to skip; the menu can also skip the one you're on.
+- **Sites**: websites to skip, webmail included by default; the menu can also skip the one you're on.
 - **Finder**: what file cards show, and when.
 - **Weather**: the provider, place, and units.
 - **macOS**: the network popup and its public IP lookup.

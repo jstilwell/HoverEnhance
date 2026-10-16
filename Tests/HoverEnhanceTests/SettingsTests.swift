@@ -53,6 +53,21 @@ struct AppSettingsTests {
         #expect(!reloaded.filter.network)
     }
 
+    @Test func webmailIsSkippedUnlessAllowed() {
+        let defaults = freshDefaults()
+        let settings = AppSettings(defaults: defaults)
+        let gmail = URL(string: "https://mail.google.com/mail/u/0/")
+        #expect(settings.skipsWebmail && settings.skips(page: gmail))
+        #expect(!settings.skips(page: URL(string: "https://www.reddit.com/")))
+
+        settings.skipsWebmail = false
+        let reloaded = AppSettings(defaults: defaults)
+        #expect(!reloaded.skips(page: gmail))
+        // A website skipped by name stays skipped.
+        reloaded.skippedWebsites = ["mail.google.com"]
+        #expect(reloaded.skips(page: gmail))
+    }
+
     @Test func finderDefaultsShowEverything() {
         let settings = AppSettings(defaults: freshDefaults())
         #expect(settings.finderCards)

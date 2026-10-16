@@ -290,7 +290,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         previewsItem.state = settings.previewsEnabled ? .on : .off
         if let domain = lastWebsite {
             skipSiteItem.isHidden = false
-            skipSiteItem.title = settings.skippedWebsites.contains(domain) ? "Allow Previews on \(domain)" : "Skip Previews on \(domain)"
+            // Webmail skipped as webmail, in Settings → Sites, has nothing to skip here.
+            let isSkippedWebmail = settings.skipsWebmail && Webmail.contains(lastWebPage?.url) && !settings.skippedWebsites.contains(domain)
+            skipSiteItem.isEnabled = !isSkippedWebmail
+            skipSiteItem.title = isSkippedWebmail ? "Previews Are Off on Webmail"
+                : settings.skippedWebsites.contains(domain) ? "Allow Previews on \(domain)" : "Skip Previews on \(domain)"
         } else {
             skipSiteItem.isHidden = true
         }

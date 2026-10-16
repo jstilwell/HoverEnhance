@@ -15,7 +15,7 @@ struct ZipSummary: Sendable, Equatable {
     static let maximumDirectorySize = 32 << 20
 
     static func read(_ url: URL, maximumDirectorySize: Int = maximumDirectorySize) -> ZipSummary? {
-        guard let handle = try? FileHandle(forReadingFrom: url) else { return nil }
+        guard FileDetails.isRegularFile(url), let handle = try? FileHandle(forReadingFrom: url) else { return nil }
         defer { try? handle.close() }
         func read(at offset: UInt64, count: Int) -> Data? {
             guard (try? handle.seek(toOffset: offset)) != nil, let data = try? handle.read(upToCount: count),

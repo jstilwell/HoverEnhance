@@ -2,6 +2,29 @@
 
 All notable changes to this project will be documented in this file.
 
+## Unreleased
+
+### Added
+
+- Previews are off on webmail, such as Gmail, Outlook, and iCloud Mail, so a link in an email can't tell its sender you read it; turn them back on under Settings → Sites.
+
+### Changed
+
+- The welcome window says that closing it before Accessibility access is on quits HoverEnhance.
+
+### Fixed
+
+- Images from sites other than the ones under Settings → Sites no longer get or keep cookies, so an image host can't use a cookie to follow you from site to site.
+- A Finder card's "Signed by" names a developer only when Apple issued the certificate; anyone can make one with a real developer's name, so others say "Unverified certificate".
+- Resting on a named pipe in Finder, such as one named like a zip file or inside a folder's .git, no longer stalls HoverEnhance.
+- Links and images pointing at a few more forms of local network address, such as the ones VPN apps hand out and IPv4 addresses inside IPv6 ones, are left alone.
+- Weather alert links from Pirate Weather open only web pages.
+- A Git remote too malformed to read no longer shows the access token in it.
+- Unsubscribing from a YouTube card works even when YouTube didn't say which subscription subscribing made.
+- After signing out of YouTube or switching accounts, cards no longer show the previous account's subscriptions.
+- Songs with very large artwork open their Finder preview without a pause.
+- Settings says so when a weather provider's key can't be saved to the Keychain.
+
 ## 0.6.0 - 10-15-2026
 
 ### Added

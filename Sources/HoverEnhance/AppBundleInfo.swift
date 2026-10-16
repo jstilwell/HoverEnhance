@@ -38,7 +38,8 @@ struct AppBundleInfo: Sendable, Equatable {
     }
 
     /// Who signed the code at `url`: "Apple", "Mac App Store", a Developer ID ("Developer ID
-    /// Application: Jane Doe (ABCDE12345)"), "Ad hoc, no developer", or "Not signed", and whether its
+    /// Application: Jane Doe (ABCDE12345)"), a certificate Apple didn't issue ("Unverified certificate
+    /// “…”"), "Ad hoc, no developer", or "Not signed", and whether its
     /// files are still as signed. Checking every file takes seconds for a big app, so that waits at most
     /// `timeout`; one that takes longer says so, and the answer is there on a later hover.
     static func signature(of url: URL, timeout: TimeInterval = 4) -> String? {
@@ -65,7 +66,11 @@ struct AppBundleInfo: Sendable, Equatable {
         } else if satisfies("anchor apple generic and certificate leaf[field.1.2.840.113635.100.6.1.9] exists") {
             signer = "Mac App Store"
         } else {
-            signer = certificates.flatMap { $0.first }.flatMap { SecCertificateCopySubjectSummary($0) as String? } ?? "Unknown developer"
+            let name = certificates.flatMap { $0.first }.flatMap { SecCertificateCopySubjectSummary($0) as String? }
+            // Only a certificate Apple issued, such as a Developer ID, vouches for the name in it: anyone can
+            // make one named "Developer ID Application: <any company>".
+            signer = satisfies("anchor apple generic") ? name ?? "Unknown developer"
+                : "Unverified certificate" + (name.map { " “\($0)”" } ?? "")
         }
         guard validity == errSecSuccess else { return signer + " · signature is broken" }
         switch FileSeals.check(url, timeout: timeout) {

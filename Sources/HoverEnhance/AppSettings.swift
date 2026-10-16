@@ -135,6 +135,7 @@ final class AppSettings {
         static let hoverDelay = "hoverDelay"
         static let excludedApps = "excludedApps"
         static let skippedWebsites = "skippedWebsites"
+        static let skipWebmail = "skipWebmail"
         static let pauseShortcut = "pauseShortcut"
         static let previewsInOtherApps = "previewsInOtherApps"
         static let otherAppsSkipEmail = "otherAppsSkipEmail"
@@ -196,6 +197,8 @@ final class AppSettings {
     }
     /// Domains, such as "bank.example", on whose pages (and their subdomains') no previews appear.
     var skippedWebsites: [String] { didSet { defaults.set(skippedWebsites, forKey: Key.skippedWebsites) } }
+    /// No previews on webmail's pages; see `Webmail`.
+    var skipsWebmail: Bool { didSet { defaults.set(skipsWebmail, forKey: Key.skipWebmail) } }
     /// Shows or hides previews from any app.
     var pauseShortcut: Shortcut? {
         didSet { defaults.set(pauseShortcut.flatMap { try? JSONEncoder().encode($0) }, forKey: Key.pauseShortcut) }
@@ -291,6 +294,7 @@ final class AppSettings {
             Key.activation: Activation.always.rawValue,
             Key.activationKey: ModifierKey.option.rawValue,
             Key.hoverDelay: 150.0,
+            Key.skipWebmail: true,
             Key.previewsInOtherApps: false,
             Key.otherAppsSkipEmail: true,
             Key.otherAppsKnownSitesOnly: true,
@@ -337,6 +341,7 @@ final class AppSettings {
         hoverDelay = max(defaults.double(forKey: Key.hoverDelay), Self.shortestHoverDelay)
         excludedApps = defaults.data(forKey: Key.excludedApps).flatMap { try? JSONDecoder().decode([ExcludedApp].self, from: $0) } ?? []
         skippedWebsites = defaults.stringArray(forKey: Key.skippedWebsites) ?? []
+        skipsWebmail = defaults.bool(forKey: Key.skipWebmail)
         pauseShortcut = defaults.data(forKey: Key.pauseShortcut).flatMap { try? JSONDecoder().decode(Shortcut.self, from: $0) }
         previewsInOtherApps = defaults.bool(forKey: Key.previewsInOtherApps)
         otherAppsSkipEmail = defaults.bool(forKey: Key.otherAppsSkipEmail)
@@ -450,9 +455,9 @@ final class AppSettings {
         showsInspector || (previewsEnabled && previewsAllowed(holding: flags))
     }
 
-    /// Whether `page` is on a website in `skippedWebsites`.
+    /// Whether `page` is on a website in `skippedWebsites`, or is webmail while that's skipped.
     func skips(page: URL?) -> Bool {
-        SkippedWebsites.contains(page, in: skippedWebsites)
+        SkippedWebsites.contains(page, in: skippedWebsites) || (skipsWebmail && Webmail.contains(page))
     }
 
     func isExcluded(_ bundleID: String?) -> Bool {

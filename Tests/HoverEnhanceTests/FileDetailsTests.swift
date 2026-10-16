@@ -19,6 +19,42 @@ struct FileDetailsTests {
         }
     }
 
+    /// Runs `body` with a named pipe at `name` in `folder`, then opens and closes the pipe for writing, so
+    /// a read `body` started anyway ends rather than holding up the tests.
+    private func withNamedPipe(_ name: String, in folder: URL, _ body: @escaping @Sendable (URL) -> Void) throws {
+        let pipe = folder.appending(path: name)
+        #expect(mkfifo(pipe.path(percentEncoded: false), 0o600) == 0)
+        let done = DispatchSemaphore(value: 0)
+        DispatchQueue.global().async { body(pipe); done.signal() }
+        let finished = done.wait(timeout: .now() + 5) == .success
+        let writer = open(pipe.path(percentEncoded: false), O_WRONLY | O_NONBLOCK)
+        if writer >= 0 { close(writer) }
+        #expect(finished, "reading \(name) waited for a writer")
+        if !finished { done.wait() }
+    }
+
+    @Test func namedPipesArentRead() throws {
+        let scratch = try Scratch()
+        try withNamedPipe("trap.zip", in: scratch.folder) { pipe in
+            #expect(!FileDetails.isRegularFile(pipe))
+            #expect(ZipSummary.read(pipe) == nil)
+            _ = FileDetails.load(pipe, options: FileCardOptions())
+        }
+        try withNamedPipe("trap.png", in: scratch.folder) { pipe in
+            #expect(LocalImage.load(pipe, maxPixelSize: 100) == nil && LocalImage.pixelSize(of: pipe) == nil)
+        }
+        let git = scratch.folder.appending(path: "repo/.git", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: git, withIntermediateDirectories: true)
+        try withNamedPipe("HEAD", in: git) { _ in
+            #expect(GitRepository.read(git.deletingLastPathComponent()) == GitRepository(head: nil, remote: nil))
+        }
+        // A link to a file is read as the file.
+        let file = try scratch.file("real.txt")
+        let link = scratch.folder.appending(path: "link.txt")
+        try FileManager.default.createSymbolicLink(at: link, withDestinationURL: file)
+        #expect(FileDetails.isRegularFile(file) && FileDetails.isRegularFile(link) && !FileDetails.isRegularFile(scratch.folder))
+    }
+
     @Test func filesHaveKindSizeAndDates() throws {
         let scratch = try Scratch()
         let url = try scratch.file("notes.txt", contents: "twelve bytes")
