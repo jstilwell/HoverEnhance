@@ -41,3 +41,10 @@ schemas (for New York, location key 349727, its documentation's example) with ma
 
 `network/addr-fyi.json` is addr.fyi's `/json` answer, as it came on 2026-10-15, with the address swapped for
 one from the documentation range (203.0.113.0/24).
+
+## Signing
+
+`signing/fake-developer-id` is `int main(void){return 0;}` built with `clang -Os` and signed with a
+self-signed code-signing certificate named "Developer ID Application: Fake Developer (ABCDE12345)", made
+with `openssl req -x509` and imported into a throwaway keychain for `codesign --keychain`. It stands in
+for an app pretending to be from a real developer.

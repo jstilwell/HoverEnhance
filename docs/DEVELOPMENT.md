@@ -69,7 +69,8 @@ app).
   records first, so protected folders aren't opened just to describe a file, and reads nothing of a
   file that's only in the cloud (the app also turns off downloading such files on read, in
   `main.swift`); `FileStatus` covers tags, iCloud, quarantine, and aliases, `ZipSummary` reads a
-  zip's central directory, `AppBundleInfo` an app's Info.plist and signature, and `GitRepository` a
+  zip's central directory, `AppBundleInfo` an app's Info.plist and signature (a developer's name only
+  from a certificate Apple issued), and `GitRepository` a
   repository's branch and remote from its `.git`. Git itself is never run: a repository's settings
   can make it run commands, and a hovered folder can come from anywhere. `FileUsers` finds apps
   whose windows show the file (`AXDocument`) and processes that hold it open, map it, or work in it
