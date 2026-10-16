@@ -81,7 +81,10 @@ struct PirateWeather: WeatherSource {
             return WeatherAlert(title: title, severity: .init(alert["severity"] as? String),
                                 starts: JSON.double(alert["time"]).map(Date.init(timeIntervalSince1970:)), ends: expires,
                                 detail: alert["description"] as? String, source: (alert["regions"] as? [String])?.first,
-                                url: (alert["uri"] as? String).flatMap(URL.init(string:)))
+                                // Opened with a click, so only a web page: not a file or another app's link.
+                                url: (alert["uri"] as? String).flatMap(URL.init(string:)).flatMap {
+                                    ["http", "https"].contains($0.scheme?.lowercased()) ? $0 : nil
+                                })
         }
         .sorted { $0.severity > $1.severity }
         return report
