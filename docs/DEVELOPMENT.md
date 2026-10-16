@@ -41,8 +41,9 @@ app).
   (`InspectionPolicy`) get only the hit-test.
 - `MediaResolver` turns the hovered image or link into a `MediaSource` (`ImageRules` for full-size
   image URLs, `SiteLinks` for posts and videos), following `file:` URLs only from local pages, and
-  to the local network (`LocalNetwork`: loopback, private ranges, `.local`) only from local pages,
-  redirects included, apart from a video's, which AVPlayer follows itself. `ImageLoader` sends and keeps cookies only for the sites in
+  to the local network (`LocalNetwork`: loopback, private ranges, `.local`, and IPv4 addresses
+  inside NAT64 and 6to4 ones) only from local pages, redirects included, apart from a video's,
+  which AVPlayer follows itself. `ImageLoader` sends and keeps cookies only for the sites in
   `MediaSite` (`LimitedDownloader` handles them itself, from the shared storage), so an image host
   can't track the user across sites; AVPlayer keeps its own. `MediaFetcher` does any
   lookup the site needs (`SiteAPIs`, `RedditGallery`), giving `Media`: one item or an album, with

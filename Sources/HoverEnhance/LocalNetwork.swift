@@ -36,8 +36,10 @@ enum LocalNetwork {
             (0x6440_0000, 10),  // 100.64/10, carrier-grade NAT
             (0x7F00_0000, 8),   // 127/8, loopback
             (0xA9FE_0000, 16),  // 169.254/16, link-local
+            (0xC000_0000, 24),  // 192.0.0/24, protocol assignments
             (0xAC10_0000, 12),  // 172.16/12
             (0xC0A8_0000, 16),  // 192.168/16
+            (0xC612_0000, 15),  // 198.18/15, benchmarking, and VPN apps' stand-in addresses
             (0xE000_0000, 4),   // multicast
             (0xF000_0000, 4),   // reserved, and broadcast
         ]
@@ -50,10 +52,13 @@ enum LocalNetwork {
         if bytes[0] & 0xFE == 0xFC { return true }                // fc00::/7, unique local
         if bytes[0] == 0xFE, bytes[1] & 0xC0 == 0x80 { return true } // fe80::/10, link-local
         if bytes[0] == 0xFF { return true }                       // multicast
+        func v4(_ bytes: ArraySlice<UInt8>) -> UInt32 { bytes.reduce(0) { $0 << 8 | UInt32($1) } }
         // ::ffff:a.b.c.d, an IPv4 address written as IPv6.
-        if bytes[0 ..< 10].allSatisfy({ $0 == 0 }), bytes[10] == 0xFF, bytes[11] == 0xFF {
-            return contains(bytes[12 ..< 16].reduce(UInt32(0)) { $0 << 8 | UInt32($1) })
-        }
+        if bytes[0 ..< 10].allSatisfy({ $0 == 0 }), bytes[10] == 0xFF, bytes[11] == 0xFF { return contains(v4(bytes[12 ..< 16])) }
+        // 64:ff9b::a.b.c.d, an IPv4 address reached through NAT64.
+        if bytes[0 ..< 12] == [0x00, 0x64, 0xFF, 0x9B, 0, 0, 0, 0, 0, 0, 0, 0] { return contains(v4(bytes[12 ..< 16])) }
+        // 2002:aabb:ccdd::, 6to4, which carries the IPv4 address after the prefix.
+        if bytes[0] == 0x20, bytes[1] == 0x02 { return contains(v4(bytes[2 ..< 6])) }
         return false
     }
 }
