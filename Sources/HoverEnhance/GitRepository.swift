@@ -45,7 +45,7 @@ struct GitRepository: Sendable, Equatable {
     /// The start of a small file. A repository can come from anywhere, and these files are never large in
     /// a real one, so a huge one isn't read whole.
     private static func text(at url: URL, upTo limit: Int = 1 << 20) -> String? {
-        guard let handle = try? FileHandle(forReadingFrom: url) else { return nil }
+        guard FileDetails.isRegularFile(url), let handle = try? FileHandle(forReadingFrom: url) else { return nil }
         defer { try? handle.close() }
         return (try? handle.read(upToCount: limit)).map { String(decoding: $0, as: UTF8.self) }
     }

@@ -87,7 +87,9 @@ struct FileDetails: Sendable, Equatable {
         if options.shows(.tags) { details.tags = tags(of: url) ?? [] }
         if options.shows(.cloud) { details.cloud = cloudStatus(of: url) }
 
-        if options.shows(.archive), !details.isCloudOnly, url.pathExtension.lowercased() == "zip" { details.archive = ZipSummary.read(url) }
+        if options.shows(.archive), !details.isCloudOnly, url.pathExtension.lowercased() == "zip", isRegularFile(url) {
+            details.archive = ZipSummary.read(url)
+        }
         if values?.isPackage == true, !details.isCloudOnly, [.appVersion, .bundleID, .architectures, .minimumSystem, .signature].contains(where: options.shows),
            var app = AppBundleInfo.read(url) {
             if !options.shows(.appVersion) { app.version = nil }
@@ -128,7 +130,7 @@ struct FileDetails: Sendable, Equatable {
         // An image Spotlight hasn't indexed: read its header once for all three. Indexed images always
         // have dimensions, so screenshots, which have no camera, aren't opened for nothing.
         if indexedDimensions == nil, values?.contentType?.conforms(to: .image) == true,
-           [.dimensions, .camera, .exposure].contains(where: options.shows) {
+           [.dimensions, .camera, .exposure].contains(where: options.shows), isRegularFile(url) {
             details.fillIn(fromImageAt: url, options: options)
         }
         if options.shows(.codecs) {
@@ -157,7 +159,7 @@ struct FileDetails: Sendable, Equatable {
     mutating func addMedia(from url: URL, options: FileCardOptions, forPreview: Bool = false) async {
         let fields: [FileCardField] = [.music, .recording, .mediaFormat, .dimensions, .duration, .thumbnail]
         guard !isCloudOnly, contentType?.conforms(to: .audiovisualContent) == true, forPreview || fields.contains(where: options.shows),
-              var media = await MediaMetadata.read(url) else { return }
+              Self.isRegularFile(url), var media = await MediaMetadata.read(url) else { return }
         if !options.shows(.music) {
             if !media.hasVideo { media.title = nil }
             (media.artist, media.album, media.albumArtist, media.composer, media.genre, media.year, media.track, media.disc) =
@@ -264,6 +266,14 @@ struct FileDetails: Sendable, Equatable {
     static func whereFroms(attributeOf url: URL) -> [String]? {
         attribute("com.apple.metadata:kMDItemWhereFroms", of: url)
             .flatMap { try? PropertyListSerialization.propertyList(from: $0, format: nil) as? [String] }
+    }
+
+    /// Whether reading `url` gives its contents and ends: a file, or a link to one. Opening a named pipe
+    /// waits for something to write to it, forever if nothing does, and a device may never end. Anyone can
+    /// name one "x.zip" or "x.png", or put one in an archive as a folder's `.git/HEAD`.
+    static func isRegularFile(_ url: URL) -> Bool {
+        var info = stat()
+        return stat(url.path(percentEncoded: false), &info) == 0 && info.st_mode & S_IFMT == S_IFREG
     }
 
     /// Dimensions, camera, and exposure from the image's header, for what Spotlight didn't have.
