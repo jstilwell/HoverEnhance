@@ -193,6 +193,8 @@ private struct WeatherKeyField: View {
     let location: WeatherLocationChoice?
     @State private var key = ""
     @State private var test: TestState = .idle
+    /// Why the key couldn't be kept, which would leave the provider without it.
+    @State private var saveFailure: String?
 
     private enum TestState: Equatable { case idle, testing, worked, failed(String) }
 
@@ -200,9 +202,17 @@ private struct WeatherKeyField: View {
         SecureField("API key", text: $key, prompt: Text("Paste your \(provider.name) key"))
             .onAppear { key = Keychain.string(for: provider.keychainAccount) ?? "" }
             .onChange(of: key) { _, newKey in
-                try? Keychain.set(newKey.trimmingCharacters(in: .whitespacesAndNewlines), for: provider.keychainAccount)
+                do {
+                    try Keychain.set(newKey.trimmingCharacters(in: .whitespacesAndNewlines), for: provider.keychainAccount)
+                    saveFailure = nil
+                } catch {
+                    saveFailure = "The key couldn't be saved to the Keychain: \(error.localizedDescription)"
+                }
                 test = .idle
             }
+        if let saveFailure {
+            Text(saveFailure).foregroundStyle(.red).fixedSize(horizontal: false, vertical: true)
+        }
         HStack(spacing: 10) {
             if let page = provider.keyPage {
                 Link(provider.keyIsFree ? "Get a free key" : "Get a key", destination: page)
