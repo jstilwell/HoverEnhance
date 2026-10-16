@@ -169,6 +169,17 @@ struct PirateWeatherTests {
         #expect(report.hourly.contains { $0.condition == .freezingRain })
     }
 
+    @Test func alertLinksAreWebPagesOnly() throws {
+        let fetched = Date(timeIntervalSince1970: 1_762_718_100)
+        let page = try fixture("pirateweather-forecast")
+        let original = "https://severeweather.wmo.int/v2/cap-alerts/ca-msc-xx/2025/11/09/16/09/12-3372a8228b861e43112cdf50691d180.xml"
+        for link in ["file:///Applications/Calculator.app", "smb://server/share"] {
+            let changed = Data(String(decoding: page, as: UTF8.self).replacingOccurrences(of: original, with: link).utf8)
+            let report = try PirateWeather.report(from: changed, timeZone: .current, fetched: fetched)
+            #expect(report.alerts.count == 1 && report.alerts[0].url == nil, "\(link)")
+        }
+    }
+
     @Test func iconsBecomeConditions() {
         #expect(PirateWeather.condition(["icon": "rain", "precipIntensity": 9.0]) == .heavyRain)
         #expect(PirateWeather.condition(["icon": "sleet", "precipType": "ice"]) == .freezingRain)
