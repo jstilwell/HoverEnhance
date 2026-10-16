@@ -111,7 +111,11 @@ struct WelcomeView: View {
 
             HStack(spacing: 8) {
                 ProgressView().controlSize(.small)
-                Text("Waiting for access. This window moves on by itself.").foregroundStyle(.secondary)
+                // Before access, the app has no menu bar icon to come back to, so closing quits; see `AppDelegate`.
+                Text(isReturning ? "Waiting for access. This window moves on by itself."
+                                 : "Waiting for access. This window moves on by itself; closing it quits HoverEnhance.")
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
             DisclosureGroup("Listed and switched on, but nothing happens?", isExpanded: $showsTroubleshooting) {
