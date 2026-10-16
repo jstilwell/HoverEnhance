@@ -25,6 +25,9 @@ struct MediaMetadataTests {
         #expect(metadata.audio == "22.05 kHz mono")
         let artwork = try #require(metadata.artwork)
         #expect(NSImage(data: artwork)?.size == CGSize(width: 48, height: 48))
+        // A large preview decodes it at the size it's shown, as images from the web are.
+        let shown = try #require(ImageDecoder.decode(artwork, from: URL(filePath: "/tmp/tagged.mp3"), maxPixelSize: 24))
+        #expect(shown.image.size == CGSize(width: 24, height: 24) && shown.pixelSize == CGSize(width: 48, height: 48))
     }
 
     @Test func untaggedAudioStillHasItsFormat() async throws {
