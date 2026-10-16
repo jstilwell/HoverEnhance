@@ -63,6 +63,24 @@ struct OtherAppsPolicyTests {
     }
 }
 
+struct WebmailTests {
+    @Test func webmailPages() {
+        for page in ["https://mail.google.com/mail/u/0/#inbox", "https://outlook.live.com/mail/0/", "https://outlook.office.com/mail/",
+                     "https://mail.yahoo.com/d/folders/1", "https://mail.proton.me/u/0/inbox", "https://app.fastmail.com/mail/Inbox/",
+                     "https://www.icloud.com/mail/", "https://www.icloud.com/mail", "https://us-west.mail.zoho.com/"] {
+            #expect(Webmail.contains(URL(string: page)), "\(page)")
+        }
+    }
+
+    @Test func otherPagesArent() {
+        for page in ["https://www.google.com/search?q=mail", "https://www.icloud.com/photos/", "https://www.icloud.com/mailbox",
+                     "https://evilmail.google.com.example/", "https://notmail.google.com/", "file:///mail.google.com/a.html"] {
+            #expect(!Webmail.contains(URL(string: page)), "\(page)")
+        }
+        #expect(!Webmail.contains(nil))
+    }
+}
+
 struct LocalFileTests {
     private func info(page: String?, link: String? = nil, image: String? = nil) -> HoverInfo {
         var info = HoverInfo(pid: 1, appKind: .browser)

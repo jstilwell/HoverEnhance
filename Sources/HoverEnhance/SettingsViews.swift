@@ -466,6 +466,10 @@ struct SitesSettingsView: View {
                 Footnote("Images and video links on other sites follow the Previews settings.")
             }
             Section {
+                Toggle(isOn: $settings.skipsWebmail) {
+                    Text("Skip webmail")
+                    Text("Gmail, Outlook, iCloud Mail, Yahoo, Proton, and others: a link in an email can tell its sender you read it, and where you are")
+                }
                 SkippedWebsitesEditor(domains: $settings.skippedWebsites)
             } header: {
                 Text("Skipped websites")
