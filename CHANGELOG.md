@@ -23,6 +23,7 @@ All notable changes to this project will be documented in this file.
 - Unsubscribing from a YouTube card works even when YouTube didn't say which subscription subscribing made.
 - After signing out of YouTube or switching accounts, cards no longer show the previous account's subscriptions.
 - Songs with very large artwork open their Finder preview without a pause.
+- Settings says so when a weather provider's key can't be saved to the Keychain.
 
 ## 0.6.0 - 10-15-2026
 
