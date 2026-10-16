@@ -118,7 +118,7 @@ From the menu bar icon:
   holding a key), the hover delay, links in other apps, and apps to skip.
 - **Previews and Video**: what to preview, the largest image to download, the notch, scrolling, and
   playback.
-- **Sites**: websites to skip; the menu can also skip the one you're on.
+- **Sites**: websites to skip, webmail included by default; the menu can also skip the one you're on.
 - **Finder**: what file cards show, and when.
 - **Weather**: the provider, place, and units.
 - **macOS**: the network popup and its public IP lookup.
