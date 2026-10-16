@@ -34,6 +34,8 @@ final class YouTubeAccount {
     private(set) var access: Access = .unknown
 
     @ObservationIgnored private var tokens: GoogleOAuth.Tokens?
+    /// The refresh under way, which cards appearing together share rather than each asking Google.
+    @ObservationIgnored private var refreshing: Task<GoogleOAuth.Tokens, Error>?
 
     init() {
         clientID = UserDefaults.standard.string(forKey: Key.clientID) ?? ""
@@ -81,6 +83,8 @@ final class YouTubeAccount {
             }
             self.tokens = tokens
             status = .signedIn
+            // Perhaps another account than before.
+            Subscription.forgetKnown()
             await checkAccess()
         } catch {
             status = .signedOut
@@ -114,11 +118,16 @@ final class YouTubeAccount {
     /// A current access token, refreshed when it's about to expire.
     func accessToken() async throws -> String {
         if let tokens, tokens.expiresAt.timeIntervalSinceNow > 60 { return tokens.accessToken }
+        if let refreshing { return try await refreshing.value.accessToken }
         guard let refreshToken = Keychain.string(for: Key.refreshToken) else {
             throw GoogleOAuth.Failure.google(code: "invalid_grant", description: nil)
         }
+        let (id, secret) = (trimmedID, trimmedSecret)
+        let refresh = Task { try await GoogleOAuth.refresh(refreshToken, clientID: id, secret: secret) }
+        refreshing = refresh
+        defer { refreshing = nil }
         do {
-            let fresh = try await GoogleOAuth.refresh(refreshToken, clientID: trimmedID, secret: trimmedSecret)
+            let fresh = try await refresh.value
             tokens = fresh
             return fresh.accessToken
         } catch GoogleOAuth.Failure.google(code: "invalid_grant", _) {
@@ -134,6 +143,7 @@ final class YouTubeAccount {
         // delete is no use to anyone.
         try? Keychain.set(nil, for: Key.refreshToken)
         tokens = nil
+        Subscription.forgetKnown()
         status = .signedOut
         access = .unknown
         accountName = nil
