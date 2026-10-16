@@ -173,6 +173,17 @@ installed copies again.
 
 Debug builds check only when asked, so a build from source isn't offered a release over itself.
 
+## README images
+
+`docs/images/` holds the README's pictures: `icon.png` is the website's `static/appicon.png`, and the
+rest are captures of the website's demos at [hoverenhance.com](https://hoverenhance.com), taken with
+Playwright in a 1280×900 window.
+
+- **`browser.gif`**: the `#features` demo's stage (`.scaled`) at 1x, one full cycle (zoom, albums,
+  video, about 30 seconds), encoded with ffmpeg at 15 fps, 640 wide, with a 128-color palette.
+- **`finder.png`, `weather.png`, `network.png`**: the `#finder .finder-stage`, `#weather .scaled`,
+  and `#network .scaled` demos at 2x, each at a moment with its card fully open.
+
 ## Icons and logos
 
 `design/icons/appicon.svg` and `menubar.svg` are the sources; `./bin/render-icons.sh` renders them
