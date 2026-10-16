@@ -122,6 +122,10 @@ struct GitRepositoryTests {
         #expect(GitRepository.withoutCredentials("https://user:pass@example.com/a.git") == "https://example.com/a.git")
         #expect(GitRepository.withoutCredentials("ssh://git@example.com/a.git") == "ssh://git@example.com/a.git")
         #expect(GitRepository.withoutCredentials("git@github.com:a/b.git") == "git@github.com:a/b.git")
+        // Too malformed to parse, here for its port.
+        #expect(GitRepository.withoutCredentials("https://ghp_secret@github.com:x/a/b.git") == "https://github.com:x/a/b.git")
+        #expect(GitRepository.withoutCredentials("ssh://git:secret@example.com:x/a.git") == "ssh://git@example.com:x/a.git")
+        #expect(GitRepository.withoutCredentials("https://github.com:x/a@b.git") == "https://github.com:x/a@b.git")
 
         #expect(GitRepository.displayRemote("git@github.com:jstilwell/HoverEnhance.git") == "github.com/jstilwell/HoverEnhance")
         #expect(GitRepository.displayRemote("https://gitlab.com/group/project.git") == "gitlab.com/group/project")

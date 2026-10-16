@@ -15,6 +15,7 @@ All notable changes to this project will be documented in this file.
 - Resting on a named pipe in Finder, such as one named like a zip file or inside a folder's .git, no longer stalls HoverEnhance.
 - Links and images pointing at a few more forms of local network address, such as the ones VPN apps hand out and IPv4 addresses inside IPv6 ones, are left alone.
 - Weather alert links from Pirate Weather open only web pages.
+- A Git remote too malformed to read no longer shows the access token in it.
 
 ## 0.6.0 - 10-15-2026
 
