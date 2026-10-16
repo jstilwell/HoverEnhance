@@ -72,7 +72,8 @@ app).
   zip's central directory, `AppBundleInfo` an app's Info.plist and signature (a developer's name only
   from a certificate Apple issued), and `GitRepository` a
   repository's branch and remote from its `.git`. Git itself is never run: a repository's settings
-  can make it run commands, and a hovered folder can come from anywhere. `FileUsers` finds apps
+  can make it run commands, and a hovered folder can come from anywhere. Only regular files are
+  opened (`FileDetails.isRegularFile`): a named pipe would wait forever for a writer. `FileUsers` finds apps
   whose windows show the file (`AXDocument`) and processes that hold it open, map it, or work in it
   (`proc_listpidspath`), and quits them. The card grows as slower details fill in
   (`CardHostingView`). `MediaMetadata` reads audio and video files' own tags (ID3, iTunes,
