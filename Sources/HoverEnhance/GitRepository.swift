@@ -45,7 +45,7 @@ struct GitRepository: Sendable, Equatable {
     /// The start of a small file. A repository can come from anywhere, and these files are never large in
     /// a real one, so a huge one isn't read whole.
     private static func text(at url: URL, upTo limit: Int = 1 << 20) -> String? {
-        guard let handle = try? FileHandle(forReadingFrom: url) else { return nil }
+        guard FileDetails.isRegularFile(url), let handle = try? FileHandle(forReadingFrom: url) else { return nil }
         defer { try? handle.close() }
         return (try? handle.read(upToCount: limit)).map { String(decoding: $0, as: UTF8.self) }
     }
@@ -78,11 +78,23 @@ struct GitRepository: Sendable, Equatable {
     /// An https remote can carry a token as its user or password ("https://token@host/…"); it
     /// shouldn't be shown or copied. An ssh remote's user ("ssh://git@host/…") is needed and kept.
     static func withoutCredentials(_ remote: String) -> String {
-        guard var components = URLComponents(string: remote), let scheme = components.scheme?.lowercased(),
-              components.user != nil || components.password != nil else { return remote }
+        guard var components = URLComponents(string: remote) else { return strippingCredentials(fromUnparsed: remote) }
+        guard let scheme = components.scheme?.lowercased(), components.user != nil || components.password != nil else { return remote }
         components.password = nil
         if scheme == "http" || scheme == "https" { components.user = nil }
         return components.string ?? remote
+    }
+
+    /// The same for a remote too malformed to parse ("https://token@host:port/…" with a port that isn't a
+    /// number): everything before the authority's last "@", or for other schemes all but the user.
+    private static func strippingCredentials(fromUnparsed remote: String) -> String {
+        guard let schemeEnd = remote.range(of: "://") else { return remote }
+        let authorityEnd = remote[schemeEnd.upperBound...].firstIndex(of: "/") ?? remote.endIndex
+        guard let at = remote[schemeEnd.upperBound ..< authorityEnd].lastIndex(of: "@") else { return remote }
+        let scheme = remote[..<schemeEnd.lowerBound].lowercased()
+        let userInfo = remote[schemeEnd.upperBound ..< at]
+        let kept = scheme == "http" || scheme == "https" ? "" : userInfo.prefix { $0 != ":" } + "@"
+        return remote[..<schemeEnd.upperBound] + kept + remote[remote.index(after: at)...]
     }
 
     /// "github.com/jstilwell/HoverEnhance", from the https or scp-style ("git@host:path") URL.

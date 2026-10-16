@@ -21,7 +21,8 @@ final class Subscription {
     private(set) var status: Status = .checking
     private(set) var error: String?
 
-    /// Recent answers, so hovering around a page doesn't spend quota re-asking. Session only.
+    /// Recent answers, so hovering around a page doesn't spend quota re-asking. Session only, and the
+    /// signed-in account's only: see `forgetKnown`.
     private static var known: [String: (subscriptionID: String?, time: Date)] = [:]
     private static let knownLifetime: TimeInterval = 10 * 60
 
@@ -57,7 +58,11 @@ final class Subscription {
             let token = try await account.accessToken()
             switch before {
             case .subscribed(let id):
-                try await YouTubeAPI.unsubscribe(id, token: token)
+                // Empty when subscribing didn't say the new subscription's ID; look it up now. Gone already
+                // if there's none.
+                if let id = id.isEmpty ? try await YouTubeAPI.subscriptionID(to: channelID, token: token) : id {
+                    try await YouTubeAPI.unsubscribe(id, token: token)
+                }
                 remember(nil)
             case .notSubscribed:
                 do {
@@ -72,6 +77,11 @@ final class Subscription {
         } catch {
             fail(error, fallback: account.status == .signedIn ? before : .signedOut)
         }
+    }
+
+    /// Drops every answer, which were another account's, or no one's, once its account signs out or changes.
+    static func forgetKnown() {
+        known = [:]
     }
 
     private func remember(_ subscriptionID: String?) {

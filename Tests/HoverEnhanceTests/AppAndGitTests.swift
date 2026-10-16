@@ -49,6 +49,13 @@ struct AppBundleInfoTests {
         #expect(AppBundleInfo.signature(of: unsigned) == "Not signed")
     }
 
+    @Test func onlyAppleIssuedCertificatesVouchForTheirName() throws {
+        // A tiny program signed with a self-signed certificate named like a Developer ID; see Fixtures/README.md.
+        let fake = try #require(Bundle.module.url(forResource: "fake-developer-id", withExtension: nil, subdirectory: "Fixtures/signing"))
+        let signature = try #require(AppBundleInfo.signature(of: fake))
+        #expect(signature.hasPrefix("Unverified certificate “Developer ID Application: Fake Developer (ABCDE12345)”"), "\(signature)")
+    }
+
     @Test func signaturesCheckEveryFile() throws {
         let scratch = try Scratch()
         func app(_ name: String) throws -> URL {
@@ -115,6 +122,10 @@ struct GitRepositoryTests {
         #expect(GitRepository.withoutCredentials("https://user:pass@example.com/a.git") == "https://example.com/a.git")
         #expect(GitRepository.withoutCredentials("ssh://git@example.com/a.git") == "ssh://git@example.com/a.git")
         #expect(GitRepository.withoutCredentials("git@github.com:a/b.git") == "git@github.com:a/b.git")
+        // Too malformed to parse, here for its port.
+        #expect(GitRepository.withoutCredentials("https://ghp_secret@github.com:x/a/b.git") == "https://github.com:x/a/b.git")
+        #expect(GitRepository.withoutCredentials("ssh://git:secret@example.com:x/a.git") == "ssh://git@example.com:x/a.git")
+        #expect(GitRepository.withoutCredentials("https://github.com:x/a@b.git") == "https://github.com:x/a@b.git")
 
         #expect(GitRepository.displayRemote("git@github.com:jstilwell/HoverEnhance.git") == "github.com/jstilwell/HoverEnhance")
         #expect(GitRepository.displayRemote("https://gitlab.com/group/project.git") == "gitlab.com/group/project")

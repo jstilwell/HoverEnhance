@@ -124,13 +124,14 @@ private struct AudioArtworkView: View {
 enum LocalImage {
     /// The image's size in pixels as shown (after its EXIF orientation), without decoding it.
     static func pixelSize(of url: URL) -> CGSize? {
-        CGImageSourceCreateWithURL(url as CFURL, nil).flatMap { ImageDecoder.Picture($0) }?.pixelSize
+        guard FileDetails.isRegularFile(url) else { return nil }
+        return CGImageSourceCreateWithURL(url as CFURL, nil).flatMap { ImageDecoder.Picture($0) }?.pixelSize
     }
 
     /// Decoded with its long edge at most `maxPixelSize`; animations whole, so they play.
     static func load(_ url: URL, maxPixelSize: Int) -> NSImage? {
-        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil), let picture = ImageDecoder.Picture(source),
-              picture.isDecodable else { return nil }
+        guard FileDetails.isRegularFile(url), let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+              let picture = ImageDecoder.Picture(source), picture.isDecodable else { return nil }
         if picture.isAnimation { return NSImage(contentsOf: url) }
         return ImageDecoder.thumbnail(of: picture, in: source, maxPixelSize: maxPixelSize)
     }

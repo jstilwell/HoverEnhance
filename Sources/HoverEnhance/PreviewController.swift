@@ -467,10 +467,19 @@ final class PreviewController {
             self.transport = transport
             content = .video(player, transport)
         case .audio:
+            // Tags can hold artwork of any size; it's decoded off the main thread at the size shown, with
+            // the same limits as images from the web. Twice the side covers art that isn't square, as it
+            // fills the square.
+            let scale = ScreenSpace.screen(containing: requested.anchor)?.backingScaleFactor ?? 2
+            let pixels = Int(max(mediaSize.width, mediaSize.height) * scale) * 2
+            let artwork = await Task.detached { [data = details.media?.artwork] in
+                data.flatMap { ImageDecoder.decode($0, from: url, maxPixelSize: pixels)?.image }
+            }.value
+            guard !Task.isCancelled, target == requested else { return nil }
             let transport = MediaTransport(duration: details.media?.duration ?? details.duration) { [weak self] in self?.playAudio(url) }
             transport.loadDuration(of: url)
             self.transport = transport
-            content = .audio(artwork: details.media?.artwork.flatMap(NSImage.init(data:)), transport: transport)
+            content = .audio(artwork: artwork, transport: transport)
         }
         let view = CardHostingView(rootView: FileMediaCardView(card: card, content: content, layout: layout, mediaSize: mediaSize))
         // The list of apps using the file fills in after the card appears.

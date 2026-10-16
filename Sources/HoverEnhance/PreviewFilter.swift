@@ -185,3 +185,23 @@ enum SkippedWebsites {
         return domains.contains { host == $0 || host.hasSuffix("." + $0) }
     }
 }
+
+/// Email read in a browser. A link in an email can tell its sender the message was read, and from where,
+/// as in an email app; webmail shields its own images behind a proxy, but a preview would load the link
+/// straight from the Mac.
+enum Webmail {
+    /// Hosts that serve only mail, and their subdomains.
+    private static let hosts = [
+        "mail.google.com", "outlook.live.com", "outlook.office.com", "outlook.office365.com", "outlook.cloud.microsoft",
+        "mail.yahoo.com", "mail.aol.com", "mail.proton.me", "mail.protonmail.com", "app.fastmail.com", "app.tuta.com",
+        "mail.tutanota.com", "app.hey.com", "mail.zoho.com", "mail.zoho.eu", "mail.yandex.com", "mail.yandex.ru",
+    ]
+
+    static func contains(_ page: URL?) -> Bool {
+        guard let page, ["http", "https"].contains(page.scheme?.lowercased()),
+              let host = page.host(percentEncoded: false)?.lowercased() else { return false }
+        // iCloud's other apps share its host.
+        if host == "www.icloud.com" || host == "icloud.com" { return page.path() == "/mail" || page.path().hasPrefix("/mail/") }
+        return hosts.contains { host == $0 || host.hasSuffix("." + $0) }
+    }
+}

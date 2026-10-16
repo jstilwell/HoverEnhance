@@ -41,8 +41,11 @@ app).
   (`InspectionPolicy`) get only the hit-test.
 - `MediaResolver` turns the hovered image or link into a `MediaSource` (`ImageRules` for full-size
   image URLs, `SiteLinks` for posts and videos), following `file:` URLs only from local pages, and
-  to the local network (`LocalNetwork`: loopback, private ranges, `.local`) only from local pages,
-  redirects included, apart from a video's, which AVPlayer follows itself. `MediaFetcher` does any
+  to the local network (`LocalNetwork`: loopback, private ranges, `.local`, and IPv4 addresses
+  inside NAT64 and 6to4 ones) only from local pages, redirects included, apart from a video's,
+  which AVPlayer follows itself. `ImageLoader` sends and keeps cookies only for the sites in
+  `MediaSite` (`LimitedDownloader` handles them itself, from the shared storage), so an image host
+  can't track the user across sites; AVPlayer keeps its own. `MediaFetcher` does any
   lookup the site needs (`SiteAPIs`, `RedditGallery`), giving `Media`: one item or an album, with
   web addresses only; lookups that fail are remembered for a minute. Nothing is previewed over a
   video the page shows (WebKit gives videos their URL; Chromium shows them as plain groups, found
@@ -67,9 +70,11 @@ app).
   records first, so protected folders aren't opened just to describe a file, and reads nothing of a
   file that's only in the cloud (the app also turns off downloading such files on read, in
   `main.swift`); `FileStatus` covers tags, iCloud, quarantine, and aliases, `ZipSummary` reads a
-  zip's central directory, `AppBundleInfo` an app's Info.plist and signature, and `GitRepository` a
+  zip's central directory, `AppBundleInfo` an app's Info.plist and signature (a developer's name only
+  from a certificate Apple issued), and `GitRepository` a
   repository's branch and remote from its `.git`. Git itself is never run: a repository's settings
-  can make it run commands, and a hovered folder can come from anywhere. `FileUsers` finds apps
+  can make it run commands, and a hovered folder can come from anywhere. Only regular files are
+  opened (`FileDetails.isRegularFile`): a named pipe would wait forever for a writer. `FileUsers` finds apps
   whose windows show the file (`AXDocument`) and processes that hold it open, map it, or work in it
   (`proc_listpidspath`), and quits them. The card grows as slower details fill in
   (`CardHostingView`). `MediaMetadata` reads audio and video files' own tags (ID3, iTunes,
@@ -124,7 +129,8 @@ app).
 - `Updates` wraps Sparkle's updater; the Makefile bundles `Sparkle.framework` into the app (without
   the XPC services, which only sandboxed apps use) and signs it from the inside out.
 - `GlobalShortcut` registers the pause shortcut as a Carbon hot key, which needs no further
-  permission. `SkippedWebsites` matches the websites previews skip, by domain and subdomain.
+  permission. `SkippedWebsites` matches the websites previews skip, by domain and subdomain, and
+  `Webmail` the webmail pages skipped unless Settings → Sites allows them.
 - `AppSettings` keeps settings in UserDefaults; code reads it where it's used, so changes apply at
   once. `SettingsWindowController` shows the SwiftUI tabs in `SettingsViews`.
 - Reddit answers scripted requests with a JavaScript check; `WebPageLoader` passes it in an
@@ -144,7 +150,7 @@ latest GitHub release (`SUFeedURL`, through `releases/latest/download/appcast.xm
 update only if it's signed with the key whose public half is `SUPublicEDKey`. To release:
 
 1. Raise `CFBundleShortVersionString` in `Resources/Info.plist` and add a dated entry for it to
-   `CHANGELOG.md` (its bullets become the release notes).
+   `CHANGELOG.md` (its bullets become the release notes, as HTML-escaped plain text in Sparkle's window).
 2. Commit, then run `./bin/build-release.sh --upload`.
 3. Bring [hoverenhance.com](https://hoverenhance.com) up to date: the `FALLBACK` release in its
    `src/routes/+page.server.ts`, and anything else the release changes. Merging doesn't publish it;

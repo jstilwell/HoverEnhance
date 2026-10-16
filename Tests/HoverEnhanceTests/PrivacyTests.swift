@@ -63,6 +63,24 @@ struct OtherAppsPolicyTests {
     }
 }
 
+struct WebmailTests {
+    @Test func webmailPages() {
+        for page in ["https://mail.google.com/mail/u/0/#inbox", "https://outlook.live.com/mail/0/", "https://outlook.office.com/mail/",
+                     "https://mail.yahoo.com/d/folders/1", "https://mail.proton.me/u/0/inbox", "https://app.fastmail.com/mail/Inbox/",
+                     "https://www.icloud.com/mail/", "https://www.icloud.com/mail", "https://us-west.mail.zoho.com/"] {
+            #expect(Webmail.contains(URL(string: page)), "\(page)")
+        }
+    }
+
+    @Test func otherPagesArent() {
+        for page in ["https://www.google.com/search?q=mail", "https://www.icloud.com/photos/", "https://www.icloud.com/mailbox",
+                     "https://evilmail.google.com.example/", "https://notmail.google.com/", "file:///mail.google.com/a.html"] {
+            #expect(!Webmail.contains(URL(string: page)), "\(page)")
+        }
+        #expect(!Webmail.contains(nil))
+    }
+}
+
 struct LocalFileTests {
     private func info(page: String?, link: String? = nil, image: String? = nil) -> HoverInfo {
         var info = HoverInfo(pid: 1, appKind: .browser)
@@ -100,13 +118,15 @@ struct LocalNetworkTests {
         for host in ["localhost", "app.localhost", "printer.local", "router", "127.0.0.1", "10.0.0.8", "172.20.1.1", "192.168.1.1",
                      "169.254.10.1", "100.100.1.1", "0.0.0.0", "224.0.0.251", "::1", "[::1]", "fe80::1", "fd12:3456::1",
                      "::ffff:192.168.1.1", "printer.local.", "3232235777", "0xC0A80101", "0300.0250.1.1", "10.1",
-                     "router.home.arpa", "nas.internal", "printer.lan"] {
+                     "router.home.arpa", "nas.internal", "printer.lan", "198.18.0.1", "198.19.255.1", "192.0.0.8",
+                     "64:ff9b::c0a8:101", "64:ff9b::7f00:1", "2002:c0a8:101::1", "2002:a00:1::"] {
             #expect(LocalNetwork.contains(host: host), "\(host)")
         }
     }
 
     @Test func publicAddressesAndNames() {
-        for host in ["example.com", "i.redd.it", "8.8.8.8", "172.32.0.1", "100.128.0.1", "2606:4700::1111", "::ffff:8.8.8.8", "local.example.com"] {
+        for host in ["example.com", "i.redd.it", "8.8.8.8", "172.32.0.1", "100.128.0.1", "2606:4700::1111", "::ffff:8.8.8.8", "local.example.com",
+                     "198.20.0.1", "192.0.1.1", "64:ff9b::808:808", "2002:808:808::1", "2001:4860::8888"] {
             #expect(!LocalNetwork.contains(host: host), "\(host)")
         }
         #expect(!LocalNetwork.contains(URL(string: "data:image/png;base64,AAAA")))
