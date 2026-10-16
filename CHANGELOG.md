@@ -18,6 +18,7 @@ All notable changes to this project will be documented in this file.
 - A Git remote too malformed to read no longer shows the access token in it.
 - Unsubscribing from a YouTube card works even when YouTube didn't say which subscription subscribing made.
 - After signing out of YouTube or switching accounts, cards no longer show the previous account's subscriptions.
+- Songs with very large artwork open their Finder preview without a pause.
 
 ## 0.6.0 - 10-15-2026
 
