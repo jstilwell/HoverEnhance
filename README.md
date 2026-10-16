@@ -48,6 +48,8 @@ or later.
   subscribe to YouTube channels.
 - **Not your network**: links and images on a web page that point at your router, printer, or anything
   else on your local network are left alone.
+- **No tracking cookies**: images from anywhere but the sites under Settings → Sites load without
+  cookies, so they can't follow you from site to site.
 - **Weather where you say**: nothing is looked up until you pick a place or allow your location, which
   goes to the weather provider you choose rounded to about a kilometer (and, in the US, to the
   National Weather Service for alerts when your provider has none, unless you turn that off).

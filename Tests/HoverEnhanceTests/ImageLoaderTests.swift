@@ -108,12 +108,15 @@ struct RefererTests {
     }
 }
 
-/// Serves https://stub.test/<name>.png?size=<bytes>[&declare=0][&claim=<bytes>][&status=<code>]: a small
-/// PNG padded to `size` bytes, sent in 64 KB pieces, with a Content-Length unless `declare=0`, or `claim`
-/// if given. It counts the requests for each address.
+/// Serves https://stub.test/<name>.png?size=<bytes>[&declare=0][&claim=<bytes>][&status=<code>][&cookie=<value>]:
+/// a small PNG padded to `size` bytes, sent in 64 KB pieces, with a Content-Length unless `declare=0`, or
+/// `claim` if given, and setting the cookie `id` to `cookie` if given. It counts the requests for each
+/// address, and keeps the Cookie header of the last.
 final class StubImageServer: URLProtocol, @unchecked Sendable {
     private static let counts = OSAllocatedUnfairLock<[URL: Int]>(initialState: [:])
     static func requests(for url: URL) -> Int { counts.withLock { $0[url] ?? 0 } }
+    private static let cookies = OSAllocatedUnfairLock<[URL: String]>(initialState: [:])
+    static func cookieSent(to url: URL) -> String? { cookies.withLock { $0[url] } }
 
     static let png: Data = {
         let context = CGContext(data: nil, width: 40, height: 30, bitsPerComponent: 8, bytesPerRow: 0,
@@ -145,11 +148,13 @@ final class StubImageServer: URLProtocol, @unchecked Sendable {
     override func startLoading() {
         guard let url = request.url, let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems else { return }
         Self.counts.withLock { $0[url, default: 0] += 1 }
+        Self.cookies.withLock { $0[url] = request.value(forHTTPHeaderField: "Cookie") }
         let size = items.first { $0.name == "size" }?.value.flatMap(Int.init) ?? 0
         let status = items.first { $0.name == "status" }?.value.flatMap(Int.init) ?? 200
         var body = Self.png
         if body.count < size { body.append(Data(count: size - body.count)) }
         var headers = ["Content-Type": "image/png"]
+        if let cookie = items.first(where: { $0.name == "cookie" })?.value { headers["Set-Cookie"] = "id=\(cookie); Path=/" }
         if items.first(where: { $0.name == "declare" })?.value != "0" {
             headers["Content-Length"] = items.first { $0.name == "claim" }?.value ?? "\(body.count)"
         }
@@ -225,5 +230,42 @@ struct ImageSizeLimitTests {
         let anyway = await loader.load([big, small], page: nil, maxPixelSize: 500, byteLimit: nil)
         guard case .loaded(let image) = anyway else { Issue.record("expected loaded, got \(anyway)"); return }
         #expect(image.url == big && image.pixelSize == CGSize(width: 40, height: 30))
+    }
+}
+
+struct ImageCookieTests {
+    /// A downloader as the image loader makes one, with a fresh cookie storage: the session keeps none,
+    /// and only addresses with "known" in their path share cookies.
+    private func downloader() -> (LimitedDownloader, HTTPCookieStorage) {
+        let configuration = StubImageServer.configuration()
+        configuration.httpCookieStorage = nil
+        configuration.httpShouldSetCookies = false
+        let storage = URLSessionConfiguration.ephemeral.httpCookieStorage!
+        return (LimitedDownloader(configuration: configuration, cookieStorage: storage) { $0.path().contains("known") }, storage)
+    }
+
+    @Test func otherHostsCantSetACookieAndReadItBack() async {
+        let (downloader, storage) = downloader()
+        let tracker = URL(string: "https://stub.test/pixel.png?size=100&cookie=\(UUID().uuidString)")!
+        _ = await downloader.data(for: URLRequest(url: tracker), limit: nil)
+        #expect(storage.cookies?.isEmpty == true)
+        _ = await downloader.data(for: URLRequest(url: tracker), limit: nil)
+        #expect(StubImageServer.cookieSent(to: tracker) == nil)
+        // Nor does a cookie the request arrives with go along.
+        var request = URLRequest(url: tracker)
+        request.setValue("id=smuggled", forHTTPHeaderField: "Cookie")
+        _ = await downloader.data(for: request, limit: nil)
+        #expect(StubImageServer.cookieSent(to: tracker) == nil)
+    }
+
+    @Test func knownSitesKeepTheirCookies() async {
+        let (downloader, storage) = downloader()
+        let value = UUID().uuidString
+        let site = URL(string: "https://stub.test/known/a.png?size=100&cookie=\(value)")!
+        _ = await downloader.data(for: URLRequest(url: site), limit: nil)
+        #expect(storage.cookies?.map(\.value) == [value])
+        let next = URL(string: "https://stub.test/known/b.png?size=100")!
+        _ = await downloader.data(for: URLRequest(url: next), limit: nil)
+        #expect(StubImageServer.cookieSent(to: next) == "id=\(value)")
     }
 }
