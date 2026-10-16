@@ -113,7 +113,10 @@ ${CHANGELOG_SECTION}"
 APPCAST_FEATURES=""
 while IFS= read -r line; do
     if [[ "$line" == -\ * ]]; then
-        APPCAST_FEATURES="${APPCAST_FEATURES}          <li>${line#- }</li>
+        # Sparkle shows the notes as HTML: escape what HTML would read as markup, and drop Markdown's
+        # emphasis and code marks, which would show as written.
+        item=$(printf '%s' "${line#- }" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g' -e 's/\*\*//g' -e 's/`//g')
+        APPCAST_FEATURES="${APPCAST_FEATURES}          <li>${item}</li>
 "
     fi
 done <<< "$CHANGELOG_SECTION"
