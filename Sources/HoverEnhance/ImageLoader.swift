@@ -37,8 +37,12 @@ actor ImageLoader {
     private var missing: [URL: Date] = [:]
     private static let missingLifetime: TimeInterval = 10 * 60
 
-    init(configuration: URLSessionConfiguration = ImageLoader.configuration()) {
-        downloader = LimitedDownloader(configuration: configuration)
+    /// Only the sites in Settings → Sites get their cookies, such as the one from Reddit's browser check:
+    /// images come from anywhere, and a cookie any of them could set would follow the user from site to site.
+    init(configuration: URLSessionConfiguration = ImageLoader.configuration(), cookieStorage: HTTPCookieStorage? = .shared) {
+        downloader = LimitedDownloader(configuration: configuration, cookieStorage: cookieStorage) { url in
+            url.host().flatMap(MediaSite.init(host:)) != nil
+        }
         // Enough for an album's neighbors and recent hovers; each can be as large as the screen, and an
         // older one comes back from the disk cache quickly. NSCache also gives them up under memory pressure.
         decoded.countLimit = 12
@@ -48,6 +52,9 @@ actor ImageLoader {
     static func configuration() -> URLSessionConfiguration {
         let configuration = URLSessionConfiguration.default
         configuration.urlCache = diskCache
+        // The downloader handles cookies itself; see `init`.
+        configuration.httpCookieStorage = nil
+        configuration.httpShouldSetCookies = false
         configuration.timeoutIntervalForRequest = 15
         configuration.httpAdditionalHeaders = ["Accept": "image/avif,image/webp,image/apng,image/*;q=0.9,*/*;q=0.5"]
         return configuration

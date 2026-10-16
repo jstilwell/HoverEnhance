@@ -4,6 +4,10 @@ import os
 /// Downloads with a size limit. A response that says it's larger than the limit is cancelled as soon
 /// as its headers arrive, and one that doesn't say is cancelled once it grows past the limit, so a
 /// huge file is never read into memory whole.
+///
+/// Cookies are sent and kept only for the hosts `sharesCookies` names, in `cookieStorage`; the session's
+/// own storage should be off. Otherwise any host could set a cookie on one hover and read it back on
+/// another, on another site, which is how third-party tracking cookies work.
 final class LimitedDownloader: NSObject, URLSessionDataDelegate, @unchecked Sendable {
     enum Outcome: Sendable {
         case data(Data, URLResponse)
@@ -25,8 +29,13 @@ final class LimitedDownloader: NSObject, URLSessionDataDelegate, @unchecked Send
     /// In-flight downloads by task; the session calls back on its own queue.
     private let downloads = OSAllocatedUnfairLock<[Int: Download]>(initialState: [:])
     private var session: URLSession!
+    private let cookieStorage: HTTPCookieStorage?
+    private let sharesCookies: @Sendable (URL) -> Bool
 
-    init(configuration: URLSessionConfiguration) {
+    init(configuration: URLSessionConfiguration, cookieStorage: HTTPCookieStorage? = nil,
+         sharesCookies: @escaping @Sendable (URL) -> Bool = { _ in false }) {
+        self.cookieStorage = cookieStorage
+        self.sharesCookies = sharesCookies
         super.init()
         // The session keeps its delegate for as long as it lives, which is as long as this does.
         session = URLSession(configuration: configuration, delegate: self, delegateQueue: nil)
@@ -34,7 +43,7 @@ final class LimitedDownloader: NSObject, URLSessionDataDelegate, @unchecked Send
 
     /// `limit` is in bytes; nil downloads whatever size it is.
     func data(for request: URLRequest, limit: Int64?) async -> Outcome {
-        let task = session.dataTask(with: request)
+        let task = session.dataTask(with: withCookies(request))
         return await withTaskCancellationHandler {
             await withCheckedContinuation { continuation in
                 downloads.withLock { $0[task.taskIdentifier] = Download(limit: limit, continuation: continuation) }
@@ -51,10 +60,29 @@ final class LimitedDownloader: NSObject, URLSessionDataDelegate, @unchecked Send
         download.continuation.resume(returning: outcome(download))
     }
 
+    // MARK: - Cookies
+
+    /// `request` with the cookies stored for its address, if that's a host that shares them, and none otherwise.
+    private func withCookies(_ request: URLRequest) -> URLRequest {
+        var request = request
+        request.setValue(nil, forHTTPHeaderField: "Cookie")
+        guard let url = request.url, sharesCookies(url), let cookies = cookieStorage?.cookies(for: url), !cookies.isEmpty else { return request }
+        for (field, value) in HTTPCookie.requestHeaderFields(with: cookies) { request.setValue(value, forHTTPHeaderField: field) }
+        return request
+    }
+
+    /// Keeps the cookies a response sets, if it's from a host that shares them.
+    private func keepCookies(from response: URLResponse) {
+        guard let response = response as? HTTPURLResponse, let url = response.url, let cookieStorage, sharesCookies(url),
+              let fields = response.allHeaderFields as? [String: String] else { return }
+        cookieStorage.setCookies(HTTPCookie.cookies(withResponseHeaderFields: fields, for: url), for: url, mainDocumentURL: url)
+    }
+
     // MARK: - URLSessionDataDelegate
 
     func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive response: URLResponse,
                     completionHandler: @escaping @Sendable (URLSession.ResponseDisposition) -> Void) {
+        keepCookies(from: response)
         // -1 when the server doesn't say.
         let expected = response.expectedContentLength
         let tooLarge = downloads.withLock { downloads -> Bool in
@@ -89,7 +117,8 @@ final class LimitedDownloader: NSObject, URLSessionDataDelegate, @unchecked Send
 
     func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse,
                     newRequest request: URLRequest, completionHandler: @escaping @Sendable (URLRequest?) -> Void) {
-        completionHandler(LocalRedirectGuard.allows(from: task.originalRequest?.url, to: request.url) ? request : nil)
+        keepCookies(from: response)
+        completionHandler(LocalRedirectGuard.allows(from: task.originalRequest?.url, to: request.url) ? withCookies(request) : nil)
     }
 
     func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: (any Error)?) {

@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## Unreleased
+
+### Fixed
+
+- Images from sites other than the ones under Settings → Sites no longer get or keep cookies, so an image host can't use a cookie to follow you from site to site.
+
 ## 0.6.0 - 10-15-2026
 
 ### Added
