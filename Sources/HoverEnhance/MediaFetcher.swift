@@ -78,6 +78,9 @@ actor MediaFetcher {
             guard let url = Wikipedia.summaryURL(for: ref) else { return .nothing }
             lookedUp = await data(at: url, headers: ["User-Agent": Wikipedia.userAgent], requests)
                 .flatMap(Wikipedia.article).map { Media(items: [.article($0)]) }
+        case .github(let ref):
+            lookedUp = await data(at: GitHub.apiURL(for: ref), headers: GitHub.headers, requests)
+                .flatMap { GitHub.card($0, for: ref) }.map { Media(items: [.github($0)]) }
         case .youtubeChannel(let ref):
             lookedUp = await youtubeCard(ref, requests).map { Media(items: [.channel($0.channel, video: $0.video)]) }
         }

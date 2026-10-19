@@ -265,7 +265,7 @@ final class PreviewController {
                 // The rocker shows the new level.
                 if input.up != 0 { playback.changeVolume(by: input.isPrecise ? input.up * 0.005 : (input.up > 0 ? 0.05 : -0.05)) }
             }
-        case .embed, .channel, .article, .weather, .network:
+        case .embed, .channel, .article, .github, .weather, .network:
             // On the player or card, scrolling belongs to it; on the notch, it mustn't move the page away.
             return !panel.isOnPreview(input.location)
         case .file:
@@ -391,6 +391,12 @@ final class PreviewController {
             playback.stop()
             panel.show(card, counter: counter, anchor: requested.anchor)
             log.infoPrivateInRelease("preview: article card for \(article.url.absoluteString)")
+
+        case .github(let github):
+            let card = NSHostingView(rootView: GitHubCardView(card: github))
+            playback.stop()
+            panel.show(card, counter: counter, anchor: requested.anchor)
+            log.infoPrivateInRelease("preview: GitHub card for \(github.url.absoluteString)")
 
         case .file(let url):
             // Cards wait longer than other previews, so sweeping across a folder doesn't flash them.
