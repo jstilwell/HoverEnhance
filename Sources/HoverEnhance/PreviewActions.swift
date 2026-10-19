@@ -1,28 +1,32 @@
 import AppKit
+import Carbon.HIToolbox
 import ImageIO
 import UniformTypeIdentifiers
 
-/// ⌘C and ⌘S, while a preview shows something they can copy or save.
-enum PreviewShortcut: Sendable, Equatable {
-    case copy, save
+/// What the copy and save shortcuts, and the buttons under a preview, do.
+enum PreviewShortcut: Sendable, Equatable, CaseIterable {
+    case copy, save, saveAs
 
-    /// Only ⌘ with C or S, by the character the key types, so other keyboard layouts work.
-    init?(keyDown event: CGEvent) {
-        let modifiers = event.flags.intersection([.maskCommand, .maskShift, .maskAlternate, .maskControl])
-        guard modifiers == .maskCommand, let key = NSEvent(cgEvent: event)?.charactersIgnoringModifiers?.lowercased() else { return nil }
-        switch key {
-        case "c": self = .copy
-        case "s": self = .save
-        default: return nil
-        }
+    static let defaults: [PreviewShortcut: Shortcut] = [
+        .copy: Shortcut(keyCode: UInt16(kVK_ANSI_C), modifiers: .command, key: "C"),
+        .save: Shortcut(keyCode: UInt16(kVK_ANSI_S), modifiers: .command, key: "S"),
+        .saveAs: Shortcut(keyCode: UInt16(kVK_ANSI_S), modifiers: [.command, .shift], key: "S"),
+    ]
+
+    /// The action whose shortcut `event` is, of `shortcuts`.
+    static func matching(_ event: NSEvent, in shortcuts: [PreviewShortcut: Shortcut]) -> PreviewShortcut? {
+        allCases.first { shortcuts[$0]?.matches(event) == true }
     }
 }
 
-/// While enabled, offers ⌘C and ⌘S to `handler`, which can act on them and swallow them, so the app under
-/// the preview doesn't copy its selection or open a save dialog as well. It's enabled only while a preview
-/// shows something to copy or save, and looks at no other key: every other one goes on as it came.
+/// While enabled, offers the copy and save shortcuts (⌘C, ⌘S, and ⇧⌘S unless changed in Settings) to
+/// `handler`, which can act on them and swallow them, so the app under the preview doesn't copy its
+/// selection or open a save dialog as well. It's enabled only while a preview shows something to copy or
+/// save, and acts on no other key: every other one goes on as it came.
 @MainActor
 final class ShortcutTap {
+    /// The shortcuts to watch for, read at each key press.
+    var shortcuts: () -> [PreviewShortcut: Shortcut] = { [:] }
     /// Return true to swallow the key press.
     var handler: ((PreviewShortcut, _ isRepeat: Bool) -> Bool)?
     var isEnabled = false {
@@ -61,7 +65,8 @@ final class ShortcutTap {
             if isEnabled, let port { CGEvent.tapEnable(tap: port, enable: true) }
             return false
         }
-        guard isEnabled, type == .keyDown, let handler, let shortcut = PreviewShortcut(keyDown: event) else { return false }
+        guard isEnabled, type == .keyDown, let handler, let key = NSEvent(cgEvent: event),
+              let shortcut = PreviewShortcut.matching(key, in: shortcuts()) else { return false }
         return handler(shortcut, event.getIntegerValueField(.keyboardEventAutorepeat) != 0)
     }
 }
@@ -132,18 +137,35 @@ enum PreviewActions {
         return first
     }
 
-    /// Writes `data` to Downloads and records where it came from, as browsers do, for Finder's Get Info
-    /// and HoverEnhance's file cards. Returns the file, or nil if it couldn't be written.
-    static func save(_ data: Data, from url: URL, page: URL?, type: UTType?) -> URL? {
-        let file = unusedURL(for: fileName(for: url, type: type), in: downloads)
-        guard (try? data.write(to: file, options: .withoutOverwriting)) != nil else { return nil }
+    /// Where a save goes.
+    enum Destination: Sendable, Equatable {
+        /// Into a folder, under a name like the original's that isn't taken there.
+        case folder(URL)
+        /// To this file, replacing it: as chosen in a save panel, which asked first.
+        case file(URL)
+
+        func file(for url: URL, type: UTType?) -> URL {
+            switch self {
+            case .folder(let folder): PreviewActions.unusedURL(for: PreviewActions.fileName(for: url, type: type), in: folder)
+            case .file(let file): file
+            }
+        }
+    }
+
+    /// Writes `data` and records where it came from, as browsers do, for Finder's Get Info and
+    /// HoverEnhance's file cards. Returns the file, or nil if it couldn't be written.
+    static func save(_ data: Data, from url: URL, page: URL?, type: UTType?, to destination: Destination) -> URL? {
+        let file = destination.file(for: url, type: type)
+        let replaces = if case .file = destination { true } else { false }
+        guard (try? data.write(to: file, options: replaces ? .atomic : .withoutOverwriting)) != nil else { return nil }
         finishDownload(file, from: url, page: page)
         return file
     }
 
-    /// Moves a downloaded file into Downloads under a name like the original's.
-    static func saveDownload(at temporary: URL, from url: URL, page: URL?, type: UTType?) -> URL? {
-        let file = unusedURL(for: fileName(for: url, type: type), in: downloads)
+    /// Moves a downloaded file to where it's being saved.
+    static func saveDownload(at temporary: URL, from url: URL, page: URL?, type: UTType?, to destination: Destination) -> URL? {
+        let file = destination.file(for: url, type: type)
+        if case .file = destination { try? FileManager.default.removeItem(at: file) }
         guard (try? FileManager.default.moveItem(at: temporary, to: file)) != nil else { return nil }
         finishDownload(file, from: url, page: page)
         return file
@@ -163,7 +185,7 @@ enum PreviewActions {
                 setxattr(file.path(percentEncoded: false), "com.apple.metadata:kMDItemWhereFroms", bytes.baseAddress, bytes.count, 0, 0)
             }
         }
-        // Bounces the Downloads stack in the Dock, as browsers do when a download finishes.
+        // Bounces the Downloads stack in the Dock, as browsers do when a download finishes there.
         DistributedNotificationCenter.default().post(name: Notification.Name("com.apple.DownloadFileFinished"),
                                                      object: file.path(percentEncoded: false))
     }
@@ -178,14 +200,14 @@ enum PreviewActions {
         return URLSession(configuration: configuration)
     }()
 
-    /// Downloads a video file into Downloads. Returns the file, or nil if it couldn't be downloaded.
-    static func save(video url: URL, page: URL?) async -> URL? {
+    /// Downloads a video file. Returns the file, or nil if it couldn't be downloaded.
+    static func save(video url: URL, page: URL?, to destination: Destination) async -> URL? {
         var request = URLRequest(url: url)
         VideoPlayback.headers(for: url).forEach { request.setValue($1, forHTTPHeaderField: $0) }
         guard let (temporary, response) = try? await videoSession.download(for: request, delegate: LocalRedirectGuard.shared) else { return nil }
         defer { try? FileManager.default.removeItem(at: temporary) }
         guard (response as? HTTPURLResponse).map({ (200..<300).contains($0.statusCode) }) ?? false else { return nil }
-        return saveDownload(at: temporary, from: url, page: page, type: videoType(mimeType: response.mimeType, url: url))
+        return saveDownload(at: temporary, from: url, page: page, type: videoType(mimeType: response.mimeType, url: url), to: destination)
     }
 
     /// A movie type for a saved video, from what the server said or the address, or MP4: never anything a

@@ -151,7 +151,10 @@ final class AppSettings {
         static let maximumSize = "maximumSize"
         static let largestImageMegabytes = "largestImageMegabytes"
         static let showsNotch = "showsNotch"
-        static let previewShortcuts = "previewShortcuts"
+        static let copyShortcut = "copyShortcut"
+        static let saveShortcut = "saveShortcut"
+        static let saveAsShortcut = "saveAsShortcut"
+        static let saveFolder = "saveFolder"
         static let imageScroll = "imageScroll"
         static let videoScroll = "videoScroll"
         static let notchVideoScroll = "notchVideoScroll"
@@ -227,8 +230,33 @@ final class AppSettings {
     var largestImageMegabytes: Int { didSet { defaults.set(largestImageMegabytes, forKey: Key.largestImageMegabytes) } }
     var largestImageBytes: Int64 { Int64(largestImageMegabytes) * 1_000_000 }
     var showsNotch: Bool { didSet { defaults.set(showsNotch, forKey: Key.showsNotch) } }
-    /// ⌘C and ⌘S copy and save what a preview shows, rather than reaching the app under it.
-    var previewShortcuts: Bool { didSet { defaults.set(previewShortcuts, forKey: Key.previewShortcuts) } }
+    /// Keys that copy and save what a preview shows, rather than reaching the app under it; nil for none.
+    var copyShortcut: Shortcut? { didSet { setShortcut(copyShortcut, forKey: Key.copyShortcut) } }
+    var saveShortcut: Shortcut? { didSet { setShortcut(saveShortcut, forKey: Key.saveShortcut) } }
+    var saveAsShortcut: Shortcut? { didSet { setShortcut(saveAsShortcut, forKey: Key.saveAsShortcut) } }
+    /// Where Save puts files; nil for Downloads.
+    var saveFolder: URL? { didSet { defaults.set(saveFolder?.path(percentEncoded: false), forKey: Key.saveFolder) } }
+
+    var previewShortcuts: [PreviewShortcut: Shortcut] {
+        [.copy: copyShortcut, .save: saveShortcut, .saveAs: saveAsShortcut].compactMapValues { $0 }
+    }
+
+    /// The folder Save puts files in: the one chosen, while it's there, or Downloads.
+    var saveFolderInUse: URL {
+        var isFolder: ObjCBool = false
+        guard let saveFolder, FileManager.default.fileExists(atPath: saveFolder.path(percentEncoded: false), isDirectory: &isFolder),
+              isFolder.boolValue else { return PreviewActions.downloads }
+        return saveFolder
+    }
+
+    /// A shortcut turned off is kept as empty data: removing the key would bring back the default.
+    private func setShortcut(_ shortcut: Shortcut?, forKey key: String) {
+        defaults.set(shortcut.flatMap { try? JSONEncoder().encode($0) } ?? Data(), forKey: key)
+    }
+
+    private static func shortcut(_ defaults: UserDefaults, _ key: String) -> Shortcut? {
+        defaults.data(forKey: key).flatMap { try? JSONDecoder().decode(Shortcut.self, from: $0) }
+    }
     var imageScroll: ImageScroll { didSet { defaults.set(imageScroll.rawValue, forKey: Key.imageScroll) } }
 
     // Video
@@ -311,7 +339,9 @@ final class AppSettings {
             Key.maximumSize: 1.0,
             Key.largestImageMegabytes: 25,
             Key.showsNotch: true,
-            Key.previewShortcuts: true,
+            Key.copyShortcut: (try? JSONEncoder().encode(PreviewShortcut.defaults[.copy])) ?? Data(),
+            Key.saveShortcut: (try? JSONEncoder().encode(PreviewShortcut.defaults[.save])) ?? Data(),
+            Key.saveAsShortcut: (try? JSONEncoder().encode(PreviewShortcut.defaults[.saveAs])) ?? Data(),
             Key.imageScroll: ImageScroll.zoom.rawValue,
             Key.videoScroll: VideoScroll.scrub.rawValue,
             Key.notchVideoScroll: VideoScroll.volume.rawValue,
@@ -361,7 +391,10 @@ final class AppSettings {
         maximumSize = defaults.double(forKey: Key.maximumSize)
         largestImageMegabytes = defaults.integer(forKey: Key.largestImageMegabytes)
         showsNotch = defaults.bool(forKey: Key.showsNotch)
-        previewShortcuts = defaults.bool(forKey: Key.previewShortcuts)
+        copyShortcut = Self.shortcut(defaults, Key.copyShortcut)
+        saveShortcut = Self.shortcut(defaults, Key.saveShortcut)
+        saveAsShortcut = Self.shortcut(defaults, Key.saveAsShortcut)
+        saveFolder = defaults.string(forKey: Key.saveFolder).map { URL(fileURLWithPath: $0, isDirectory: true) }
         imageScroll = defaults.string(forKey: Key.imageScroll).flatMap(ImageScroll.init(rawValue:)) ?? .zoom
         videoScroll = defaults.string(forKey: Key.videoScroll).flatMap(VideoScroll.init(rawValue:)) ?? .scrub
         notchVideoScroll = defaults.string(forKey: Key.notchVideoScroll).flatMap(VideoScroll.init(rawValue:)) ?? .volume

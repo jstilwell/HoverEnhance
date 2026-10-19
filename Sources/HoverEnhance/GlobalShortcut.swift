@@ -27,16 +27,27 @@ struct Shortcut: Codable, Hashable, Sendable {
 
     /// The key pressed, if it makes a shortcut that works in every app without taking one over: two
     /// modifiers, one of them ⌘, ⌥, or ⌃ (⌘V alone would take over pasting, ⌥P typing π), or a function
-    /// key with any of them.
-    init?(event: NSEvent) {
+    /// key with any of them. `oneModifier` allows one of ⌘, ⌥, and ⌃ alone, for a shortcut that only
+    /// works while a preview is up, as ⌘C does.
+    init?(event: NSEvent, oneModifier: Bool = false) {
         let flags = event.modifierFlags.intersection([.command, .option, .control, .shift])
         guard !flags.isDisjoint(with: [.command, .option, .control]) else { return nil }
         let modifierCount = [NSEvent.ModifierFlags.command, .option, .control, .shift].filter(flags.contains).count
         let isFunctionKey = Self.keyNames[event.keyCode]?.hasPrefix("F") == true
-        guard modifierCount >= 2 || isFunctionKey else { return nil }
+        guard modifierCount >= 2 || isFunctionKey || oneModifier else { return nil }
         let key = Self.keyNames[event.keyCode] ?? event.charactersIgnoringModifiers?.uppercased() ?? ""
         guard !key.isEmpty, !key.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) }) else { return nil }
         self.init(keyCode: event.keyCode, modifiers: flags, key: key)
+    }
+
+    /// Whether `event` is this shortcut. A key that types a character is matched by it, so a shortcut
+    /// recorded as ⌘C, or the ⌘C it starts as, is ⌘C on any keyboard layout; others go by key code.
+    func matches(_ event: NSEvent) -> Bool {
+        guard event.modifierFlags.intersection([.command, .option, .control, .shift]) == modifierFlags else { return false }
+        if Self.keyNames[keyCode] == nil, key.count == 1 {
+            return event.charactersIgnoringModifiers?.uppercased() == key
+        }
+        return event.keyCode == keyCode
     }
 
     /// Keys whose characters don't name them.

@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import UniformTypeIdentifiers
 import WebKit
 
 /// Decides when to show a preview for what the cursor is resting on, and when to hide it.
@@ -51,6 +52,7 @@ final class PreviewController {
 
     init() {
         scrollTap.handler = { [weak self] input in self?.scroll(input) ?? false }
+        shortcutTap.shortcuts = { AppSettings.shared.previewShortcuts }
         shortcutTap.handler = { [weak self] shortcut, isRepeat in self?.perform(shortcut, isRepeat: isRepeat) ?? false }
         playback.onVolumeChange = { [weak self] level, muted in self?.panel.updateVolume(level: level, muted: muted) }
         activationObserver = NSWorkspace.shared.notificationCenter.addObserver(
@@ -235,65 +237,106 @@ final class PreviewController {
         embeds.suspend()
     }
 
-    /// Whether ⌘C or ⌘S do anything for `item`. Finder's own copy works on its files.
-    private static func hasShortcuts(_ item: MediaItem) -> Bool {
+    /// What copying and saving can do with `item`: an image or a video from the web is copied and saved,
+    /// and a card's link copied. Finder's own copy works on its files.
+    private static func actions(for item: MediaItem) -> Set<PreviewShortcut> {
         switch item {
-        case .image, .article, .github: true
-        case .video(let url, _): !url.isFileURL
-        case .embed, .channel, .file, .weather, .network: false
+        case .image: [.copy, .save, .saveAs]
+        case .video(let url, _): url.isFileURL ? [] : [.copy, .save, .saveAs]
+        case .article, .github: [.copy]
+        case .embed, .channel, .file, .weather, .network: []
         }
     }
 
-    /// ⌘C or ⌘S on the preview. Returns whether it acted, in which case the app under it never sees the keys.
-    private func perform(_ shortcut: PreviewShortcut, isRepeat: Bool) -> Bool {
-        guard let showing, let target, AppSettings.shared.previewShortcuts, Self.hasShortcuts(showing) else { return false }
+    /// A copy or save shortcut, or a button under the preview. Returns whether it acted, in which case the
+    /// app under the preview never sees the keys.
+    @discardableResult
+    private func perform(_ action: PreviewShortcut, isRepeat: Bool = false) -> Bool {
+        guard let showing, let target, Self.actions(for: showing).contains(action) else { return false }
+        if isRepeat { return true }
         let page = target.page
-        switch (shortcut, showing) {
-        case (.copy, .image), (.save, .image):
+        let settings = AppSettings.shared
+        switch (action, showing) {
+        case (.copy, .image):
             guard let image = shownImage else { return false }
-            if isRepeat { return true }
             Task {
                 let data = await loader.original(of: image.url, page: page)
-                guard self.target == target else { return }
-                if shortcut == .copy {
-                    PreviewActions.copy(image: data, fallback: image.image)
-                    panel.flash("Copied")
+                PreviewActions.copy(image: data, fallback: image.image)
+                if self.target == target { panel.flash("Copied") }
+            }
+        case (.save, .image), (.saveAs, .image):
+            guard let image = shownImage else { return false }
+            Task {
+                guard let data = await loader.original(of: image.url, page: page) else {
+                    if self.target == target { panel.flash("Couldn't save") }
+                    return
+                }
+                let type = PreviewActions.imageType(of: data)
+                if action == .saveAs {
+                    chooseFile(for: image.url, type: type) { file in
+                        _ = PreviewActions.save(data, from: image.url, page: page, type: type, to: .file(file))
+                    }
                 } else {
-                    let saved = data.flatMap { PreviewActions.save($0, from: image.url, page: page, type: PreviewActions.imageType(of: $0)) }
-                    panel.flash(saved == nil ? "Couldn't save" : "Saved to Downloads")
+                    let folder = settings.saveFolderInUse
+                    let saved = PreviewActions.save(data, from: image.url, page: page, type: type, to: .folder(folder))
+                    if self.target == target { panel.flash(saved == nil ? "Couldn't save" : "Saved to \(Self.name(of: folder))") }
                 }
             }
         case (.copy, .video(let url, _)):
-            if !isRepeat {
-                PreviewActions.copy(link: url)
-                panel.flash("Copied address")
-            }
-        case (.save, .video(let url, _)):
-            if isRepeat { return true }
+            PreviewActions.copy(link: url)
+            panel.flash("Copied address")
+        case (.save, .video(let url, _)), (.saveAs, .video(let url, _)):
             guard PreviewActions.canSave(video: url) else {
                 panel.flash("Streamed videos can't be saved")
                 return true
             }
-            panel.flash("Saving…")
-            // The download goes on if the preview closes; Downloads in the Dock bounces when it's done.
-            Task {
-                let saved = await PreviewActions.save(video: url, page: page)
-                if self.target == target { panel.flash(saved == nil ? "Couldn't save" : "Saved to Downloads") }
+            if action == .saveAs {
+                chooseFile(for: url, type: PreviewActions.videoType(mimeType: nil, url: url)) { file in
+                    Task { _ = await PreviewActions.save(video: url, page: page, to: .file(file)) }
+                }
+            } else {
+                let folder = settings.saveFolderInUse
+                panel.flash("Saving…")
+                // The download goes on if the preview closes; Downloads in the Dock bounces when it's done there.
+                Task {
+                    let saved = await PreviewActions.save(video: url, page: page, to: .folder(folder))
+                    if self.target == target { panel.flash(saved == nil ? "Couldn't save" : "Saved to \(Self.name(of: folder))") }
+                }
             }
         case (.copy, .article(let article)):
-            if !isRepeat {
-                PreviewActions.copy(link: article.url)
-                panel.flash("Copied link")
-            }
+            PreviewActions.copy(link: article.url)
+            panel.flash("Copied link")
         case (.copy, .github(let card)):
-            if !isRepeat {
-                PreviewActions.copy(link: card.url)
-                panel.flash("Copied link")
-            }
+            PreviewActions.copy(link: card.url)
+            panel.flash("Copied link")
         default:
             return false
         }
         return true
+    }
+
+    /// Save As: asks where, starting in the save folder, then calls `save` with the file chosen. The
+    /// panel brings HoverEnhance forward, which ends the preview, and the app that was in front comes
+    /// back once it's done.
+    private func chooseFile(for url: URL, type: UTType?, then save: @escaping @MainActor (URL) -> Void) {
+        let previous = NSWorkspace.shared.frontmostApplication
+        let savePanel = NSSavePanel()
+        savePanel.nameFieldStringValue = PreviewActions.fileName(for: url, type: type)
+        savePanel.directoryURL = AppSettings.shared.saveFolderInUse
+        savePanel.canCreateDirectories = true
+        if let type { savePanel.allowedContentTypes = [type] }
+        NSApp.activate()
+        savePanel.begin { response in
+            MainActor.assumeIsolated {
+                if response == .OK, let file = savePanel.url { save(file) }
+                previous?.activate()
+            }
+        }
+    }
+
+    /// "Downloads", as Finder names the folder.
+    private static func name(of folder: URL) -> String {
+        FileManager.default.displayName(atPath: folder.path(percentEncoded: false))
     }
 
     /// The scroll wheel with the cursor on the notch or the preview acts on the preview. Returns
@@ -498,7 +541,7 @@ final class PreviewController {
         showing = shownAs ?? media.items[position]
         if case .image = media.items[position] {} else { shownImage = nil }
         scrollTap.isEnabled = true
-        shortcutTap.isEnabled = settings.previewShortcuts && showing.map(Self.hasShortcuts) == true
+        shortcutTap.isEnabled = !(showing.map(Self.actions) ?? []).isEmpty
         prefetch(position + 1)
         return true
     }
