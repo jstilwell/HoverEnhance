@@ -72,6 +72,28 @@ enum SiteAPIs {
         return items.isEmpty ? nil : Media(items: items)
     }
 
+    // MARK: - Erome
+
+    static func eromeAlbumURL(_ album: String) -> URL {
+        URL(string: "https://www.erome.com/a/\(album)")!
+    }
+
+    /// The album page puts each photo or video in a `media-group`: a video's `<source>`s, best last, or
+    /// a photo's full-size `data-src`.
+    static func erome(albumPage html: String) -> Media? {
+        let items = html.components(separatedBy: #"class="media-group""#).dropFirst().compactMap { group -> MediaItem? in
+            let sources = group.matches(of: /<source ([^>]*)>/).compactMap { tag -> (url: String, res: Int)? in
+                guard let src = tag.1.firstMatch(of: /src="([^"]+)"/) else { return nil }
+                return (String(src.1), tag.1.firstMatch(of: /res='(\d+)'/).flatMap { Int($0.1) } ?? 0)
+            }
+            if let best = sources.max(by: { $0.res < $1.res }), let url = URL(string: best.url) {
+                return .video(url, size: nil)
+            }
+            return group.firstMatch(of: /class="img" data-src="([^"]+)"/).flatMap { URL(string: String($0.1)) }.map { .image([$0]) }
+        }
+        return items.isEmpty ? nil : Media(items: items)
+    }
+
     // MARK: - X (Twitter)
 
     /// The endpoint X's own embedded tweets use. It needs no account.

@@ -2,7 +2,7 @@ import Foundation
 
 /// Sites with their own preview rules, each of which can be switched off in Settings.
 enum MediaSite: String, CaseIterable, Identifiable, Codable, Sendable {
-    case reddit, x, bluesky, instagram, streamable, youtube, vimeo, tiktok, twitch, imgur, wikimedia, letterboxd, redgifs
+    case reddit, x, bluesky, instagram, streamable, youtube, vimeo, tiktok, twitch, imgur, wikimedia, letterboxd, redgifs, erome
 
     var id: Self { self }
 
@@ -21,6 +21,7 @@ enum MediaSite: String, CaseIterable, Identifiable, Codable, Sendable {
         case .wikimedia: "Wikipedia & Wikimedia"
         case .letterboxd: "Letterboxd"
         case .redgifs: "RedGIFs"
+        case .erome: "Erome"
         }
     }
 
@@ -39,6 +40,7 @@ enum MediaSite: String, CaseIterable, Identifiable, Codable, Sendable {
         case .wikimedia: "Large versions of article images"
         case .letterboxd: "Large posters"
         case .redgifs: "Videos, images, and galleries"
+        case .erome: "Albums of photos and videos"
         }
     }
 
@@ -58,6 +60,7 @@ enum MediaSite: String, CaseIterable, Identifiable, Codable, Sendable {
         else if on("wikimedia.org", "wikipedia.org") { self = .wikimedia }
         else if on("ltrbxd.com", "letterboxd.com") { self = .letterboxd }
         else if on("redgifs.com") { self = .redgifs }
+        else if on("erome.com") { self = .erome }
         else { return nil }
     }
 }
@@ -71,6 +74,7 @@ extension MediaSource {
         case .redditGallery: .reddit
         case .streamable: .streamable
         case .redgifs: .redgifs
+        case .erome: .erome
         case .tweet: .x
         case .blueskyPost: .bluesky
         case .instagram: .instagram
@@ -120,7 +124,7 @@ struct PreviewFilter: Sendable, Equatable {
             // Finder writes folder URLs with a trailing slash and packages, like apps, without.
             return files && (filesOnDesktop || !onDesktop) && (folders || !url.hasDirectoryPath)
         // Posts can hold photos or videos; what's turned off is dropped once they're looked up.
-        case .tweet, .blueskyPost, .instagram, .redgifs: return images || videos
+        case .tweet, .blueskyPost, .instagram, .redgifs, .erome: return images || videos
         }
     }
 

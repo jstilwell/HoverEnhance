@@ -23,6 +23,11 @@ struct SiteLinksTests {
         #expect(source("https://www.reddit.com/gallery/1q2w3er") == .redditGallery(id: "1q2w3er"))
     }
 
+    @Test func eromeLinks() {
+        #expect(source("https://www.erome.com/a/6a0njoMF") == .erome(album: "6a0njoMF"))
+        #expect(source("https://erome.com/a/6a0njoMF?lang=en") == .erome(album: "6a0njoMF"))
+    }
+
     @Test func redgifsLinks() {
         #expect(source("https://www.redgifs.com/watch/carefulinfantiledromaeosaur") == .redgifs(id: "carefulinfantiledromaeosaur"))
         #expect(source("https://v3.redgifs.com/watch/carefulinfantiledromaeosaur#rel=user") == .redgifs(id: "carefulinfantiledromaeosaur"))
@@ -44,6 +49,8 @@ struct SiteLinksTests {
         #expect(source("https://www.redgifs.com/watch/") == nil)
         #expect(source("https://www.redgifs.com/users/someone") == nil)
         #expect(source("https://www.redgifs.com/watch/a.b") == nil)
+        #expect(source("https://www.erome.com/explore") == nil)
+        #expect(source("https://www.erome.com/someone") == nil)
         #expect(source("https://example.com/article") == nil)
     }
 }
@@ -178,6 +185,22 @@ struct SiteAPIsTests {
             == URL(string: "https://api.redgifs.com/v2/gallery/1a081774aaa-0601-8b84-0000-9a730627ddb5"))
         #expect(SiteAPIs.redgifsGalleryURL(id: "../gifs/x") == nil)
         #expect(SiteAPIs.redgifsGif(Data(#"{"error": {"code": "NotFound"}}"#.utf8)) == nil)
+    }
+
+    @Test func eromeAlbumsInOrderWithTheBestVideo() throws {
+        let url = try #require(Bundle.module.url(forResource: "album", withExtension: "html", subdirectory: "Fixtures/erome"))
+        let html = try String(contentsOf: url, encoding: .utf8)
+        #expect(SiteAPIs.erome(albumPage: html)?.items == [
+            .video(URL(string: "https://v1.erome.com/1/AbCd1234/Vid1_720p.mp4")!, size: nil),
+            .image([URL(string: "https://s1.erome.com/1/AbCd1234/Img2.jpg?v=1792423167")!]),
+            .image([URL(string: "https://s1.erome.com/1/AbCd1234/Img3.jpg")!]),
+        ])
+        #expect(SiteAPIs.erome(albumPage: "<html>Album not found</html>") == nil)
+    }
+
+    @Test func eromeVideosAskWithItsPages() {
+        #expect(VideoPlayback.headers(for: URL(string: "https://v1.erome.com/1/A/B.mp4")!) == ["Referer": "https://www.erome.com/"])
+        #expect(VideoPlayback.headers(for: URL(string: "https://noterome.com/B.mp4")!).isEmpty)
     }
 
     @Test func redgifsGalleriesBecomeAnAlbum() {

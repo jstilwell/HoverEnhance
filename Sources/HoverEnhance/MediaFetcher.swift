@@ -66,6 +66,8 @@ actor MediaFetcher {
             lookedUp = await data(at: SiteAPIs.streamableURL(id: id), requests).flatMap(SiteAPIs.streamable)
         case .redgifs(let id):
             lookedUp = await redgifs(id: id, requests)
+        case .erome(let album):
+            lookedUp = await data(at: SiteAPIs.eromeAlbumURL(album), requests).flatMap { SiteAPIs.erome(albumPage: String(decoding: $0, as: UTF8.self)) }
         case .tweet(let id):
             lookedUp = await data(at: SiteAPIs.tweetURL(id: id), requests).flatMap(SiteAPIs.tweet)
         case .blueskyPost(let actor, let rkey):
