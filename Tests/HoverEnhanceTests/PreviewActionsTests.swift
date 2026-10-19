@@ -4,21 +4,38 @@ import UniformTypeIdentifiers
 @testable import HoverEnhance
 
 struct PreviewShortcutTests {
-    private func key(_ code: CGKeyCode, _ character: String, flags: CGEventFlags) -> PreviewShortcut? {
-        let event = CGEvent(keyboardEventSource: nil, virtualKey: code, keyDown: true)!
-        let utf16 = Array(character.utf16)
-        event.keyboardSetUnicodeString(stringLength: utf16.count, unicodeString: utf16)
-        event.flags = flags
-        return PreviewShortcut(keyDown: event)
+    private func key(_ code: UInt16, _ characters: String, _ flags: NSEvent.ModifierFlags) -> NSEvent {
+        NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: flags, timestamp: 0, windowNumber: 0, context: nil,
+                         characters: characters, charactersIgnoringModifiers: characters, isARepeat: false, keyCode: code)!
     }
 
-    @Test func onlyCommandCAndS() {
-        #expect(key(8, "c", flags: .maskCommand) == .copy)
-        #expect(key(1, "s", flags: .maskCommand) == .save)
-        #expect(key(8, "c", flags: []) == nil)
-        #expect(key(8, "c", flags: [.maskCommand, .maskShift]) == nil)
-        #expect(key(1, "s", flags: [.maskCommand, .maskAlternate]) == nil)
-        #expect(key(9, "v", flags: .maskCommand) == nil)
+    @Test func theDefaultsAreCommandCSAndShiftCommandS() {
+        let shortcuts = PreviewShortcut.defaults
+        #expect(PreviewShortcut.matching(key(8, "c", .command), in: shortcuts) == .copy)
+        #expect(PreviewShortcut.matching(key(1, "s", .command), in: shortcuts) == .save)
+        #expect(PreviewShortcut.matching(key(1, "S", [.command, .shift]), in: shortcuts) == .saveAs)
+        #expect(PreviewShortcut.matching(key(8, "c", []), in: shortcuts) == nil)
+        #expect(PreviewShortcut.matching(key(8, "c", [.command, .option]), in: shortcuts) == nil)
+        #expect(PreviewShortcut.matching(key(9, "v", .command), in: shortcuts) == nil)
+    }
+
+    @Test func lettersMatchByTheCharacterTheyType() {
+        // On Dvorak, the key that types C isn't QWERTY's C key.
+        #expect(PreviewShortcut.matching(key(34, "c", .command), in: PreviewShortcut.defaults) == .copy)
+        #expect(PreviewShortcut.matching(key(8, "j", .command), in: PreviewShortcut.defaults) == nil)
+        // Keys named by what they are, like F5, go by key code.
+        let f5 = Shortcut(keyCode: 96, modifiers: .command, key: "F5")
+        #expect(PreviewShortcut.matching(key(96, "\u{F708}", .command), in: [.save: f5]) == .save)
+    }
+
+    @Test func aShortcutTurnedOffMatchesNothing() {
+        #expect(PreviewShortcut.matching(key(8, "c", .command), in: [.save: PreviewShortcut.defaults[.save]!]) == nil)
+    }
+
+    @Test func previewShortcutsTakeOneModifier() {
+        #expect(Shortcut(event: key(8, "c", .command)) == nil)
+        #expect(Shortcut(event: key(8, "c", .command), oneModifier: true) == PreviewShortcut.defaults[.copy])
+        #expect(Shortcut(event: key(8, "c", .shift), oneModifier: true) == nil)
     }
 }
 
@@ -48,6 +65,20 @@ struct SavingTests {
         #expect(PreviewActions.videoType(mimeType: "application/octet-stream", url: url) == .quickTimeMovie)
         #expect(PreviewActions.videoType(mimeType: "text/plain", url: URL(string: "https://example.com/run.command")!) == .mpeg4Movie)
         #expect(PreviewActions.fileName(for: URL(string: "https://example.com/run.command")!, type: .mpeg4Movie) == "run.mp4")
+    }
+
+    @Test func saveAsReplacesTheFileChosen() throws {
+        let folder = FileManager.default.temporaryDirectory.appending(path: "HoverEnhanceTests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let source = URL(string: "https://example.com/a.png")!
+        let first = PreviewActions.save(Data("1".utf8), from: source, page: nil, type: .png, to: .folder(folder))
+        let second = PreviewActions.save(Data("2".utf8), from: source, page: nil, type: .png, to: .folder(folder))
+        #expect(first?.lastPathComponent == "a.png")
+        #expect(second?.lastPathComponent == "a 2.png")
+        let chosen = folder.appending(path: "a.png")
+        #expect(PreviewActions.save(Data("3".utf8), from: source, page: nil, type: .png, to: .file(chosen)) == chosen)
+        #expect(try Data(contentsOf: chosen) == Data("3".utf8))
     }
 
     @Test func streamsCantBeSaved() {

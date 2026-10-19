@@ -20,11 +20,32 @@ struct AppSettingsTests {
         #expect(settings.minimumEnlargement == 1.2)
         #expect(settings.maximumSize == 1)
         #expect(settings.showsNotch)
-        #expect(settings.previewShortcuts)
+        #expect(settings.previewShortcuts == PreviewShortcut.defaults)
+        #expect(settings.saveFolder == nil && settings.saveFolderInUse == PreviewActions.downloads)
         #expect(settings.videosStartMuted)
         #expect(settings.loopVideos && settings.resumeVideos)
         #expect(settings.filter == PreviewFilter())
         #expect(settings.largestImageBytes == 25_000_000)
+    }
+
+    @Test func copyAndSaveKeysStayOffOnceTurnedOff() {
+        let defaults = freshDefaults()
+        let settings = AppSettings(defaults: defaults)
+        settings.copyShortcut = nil
+        let recorded = Shortcut(keyCode: 1, modifiers: [.command, .option], key: "S")
+        settings.saveShortcut = recorded
+        let reloaded = AppSettings(defaults: defaults)
+        #expect(reloaded.copyShortcut == nil)
+        #expect(reloaded.saveShortcut == recorded)
+        #expect(reloaded.previewShortcuts == [.save: recorded, .saveAs: PreviewShortcut.defaults[.saveAs]!])
+    }
+
+    @Test func aSaveFolderThatsGoneMeansDownloads() {
+        let settings = AppSettings(defaults: freshDefaults())
+        settings.saveFolder = URL(fileURLWithPath: "/nonexistent/\(UUID().uuidString)", isDirectory: true)
+        #expect(settings.saveFolderInUse == PreviewActions.downloads)
+        settings.saveFolder = FileManager.default.temporaryDirectory
+        #expect(settings.saveFolderInUse == FileManager.default.temporaryDirectory)
     }
 
     @Test func otherAppsStartOffWithTheSafeChoices() {
