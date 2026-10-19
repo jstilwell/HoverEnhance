@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 ## 0.8.0 - Unreleased
 
+### Added
+
+- Resting on a link to a Wikipedia article shows a card with its picture, description, and opening lines.
+- Resting on a link to a GitHub repository, issue, or pull request shows a card with its stars, state, labels, and changes.
+- While a preview is up, ⌘C copies the image, a video's address, or a card's link, and ⌘S saves the image or video to Downloads; turn this off under Settings → Previews.
+
+### Changed
+
+- "Creator cards" under Settings → Previews is now "Cards", and covers the Wikipedia and GitHub cards too.
+
 ## 0.7.0 - 10-15-2026
 
 ### Added
