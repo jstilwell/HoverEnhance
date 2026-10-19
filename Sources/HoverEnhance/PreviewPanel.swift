@@ -52,13 +52,24 @@ final class PreviewPanel {
     private var rockerReach: CGRect?
     /// Where the preview on screen was shown from, for placing the rocker.
     private var placement: (anchor: CGPoint, placeRight: Bool)?
+    /// Copy, Save, and Save As… under an image or video, while the cursor is on it. It takes clicks.
+    private let bar = NSPanel(
+        contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: true
+    )
+    private let barView = NSVisualEffectView()
+    /// What the bar offers for the content on screen, or nil for none.
+    private var barOffer: (canSave: Bool, shortcuts: [PreviewShortcut: Shortcut])?
+    /// The bar and the gap between it and the preview, in global top-left-origin coordinates.
+    private var barReach: CGRect?
+    /// A button on the bar was clicked.
+    var onBarAction: ((PreviewShortcut) -> Void)?
 
     private let padding = PreviewGeometry.padding
     private let screenMargin: CGFloat = 8
     static let cornerRadius: CGFloat = 12
 
     init() {
-        for window in [panel, notch, rocker] {
+        for window in [panel, notch, rocker, bar] {
             window.level = .statusBar
             window.isOpaque = false
             window.backgroundColor = .clear
@@ -68,8 +79,11 @@ final class PreviewPanel {
             window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
         }
         panel.hasShadow = true
+        bar.ignoresMouseEvents = false
+        bar.hasShadow = true
+        bar.contentView = barView
 
-        for view in [container, notchView] {
+        for view in [container, notchView, barView] {
             view.material = .popover
             view.blendingMode = .behindWindow
             // The panels are never key; without this they'd draw the flat inactive look.
@@ -78,6 +92,7 @@ final class PreviewPanel {
             view.layer?.masksToBounds = true
         }
         notchView.layer?.cornerRadius = 7
+        barView.layer?.cornerRadius = PreviewActionBarView.height / 2
         notch.contentView = notchView
         rocker.contentView = rockerView
         container.layer?.cornerRadius = Self.cornerRadius
@@ -118,11 +133,55 @@ final class PreviewPanel {
         container.addSubview(readout)
     }
 
-    /// Whether a global top-left-origin point is on the preview, its notch, or the volume rocker.
+    /// Whether a global top-left-origin point is on the preview, its notch, the volume rocker, or the
+    /// copy and save buttons.
     func covers(_ point: CGPoint) -> Bool {
         guard panel.isVisible else { return false }
         return ScreenSpace.flip(panel.frame).contains(point) || ScreenSpace.flip(notch.frame).contains(point)
             || (rocker.isVisible && rockerReach?.contains(point) == true)
+            || (bar.isVisible && barReach?.contains(point) == true)
+    }
+
+    /// Offers Copy, Save, and Save As… for the content on screen, or nothing when nil. They show while the
+    /// cursor is on the preview.
+    func offerActions(canSave: Bool?, shortcuts: [PreviewShortcut: Shortcut]) {
+        barOffer = canSave.map { ($0, shortcuts) }
+        if let barOffer {
+            let host = NSHostingView(rootView: PreviewActionBarView(canSave: barOffer.canSave, shortcuts: barOffer.shortcuts) { [weak self] action in
+                self?.onBarAction?(action)
+            })
+            host.frame.size = host.fittingSize
+            barView.subviews.forEach { $0.removeFromSuperview() }
+            barView.addSubview(host)
+            barView.frame.size = host.fittingSize
+        }
+        hideBar()
+        if let cursor = CGEvent(source: nil)?.location { updateActionBar(cursor: cursor) }
+    }
+
+    /// Shows the copy and save buttons while the cursor is on the preview or on them, and hides them otherwise.
+    func updateActionBar(cursor: CGPoint) {
+        let wanted = barOffer != nil && panel.isVisible && !isHiding
+            && (isOnPreview(cursor) || (bar.isVisible && barReach?.contains(cursor) == true))
+        if wanted, !bar.isVisible {
+            placeBar()
+            bar.alphaValue = panel.alphaValue
+            bar.orderFrontRegardless()
+        } else if !wanted, bar.isVisible {
+            hideBar()
+        }
+    }
+
+    private func placeBar() {
+        let preview = ScreenSpace.flip(panel.frame)
+        let frame = PreviewGeometry.actionBarFrame(panel: preview, size: barView.frame.size, visible: visibleFrame(at: CGPoint(x: preview.midX, y: preview.midY)))
+        bar.setFrame(ScreenSpace.flip(frame), display: true)
+        barReach = PreviewGeometry.actionBarReach(bar: frame, panel: preview)
+    }
+
+    private func hideBar() {
+        bar.orderOut(nil)
+        barReach = nil
     }
 
     /// Shows the volume rocker beside the notch, for the video on screen.
@@ -297,6 +356,8 @@ final class PreviewPanel {
             panel.orderOut(nil)
             notch.orderOut(nil)
             hideRocker()
+            hideBar()
+            barOffer = nil
             spinner.stopAnimation(nil)
             imageView.image = nil
             playerView.player = nil
@@ -308,7 +369,7 @@ final class PreviewPanel {
 
     /// Fades both windows, or sets them at once when the system asks for reduced motion.
     private func fade(to alpha: CGFloat, then completion: (@MainActor () -> Void)? = nil) {
-        let windows = [panel, notch] + (rocker.isVisible ? [rocker] : [])
+        let windows = [panel, notch] + (rocker.isVisible ? [rocker] : []) + (bar.isVisible ? [bar] : [])
         guard !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else {
             windows.forEach { $0.alphaValue = alpha }
             completion?()
@@ -362,6 +423,9 @@ final class PreviewPanel {
         notchView.isHidden = !AppSettings.shared.showsNotch
 
         if content !== view {
+            // The buttons belong to what was on screen; whoever shows the new content offers its own.
+            barOffer = nil
+            hideBar()
             if content === loadingView { spinner.stopAnimation(nil) }
             content?.removeFromSuperview()
             container.addSubview(view, positioned: .below, relativeTo: badge)
@@ -382,6 +446,7 @@ final class PreviewPanel {
         notch.orderFrontRegardless()
         panel.orderFrontRegardless()
         panel.invalidateShadow()
+        if bar.isVisible { placeBar() }
         // Fades in when new, and back in if it was fading out.
         if appearing || panel.alphaValue < 1 { fade(to: 1) }
     }

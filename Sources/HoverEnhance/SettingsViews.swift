@@ -179,6 +179,11 @@ struct OtherAppsSheet: View {
 /// Records a key combination: click, then press it. Esc stops without changing it.
 private struct ShortcutRecorder: View {
     @Binding var shortcut: Shortcut?
+    /// For a shortcut that works only while a preview is up: one modifier will do, as for ⌘C, and other
+    /// apps holding the keys don't matter, since the preview takes them first.
+    var whilePreviewing = false
+    /// The other shortcuts it mustn't be the same as.
+    var others: [Shortcut?] = []
     @State private var monitor: Any?
     @State private var problem: String?
 
@@ -211,16 +216,18 @@ private struct ShortcutRecorder: View {
             MainActor.assumeIsolated {
                 if event.keyCode == 53 {
                     stop()
-                } else if let recorded = Shortcut(event: event) {
+                } else if let recorded = Shortcut(event: event, oneModifier: whilePreviewing) {
+                    if others.contains(recorded) {
+                        problem = "\(recorded.label) is in use"
                     // The current shortcut is held by this app, so it's the one combination not to try.
-                    if recorded == shortcut || GlobalShortcut.isAvailable(recorded) {
+                    } else if whilePreviewing || recorded == shortcut || GlobalShortcut.isAvailable(recorded) {
                         shortcut = recorded
                         stop()
                     } else {
                         problem = "\(recorded.label) is taken"
                     }
                 } else {
-                    problem = "Use two of ⌘ ⌥ ⌃ ⇧"
+                    problem = whilePreviewing ? "Use ⌘, ⌥, or ⌃" : "Use two of ⌘ ⌥ ⌃ ⇧"
                 }
             }
             return nil
@@ -230,6 +237,44 @@ private struct ShortcutRecorder: View {
     private func stop() {
         if let monitor { NSEvent.removeMonitor(monitor) }
         monitor = nil
+    }
+}
+
+/// The folder Save puts files in, and a button to choose another. Removing the choice goes back to Downloads.
+private struct SaveFolderPicker: View {
+    @Binding var folder: URL?
+    let inUse: URL
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(nsImage: NSWorkspace.shared.icon(forFile: inUse.path(percentEncoded: false)))
+                .resizable()
+                .frame(width: 16, height: 16)
+            Text(FileManager.default.displayName(atPath: inUse.path(percentEncoded: false)))
+                .help(inUse.path(percentEncoded: false))
+            Button("Choose…", action: choose)
+            if folder != nil {
+                Button {
+                    folder = nil
+                } label: {
+                    Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
+                }
+                .buttonStyle(.borderless)
+                .help("Save to Downloads")
+                .accessibilityLabel("Save to Downloads")
+            }
+        }
+    }
+
+    private func choose() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.canCreateDirectories = true
+        panel.directoryURL = inUse
+        panel.prompt = "Save Here"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        folder = url == PreviewActions.downloads ? nil : url
     }
 }
 
@@ -350,8 +395,8 @@ struct PreviewsSettingsView: View {
                     Text("YouTube, Vimeo, TikTok, and Twitch, in each site's own player")
                 }
                 Toggle(isOn: $settings.showCards) {
-                    Text("Creator cards")
-                    Text("On YouTube, a video title or channel name shows its creator. Thumbnails are left to YouTube.")
+                    Text("Cards")
+                    Text("Links to Wikipedia articles and GitHub repositories, issues, and pull requests. On YouTube, a video title or channel name shows its creator; thumbnails are left to YouTube.")
                 }
             }
             Section {
@@ -384,6 +429,24 @@ struct PreviewsSettingsView: View {
                 Text("Notch and scroll wheel")
             } footer: {
                 Footnote("Moving off the notch any way but onto the preview closes the preview, even with the notch hidden. With the cursor on the notch or the preview, the scroll wheel acts on the preview instead of the page: albums step through their items, and single images do what's set here.")
+            }
+            Section {
+                LabeledContent("Copy") {
+                    ShortcutRecorder(shortcut: $settings.copyShortcut, whilePreviewing: true, others: [settings.saveShortcut, settings.saveAsShortcut])
+                }
+                LabeledContent("Save") {
+                    ShortcutRecorder(shortcut: $settings.saveShortcut, whilePreviewing: true, others: [settings.copyShortcut, settings.saveAsShortcut])
+                }
+                LabeledContent("Save As") {
+                    ShortcutRecorder(shortcut: $settings.saveAsShortcut, whilePreviewing: true, others: [settings.copyShortcut, settings.saveShortcut])
+                }
+                LabeledContent("Save to") {
+                    SaveFolderPicker(folder: $settings.saveFolder, inUse: settings.saveFolderInUse)
+                }
+            } header: {
+                Text("Copy and save")
+            } footer: {
+                Footnote("These keys work only while a preview is up, and the app under it doesn't get them. Copy takes the image, a video's address, or a card's link; Save and Save As take the image or video file. Streamed videos, like Reddit's, can't be saved. With the cursor on an image or video, its buttons do the same.")
             }
         }
         .formStyle(.grouped)

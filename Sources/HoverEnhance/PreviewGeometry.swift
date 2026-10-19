@@ -132,6 +132,27 @@ extension PreviewGeometry {
     static func rockerReach(rocker: CGRect, notch: CGRect) -> CGRect {
         rocker.union(CGRect(x: rocker.minX, y: notch.minY, width: rocker.width, height: notch.height))
     }
+
+    /// Between the preview and the copy and save buttons under it.
+    static let actionBarGap: CGFloat = 6
+
+    /// The copy and save buttons, of `size`: centred under the preview at `panel`, below a video's
+    /// controls; above it when there's no room below, or inside its top edge when there's none either.
+    static func actionBarFrame(panel: CGRect, size: CGSize, visible: CGRect) -> CGRect {
+        let x = min(max(panel.midX - size.width / 2, visible.minX), visible.maxX - size.width)
+        let below = panel.maxY + actionBarGap
+        let above = panel.minY - actionBarGap - size.height
+        let y = below + size.height <= visible.maxY ? below : above >= visible.minY ? above : panel.minY + padding + 8
+        return CGRect(origin: CGPoint(x: x, y: y), size: size)
+    }
+
+    /// The buttons and the gap between them and the preview, so the cursor can move from one to the other.
+    static func actionBarReach(bar: CGRect, panel: CGRect) -> CGRect {
+        guard !panel.intersects(bar) else { return bar }
+        let gap = bar.minY >= panel.maxY ? CGRect(x: bar.minX, y: panel.maxY, width: bar.width, height: bar.minY - panel.maxY)
+            : CGRect(x: bar.minX, y: bar.maxY, width: bar.width, height: panel.minY - bar.maxY)
+        return bar.union(gap)
+    }
 }
 
 /// Where a Finder preview's details go: beside the image, video, or artwork, or below it.

@@ -27,7 +27,8 @@ final class VideoPlayback {
     /// asked for), and doesn't loop, which is for videos.
     func start(_ url: URL, key: String, audioOnly: Bool = false) async -> CGSize? {
         stop()
-        let item = AVPlayerItem(url: url)
+        let headers = Self.headers(for: url)
+        let item = AVPlayerItem(asset: AVURLAsset(url: url, options: headers.isEmpty ? nil : ["AVURLAssetHTTPHeaderFieldsKey": headers]))
         let player = AVPlayer(playerItem: item)
         // AirPlay device discovery would make macOS ask for local network access.
         player.allowsExternalPlayback = false
@@ -79,6 +80,13 @@ final class VideoPlayback {
         }
         if self.player === player { stop() }
         return nil
+    }
+
+    /// What a video's server wants besides the address: Erome's refuse videos asked for from anywhere
+    /// but its own pages.
+    nonisolated static func headers(for url: URL) -> [String: String] {
+        guard let host = url.host()?.lowercased(), host == "erome.com" || host.hasSuffix(".erome.com") else { return [:] }
+        return ["Referer": "https://www.erome.com/"]
     }
 
     /// Moves playback by `seconds`. Returns the new position for display, like "1:23 / 2:45".
