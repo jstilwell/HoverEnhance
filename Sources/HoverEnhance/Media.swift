@@ -10,6 +10,8 @@ enum MediaSource: Sendable, Hashable {
     /// A Reddit gallery post; its page lists the images.
     case redditGallery(id: String)
     case streamable(id: String)
+    /// A RedGIFs video, or an image and the gallery it's in.
+    case redgifs(id: String)
     /// A post on X (Twitter): photos, a video, or a GIF.
     case tweet(id: String)
     /// A Bluesky post; `actor` is a handle or DID.
@@ -33,7 +35,7 @@ extension MediaSource {
     var isPost: Bool {
         switch self {
         case .redditGallery, .tweet, .blueskyPost, .instagram: true
-        case .images, .video, .streamable, .embed, .youtubeChannel, .file, .weather, .network: false
+        case .images, .video, .streamable, .redgifs, .embed, .youtubeChannel, .file, .weather, .network: false
         }
     }
 

@@ -343,7 +343,7 @@ struct PreviewsSettingsView: View {
                 }
                 Toggle(isOn: $settings.showVideos) {
                     Text("Videos")
-                    Text("Streamable, Reddit, X, Bluesky, Instagram, and links to video files")
+                    Text("Streamable, Reddit, X, Bluesky, Instagram, RedGIFs, and links to video files")
                 }
                 Toggle(isOn: $settings.showEmbeds) {
                     Text("Embedded players")

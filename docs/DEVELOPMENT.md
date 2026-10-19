@@ -133,6 +133,8 @@ app).
   `Webmail` the webmail pages skipped unless Settings → Sites allows them.
 - `AppSettings` keeps settings in UserDefaults; code reads it where it's used, so changes apply at
   once. `SettingsWindowController` shows the SwiftUI tabs in `SettingsViews`.
+- RedGIFs' API wants a token it hands anyone, good for a day and only for the address and user agent
+  that asked; `MediaFetcher` keeps one and replaces it once when it's refused.
 - Reddit answers scripted requests with a JavaScript check; `WebPageLoader` passes it in an
   offscreen WebKit view and shares the cookie with URLSession.
 - Chromium browsers and Electron apps only expose web content to accessibility on request, so the

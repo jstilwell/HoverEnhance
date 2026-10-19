@@ -23,6 +23,55 @@ enum SiteAPIs {
         return nil
     }
 
+    // MARK: - RedGIFs
+
+    /// A token for RedGIFs' API, which it hands out to anyone. It lasts a day, and only for the address
+    /// and user agent that asked for it.
+    static let redgifsTokenURL = URL(string: "https://api.redgifs.com/v2/auth/temporary")!
+
+    static func redgifsToken(_ data: Data) -> String? {
+        struct Token: Decodable { let token: String }
+        return (try? JSONDecoder().decode(Token.self, from: data))?.token
+    }
+
+    static func redgifsGifURL(id: String) -> URL {
+        URL(string: "https://api.redgifs.com/v2/gifs/\(id)")!
+    }
+
+    static func redgifsGalleryURL(id: String) -> URL? {
+        guard id.allSatisfy({ $0.isASCII && ($0.isHexDigit || $0 == "-") }) else { return nil }
+        return URL(string: "https://api.redgifs.com/v2/gallery/\(id)")
+    }
+
+    private struct RedgifsGif: Decodable {
+        struct URLs: Decodable { let hd: String?; let sd: String? }
+        /// 1 for a video, 2 for an image.
+        let type: Int?
+        let width: Double?
+        let height: Double?
+        let urls: URLs
+        let gallery: String?
+
+        var item: MediaItem? {
+            let urls = [urls.hd, urls.sd].compactMap { $0.flatMap(URL.init(string:)) }
+            guard let best = urls.first else { return nil }
+            return type == 2 ? .image(urls) : .video(best, size: SiteAPIs.size(width, height))
+        }
+    }
+
+    /// One gif's video or image, and the id of the gallery it's in, if any.
+    static func redgifsGif(_ data: Data) -> (media: Media, gallery: String?)? {
+        struct Response: Decodable { let gif: RedgifsGif }
+        guard let gif = (try? JSONDecoder().decode(Response.self, from: data))?.gif, let item = gif.item else { return nil }
+        return (Media(items: [item]), gif.gallery)
+    }
+
+    static func redgifsGallery(_ data: Data) -> Media? {
+        struct Response: Decodable { let gifs: [RedgifsGif] }
+        let items = (try? JSONDecoder().decode(Response.self, from: data))?.gifs.compactMap(\.item) ?? []
+        return items.isEmpty ? nil : Media(items: items)
+    }
+
     // MARK: - X (Twitter)
 
     /// The endpoint X's own embedded tweets use. It needs no account.

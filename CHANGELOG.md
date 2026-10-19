@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.8.0 - Unreleased
+
+### Added
+
+- RedGIFs links preview their video, image, or gallery; turn them off under Settings → Sites.
+
 ## 0.7.0 - 10-15-2026
 
 ### Added
