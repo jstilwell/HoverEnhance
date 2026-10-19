@@ -11,6 +11,9 @@ final class PreviewController {
     private let embeds = EmbedPlayer()
     private let panel = PreviewPanel()
     private let scrollTap = ScrollTap()
+    private let shortcutTap = ShortcutTap()
+    /// The image on screen, for copying and saving it.
+    private var shownImage: LoadedImage?
     private var activationObserver: NSObjectProtocol?
     private var spaceObserver: NSObjectProtocol?
 
@@ -48,6 +51,7 @@ final class PreviewController {
 
     init() {
         scrollTap.handler = { [weak self] input in self?.scroll(input) ?? false }
+        shortcutTap.handler = { [weak self] shortcut, isRepeat in self?.perform(shortcut, isRepeat: isRepeat) ?? false }
         playback.onVolumeChange = { [weak self] level, muted in self?.panel.updateVolume(level: level, muted: muted) }
         activationObserver = NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main
@@ -221,12 +225,75 @@ final class PreviewController {
         // Take the windows down first; stopping playback can take a moment.
         panel.hide()
         scrollTap.isEnabled = false
+        shortcutTap.isEnabled = false
         showing = nil
+        shownImage = nil
         transport?.detach()
         transport = nil
         albumSteps.reset()
         playback.stop()
         embeds.suspend()
+    }
+
+    /// Whether ⌘C or ⌘S do anything for `item`. Finder's own copy works on its files.
+    private static func hasShortcuts(_ item: MediaItem) -> Bool {
+        switch item {
+        case .image, .article, .github: true
+        case .video(let url, _): !url.isFileURL
+        case .embed, .channel, .file, .weather, .network: false
+        }
+    }
+
+    /// ⌘C or ⌘S on the preview. Returns whether it acted, in which case the app under it never sees the keys.
+    private func perform(_ shortcut: PreviewShortcut, isRepeat: Bool) -> Bool {
+        guard let showing, let target, AppSettings.shared.previewShortcuts, Self.hasShortcuts(showing) else { return false }
+        let page = target.page
+        switch (shortcut, showing) {
+        case (.copy, .image), (.save, .image):
+            guard let image = shownImage else { return false }
+            if isRepeat { return true }
+            Task {
+                let data = await loader.original(of: image.url, page: page)
+                guard self.target == target else { return }
+                if shortcut == .copy {
+                    PreviewActions.copy(image: data, fallback: image.image)
+                    panel.flash("Copied")
+                } else {
+                    let saved = data.flatMap { PreviewActions.save($0, from: image.url, page: page, type: PreviewActions.imageType(of: $0)) }
+                    panel.flash(saved == nil ? "Couldn't save" : "Saved to Downloads")
+                }
+            }
+        case (.copy, .video(let url, _)):
+            if !isRepeat {
+                PreviewActions.copy(link: url)
+                panel.flash("Copied address")
+            }
+        case (.save, .video(let url, _)):
+            if isRepeat { return true }
+            guard PreviewActions.canSave(video: url) else {
+                panel.flash("Streamed videos can't be saved")
+                return true
+            }
+            panel.flash("Saving…")
+            // The download goes on if the preview closes; Downloads in the Dock bounces when it's done.
+            Task {
+                let saved = await PreviewActions.save(video: url, page: page)
+                if self.target == target { panel.flash(saved == nil ? "Couldn't save" : "Saved to Downloads") }
+            }
+        case (.copy, .article(let article)):
+            if !isRepeat {
+                PreviewActions.copy(link: article.url)
+                panel.flash("Copied link")
+            }
+        case (.copy, .github(let card)):
+            if !isRepeat {
+                PreviewActions.copy(link: card.url)
+                panel.flash("Copied link")
+            }
+        default:
+            return false
+        }
+        return true
     }
 
     /// The scroll wheel with the cursor on the notch or the preview acts on the preview. Returns
@@ -311,6 +378,7 @@ final class PreviewController {
                 }
                 playback.stop()
                 panel.show(image, counter: counter, anchor: requested.anchor, focus: Self.focus(of: requested.anchor, in: requested.element))
+                shownImage = image
                 log.infoPrivateInRelease("preview \(position + 1)/\(media.items.count): \(image.url.absoluteString)")
             case .tooLarge(let url, let bytes):
                 let card = NSHostingView(rootView: TooLargeCardView(url: url, bytes: bytes, limit: settings.largestImageBytes) { [weak self] in
@@ -428,7 +496,9 @@ final class PreviewController {
         }
         index = position
         showing = shownAs ?? media.items[position]
+        if case .image = media.items[position] {} else { shownImage = nil }
         scrollTap.isEnabled = true
+        shortcutTap.isEnabled = settings.previewShortcuts && showing.map(Self.hasShortcuts) == true
         prefetch(position + 1)
         return true
     }

@@ -82,12 +82,24 @@ actor ImageLoader {
         return .failed
     }
 
-    private func fetch(_ url: URL, page: URL?, maxPixelSize: Int, byteLimit: Int64?) async -> Outcome {
+    /// The file behind an image shown, as it was downloaded, usually from the disk cache: for copying and
+    /// saving it whole, rather than as decoded for the screen.
+    func original(of url: URL, page: URL?) async -> Data? {
+        guard case .data(let data, let response) = await downloader.data(for: request(for: url, page: page), limit: Self.largestEver),
+              (response as? HTTPURLResponse).map({ (200..<300).contains($0.statusCode) }) ?? true else { return nil }
+        return data
+    }
+
+    private func request(for url: URL, page: URL?) -> URLRequest {
         var request = URLRequest(url: url)
         if let referer = page.flatMap({ Self.referer(from: $0, to: url) }) {
             request.setValue(referer, forHTTPHeaderField: "Referer")
         }
-        switch await downloader.data(for: request, limit: byteLimit) {
+        return request
+    }
+
+    private func fetch(_ url: URL, page: URL?, maxPixelSize: Int, byteLimit: Int64?) async -> Outcome {
+        switch await downloader.data(for: request(for: url, page: page), limit: byteLimit) {
         case .data(let data, let response):
             if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
                 if [404, 410].contains(http.statusCode) {
