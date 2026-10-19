@@ -149,7 +149,14 @@ enum PreviewActions {
         return file
     }
 
-    private static func finishDownload(_ file: URL, from url: URL, page: URL?) {
+    static func finishDownload(_ file: URL, from url: URL, page: URL?) {
+        // Quarantined, as browsers' downloads are, so Gatekeeper checks the file before anything runs it.
+        var quarantine: [String: Any] = [kLSQuarantineTypeKey as String: kLSQuarantineTypeWebDownload, kLSQuarantineDataURLKey as String: url]
+        if let page { quarantine[kLSQuarantineOriginURLKey as String] = page }
+        var resource = file
+        var values = URLResourceValues()
+        values.quarantineProperties = quarantine
+        try? resource.setResourceValues(values)
         let origins = [url.absoluteString] + (page.map { [$0.absoluteString] } ?? [])
         if let plist = try? PropertyListSerialization.data(fromPropertyList: origins, format: .binary, options: 0) {
             _ = plist.withUnsafeBytes { bytes in
@@ -178,9 +185,14 @@ enum PreviewActions {
         guard let (temporary, response) = try? await videoSession.download(for: request, delegate: LocalRedirectGuard.shared) else { return nil }
         defer { try? FileManager.default.removeItem(at: temporary) }
         guard (response as? HTTPURLResponse).map({ (200..<300).contains($0.statusCode) }) ?? false else { return nil }
-        let type = response.mimeType.flatMap { UTType(mimeType: $0) }.flatMap { $0.conforms(to: .movie) ? $0 : nil }
-            ?? UTType(filenameExtension: url.pathExtension)
-        return saveDownload(at: temporary, from: url, page: page, type: type)
+        return saveDownload(at: temporary, from: url, page: page, type: videoType(mimeType: response.mimeType, url: url))
+    }
+
+    /// A movie type for a saved video, from what the server said or the address, or MP4: never anything a
+    /// double-click would run, whatever the address ends in.
+    static func videoType(mimeType: String?, url: URL) -> UTType {
+        let candidates = [mimeType.flatMap { UTType(mimeType: $0) }, UTType(filenameExtension: url.pathExtension)]
+        return candidates.compactMap { $0 }.first { $0.conforms(to: .movie) } ?? .mpeg4Movie
     }
 
     /// Streams (HLS) come in pieces; only a single file can be saved.

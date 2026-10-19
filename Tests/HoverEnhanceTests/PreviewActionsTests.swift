@@ -42,6 +42,14 @@ struct SavingTests {
         #expect(PreviewActions.unusedURL(for: "B.jpg", in: folder) { taken.contains($0.path(percentEncoded: false)) }.lastPathComponent == "B.jpg")
     }
 
+    @Test func savedVideosAreAlwaysMovies() {
+        let url = URL(string: "https://example.com/clip.mov")!
+        #expect(PreviewActions.videoType(mimeType: "video/mp4", url: url) == .mpeg4Movie)
+        #expect(PreviewActions.videoType(mimeType: "application/octet-stream", url: url) == .quickTimeMovie)
+        #expect(PreviewActions.videoType(mimeType: "text/plain", url: URL(string: "https://example.com/run.command")!) == .mpeg4Movie)
+        #expect(PreviewActions.fileName(for: URL(string: "https://example.com/run.command")!, type: .mpeg4Movie) == "run.mp4")
+    }
+
     @Test func streamsCantBeSaved() {
         #expect(!PreviewActions.canSave(video: URL(string: "https://v.redd.it/a/HLSPlaylist.m3u8")!))
         #expect(PreviewActions.canSave(video: URL(string: "https://media.redgifs.com/A.mp4")!))
