@@ -172,3 +172,33 @@ struct FileMediaLayoutTests {
         #expect(size == .zero)
     }
 }
+
+struct ActionBarPlacementTests {
+    private let visible = CGRect(x: 0, y: 25, width: 1440, height: 875)
+    private let size = CGSize(width: 260, height: 30)
+
+    @Test func goesUnderThePreview() {
+        let panel = CGRect(x: 600, y: 200, width: 480, height: 300)
+        let bar = PreviewGeometry.actionBarFrame(panel: panel, size: size, visible: visible)
+        #expect(bar == CGRect(x: 710, y: 506, width: 260, height: 30))
+        // The gap between them counts, so moving down to the buttons doesn't end the hover.
+        #expect(PreviewGeometry.actionBarReach(bar: bar, panel: panel) == CGRect(x: 710, y: 500, width: 260, height: 36))
+    }
+
+    @Test func goesAboveWithoutRoomBelow() {
+        let panel = CGRect(x: 600, y: 500, width: 480, height: 395)
+        #expect(PreviewGeometry.actionBarFrame(panel: panel, size: size, visible: visible).minY == 464)
+    }
+
+    @Test func goesInsideAPreviewAsTallAsTheScreen() {
+        let panel = CGRect(x: 600, y: 25, width: 480, height: 875)
+        let bar = PreviewGeometry.actionBarFrame(panel: panel, size: size, visible: visible)
+        #expect(bar.minY == 25 + PreviewGeometry.padding + 8)
+        #expect(PreviewGeometry.actionBarReach(bar: bar, panel: panel) == bar)
+    }
+
+    @Test func staysOnScreen() {
+        let panel = CGRect(x: 1300, y: 200, width: 140, height: 200)
+        #expect(PreviewGeometry.actionBarFrame(panel: panel, size: size, visible: visible).maxX == 1440)
+    }
+}

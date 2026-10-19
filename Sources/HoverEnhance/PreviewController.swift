@@ -53,6 +53,7 @@ final class PreviewController {
     init() {
         scrollTap.handler = { [weak self] input in self?.scroll(input) ?? false }
         shortcutTap.shortcuts = { AppSettings.shared.previewShortcuts }
+        panel.onBarAction = { [weak self] action in self?.perform(action) }
         shortcutTap.handler = { [weak self] shortcut, isRepeat in self?.perform(shortcut, isRepeat: isRepeat) ?? false }
         playback.onVolumeChange = { [weak self] level, muted in self?.panel.updateVolume(level: level, muted: muted) }
         activationObserver = NSWorkspace.shared.notificationCenter.addObserver(
@@ -175,7 +176,9 @@ final class PreviewController {
             panel.pan(toward: point)
         } else if !target.notch.contains(point) && !panel.covers(point) {
             reset(because: "left the notch")
+            return
         }
+        panel.updateActionBar(cursor: point)
     }
 
     /// Content moved under the cursor. Scrolls the preview took never get here, but in case the
@@ -245,6 +248,15 @@ final class PreviewController {
         case .video(let url, _): url.isFileURL ? [] : [.copy, .save, .saveAs]
         case .article, .github: [.copy]
         case .embed, .channel, .file, .weather, .network: []
+        }
+    }
+
+    /// For an image or video from the web, which get the copy and save buttons: whether it can be saved.
+    private static func barCanSave(_ item: MediaItem) -> Bool? {
+        switch item {
+        case .image: true
+        case .video(let url, _): url.isFileURL ? nil : PreviewActions.canSave(video: url)
+        default: nil
         }
     }
 
@@ -542,6 +554,10 @@ final class PreviewController {
         if case .image = media.items[position] {} else { shownImage = nil }
         scrollTap.isEnabled = true
         shortcutTap.isEnabled = !(showing.map(Self.actions) ?? []).isEmpty
+        // Images and videos from the web get buttons too; a card's link is copied with the key alone.
+        // An image over the size limit shows Load Anyway instead, with nothing to copy yet.
+        let isImageCard = if case .image = showing, shownImage == nil { true } else { false }
+        panel.offerActions(canSave: isImageCard ? nil : showing.flatMap(Self.barCanSave), shortcuts: settings.previewShortcuts)
         prefetch(position + 1)
         return true
     }
