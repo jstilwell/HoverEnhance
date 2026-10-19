@@ -24,6 +24,8 @@ enum MediaSource: Sendable, Hashable {
     case embed(Embed)
     /// On YouTube itself: the creator behind a video or channel link.
     case youtubeChannel(YouTubeChannelRef)
+    /// A link to a Wikipedia article, anywhere but Wikipedia.
+    case wikipedia(WikipediaArticleRef)
     /// In Finder: a file or folder, in a window or on the desktop.
     case file(URL, onDesktop: Bool)
     /// The Weather menu bar item, at `item`: its frame, for hanging the forecast under it.
@@ -37,7 +39,7 @@ extension MediaSource {
     var isPost: Bool {
         switch self {
         case .redditGallery, .tweet, .blueskyPost, .instagram, .erome: true
-        case .images, .video, .streamable, .redgifs, .embed, .youtubeChannel, .file, .weather, .network: false
+        case .images, .video, .streamable, .redgifs, .embed, .youtubeChannel, .wikipedia, .file, .weather, .network: false
         }
     }
 
@@ -59,6 +61,8 @@ enum MediaItem: Sendable, Equatable {
     case embed(Embed)
     /// A card about a YouTube creator, and the video when the link was to one.
     case channel(YouTubeChannel, video: YouTubeVideo?)
+    /// A card about a Wikipedia article.
+    case article(WikipediaArticle)
     /// A card about a file or folder.
     case file(URL)
     /// The forecast, under the menu bar item at `item`.
@@ -93,7 +97,7 @@ struct Media: Sendable, Equatable {
                 return web.isEmpty ? nil : .image(web)
             case .video(let url, _):
                 return isWeb(url) ? item : nil
-            case .embed, .channel, .file, .weather, .network:
+            case .embed, .channel, .article, .file, .weather, .network:
                 return item
             }
         }
@@ -140,6 +144,12 @@ enum MediaResolver {
         if YouTube.isYouTube(info.pageURL) {
             guard info.isOnText, let link = info.linkURL else { return nil }
             if let ref = YouTube.channelRef(fromLink: link) { return .youtubeChannel(ref) }
+        }
+        // A link to an article gets a card about it, unless what's hovered is an image to enlarge. Not on
+        // Wikipedia itself, which has its own page previews.
+        if let link = info.linkURL, let ref = Wikipedia.articleRef(fromLink: link), !Wikipedia.isWikipedia(info.pageURL),
+           info.isOnText || imageCandidates(for: info).isEmpty {
+            return .wikipedia(ref)
         }
         // A link to a post or video outranks the thumbnail inside it.
         if let link = info.linkURL, let source = SiteLinks.source(forLink: link) {

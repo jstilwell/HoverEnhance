@@ -37,7 +37,7 @@ enum MediaSite: String, CaseIterable, Identifiable, Codable, Sendable {
         case .tiktok: "Videos in TikTok's player"
         case .twitch: "Clips in Twitch's player"
         case .imgur: "Full-size images and GIF videos"
-        case .wikimedia: "Large versions of article images"
+        case .wikimedia: "Large versions of article images, and cards for links to articles"
         case .letterboxd: "Large posters"
         case .redgifs: "Videos, images, and galleries"
         case .erome: "Albums of photos and videos"
@@ -79,6 +79,7 @@ extension MediaSource {
         case .blueskyPost: .bluesky
         case .instagram: .instagram
         case .youtubeChannel: .youtube
+        case .wikipedia: .wikimedia
         case .file, .weather, .network: nil
         case .embed(let embed):
             switch embed.site {
@@ -117,7 +118,7 @@ struct PreviewFilter: Sendable, Equatable {
         case .images, .redditGallery: return images
         case .video, .streamable: return videos
         case .embed: return embeds
-        case .youtubeChannel: return cards
+        case .youtubeChannel, .wikipedia: return cards
         case .weather: return weather
         case .network: return network
         case .file(let url, let onDesktop):
@@ -135,7 +136,7 @@ struct PreviewFilter: Sendable, Equatable {
             case .image: images
             case .video: videos
             case .embed: embeds
-            case .channel: cards
+            case .channel, .article: cards
             case .weather: weather
             case .network: network
             case .file: files
