@@ -49,6 +49,18 @@ enum SiteLinks {
                   parts[start + 1].allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "-" || $0 == "_") }) else { return nil }
             return .instagram(code: parts[start + 1])
 
+        case "redgifs.com", "www.redgifs.com", "v3.redgifs.com", "i.redgifs.com":
+            // watch/<id>, ifr/<id> for embeds, and i/<id>[.jpg] for images. Ids are words run together,
+            // written in lowercase by the API and capitalized in media file names.
+            guard parts.count == 3, ["watch", "ifr", "i"].contains(parts[1]) else { return nil }
+            let id = (parts[1] == "i" ? url.deletingPathExtension().lastPathComponent : parts[2]).lowercased()
+            return isAlphanumeric(id) ? .redgifs(id: id) : nil
+
+        case "erome.com", "www.erome.com":
+            // a/<id>
+            guard parts.count == 3, parts[1] == "a", isAlphanumeric(parts[2]) else { return nil }
+            return .erome(album: parts[2])
+
         case "i.imgur.com":
             // .gifv is a web page around an MP4 of the same name.
             guard url.pathExtension.lowercased() == "gifv" else { return nil }

@@ -303,7 +303,7 @@ enum YouTubeFormat {
     }
 }
 
-private extension Color {
+extension Color {
     /// One color in light mode and another in dark, from hex RGB.
     init(light: UInt32, dark: UInt32) {
         self.init(nsColor: NSColor(name: nil) { appearance in
