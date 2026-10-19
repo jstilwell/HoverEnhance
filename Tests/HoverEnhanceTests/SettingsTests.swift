@@ -20,6 +20,7 @@ struct AppSettingsTests {
         #expect(settings.minimumEnlargement == 1.2)
         #expect(settings.maximumSize == 1)
         #expect(settings.showsNotch)
+        #expect(settings.previewShortcuts)
         #expect(settings.videosStartMuted)
         #expect(settings.loopVideos && settings.resumeVideos)
         #expect(settings.filter == PreviewFilter())

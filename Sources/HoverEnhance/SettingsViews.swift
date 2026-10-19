@@ -377,11 +377,15 @@ struct PreviewsSettingsView: View {
             }
             Section {
                 Toggle("Show the notch under the cursor", isOn: $settings.showsNotch)
+                Toggle(isOn: $settings.previewShortcuts) {
+                    Text("⌘C copies and ⌘S saves")
+                    Text("While a preview is up: an image, a video (its address, or the file to Downloads), or a card's link")
+                }
                 Picker("Scroll wheel on images", selection: $settings.imageScroll) {
                     ForEach(ImageScroll.allCases) { Text($0.label).tag($0) }
                 }
             } header: {
-                Text("Notch and scroll wheel")
+                Text("Notch, scroll wheel, and keys")
             } footer: {
                 Footnote("Moving off the notch any way but onto the preview closes the preview, even with the notch hidden. With the cursor on the notch or the preview, the scroll wheel acts on the preview instead of the page: albums step through their items, and single images do what's set here.")
             }

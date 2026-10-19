@@ -151,6 +151,7 @@ final class AppSettings {
         static let maximumSize = "maximumSize"
         static let largestImageMegabytes = "largestImageMegabytes"
         static let showsNotch = "showsNotch"
+        static let previewShortcuts = "previewShortcuts"
         static let imageScroll = "imageScroll"
         static let videoScroll = "videoScroll"
         static let notchVideoScroll = "notchVideoScroll"
@@ -226,6 +227,8 @@ final class AppSettings {
     var largestImageMegabytes: Int { didSet { defaults.set(largestImageMegabytes, forKey: Key.largestImageMegabytes) } }
     var largestImageBytes: Int64 { Int64(largestImageMegabytes) * 1_000_000 }
     var showsNotch: Bool { didSet { defaults.set(showsNotch, forKey: Key.showsNotch) } }
+    /// ⌘C and ⌘S copy and save what a preview shows, rather than reaching the app under it.
+    var previewShortcuts: Bool { didSet { defaults.set(previewShortcuts, forKey: Key.previewShortcuts) } }
     var imageScroll: ImageScroll { didSet { defaults.set(imageScroll.rawValue, forKey: Key.imageScroll) } }
 
     // Video
@@ -308,6 +311,7 @@ final class AppSettings {
             Key.maximumSize: 1.0,
             Key.largestImageMegabytes: 25,
             Key.showsNotch: true,
+            Key.previewShortcuts: true,
             Key.imageScroll: ImageScroll.zoom.rawValue,
             Key.videoScroll: VideoScroll.scrub.rawValue,
             Key.notchVideoScroll: VideoScroll.volume.rawValue,
@@ -357,6 +361,7 @@ final class AppSettings {
         maximumSize = defaults.double(forKey: Key.maximumSize)
         largestImageMegabytes = defaults.integer(forKey: Key.largestImageMegabytes)
         showsNotch = defaults.bool(forKey: Key.showsNotch)
+        previewShortcuts = defaults.bool(forKey: Key.previewShortcuts)
         imageScroll = defaults.string(forKey: Key.imageScroll).flatMap(ImageScroll.init(rawValue:)) ?? .zoom
         videoScroll = defaults.string(forKey: Key.videoScroll).flatMap(VideoScroll.init(rawValue:)) ?? .scrub
         notchVideoScroll = defaults.string(forKey: Key.notchVideoScroll).flatMap(VideoScroll.init(rawValue:)) ?? .volume
