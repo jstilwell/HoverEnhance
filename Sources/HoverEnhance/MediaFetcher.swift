@@ -74,6 +74,10 @@ actor MediaFetcher {
             lookedUp = await blueskyPost(actor: actor, rkey: rkey, requests)
         case .instagram(let code):
             lookedUp = await instagram(code: code, requests)
+        case .wikipedia(let ref):
+            guard let url = Wikipedia.summaryURL(for: ref) else { return .nothing }
+            lookedUp = await data(at: url, headers: ["User-Agent": Wikipedia.userAgent], requests)
+                .flatMap(Wikipedia.article).map { Media(items: [.article($0)]) }
         case .youtubeChannel(let ref):
             lookedUp = await youtubeCard(ref, requests).map { Media(items: [.channel($0.channel, video: $0.video)]) }
         }
@@ -176,8 +180,10 @@ actor MediaFetcher {
         return (channel, video)
     }
 
-    private func data(at url: URL, _ requests: Requests) async -> Data? {
-        guard let (data, response) = try? await session.data(from: url, delegate: LocalRedirectGuard.shared),
+    private func data(at url: URL, headers: [String: String] = [:], _ requests: Requests) async -> Data? {
+        var request = URLRequest(url: url)
+        headers.forEach { request.setValue($1, forHTTPHeaderField: $0) }
+        guard let (data, response) = try? await session.data(for: request, delegate: LocalRedirectGuard.shared),
               (response as? HTTPURLResponse)?.statusCode == 200 else {
             requests.failed = true
             return nil

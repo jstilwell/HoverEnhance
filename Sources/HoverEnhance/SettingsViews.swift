@@ -350,8 +350,8 @@ struct PreviewsSettingsView: View {
                     Text("YouTube, Vimeo, TikTok, and Twitch, in each site's own player")
                 }
                 Toggle(isOn: $settings.showCards) {
-                    Text("Creator cards")
-                    Text("On YouTube, a video title or channel name shows its creator. Thumbnails are left to YouTube.")
+                    Text("Cards")
+                    Text("Links to Wikipedia articles, and on YouTube, a video title or channel name shows its creator. Thumbnails are left to YouTube.")
                 }
             }
             Section {
