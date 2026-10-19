@@ -24,6 +24,9 @@ actor MediaFetcher {
         var failed = false
     }
     private var blueskyDIDs: [String: String] = [:]
+    private var redgifsToken: (value: String, time: Date)?
+    /// RedGIFs' tokens last a day; one is replaced a little before then.
+    private let redgifsTokenLifetime: TimeInterval = 23 * 60 * 60
     /// YouTube channel pages are about a megabyte, so each is read once per session.
     private var youtubeChannels: [URL: YouTubeChannel] = [:]
 
@@ -61,6 +64,8 @@ actor MediaFetcher {
             lookedUp = await redditGallery(id: id, requests)
         case .streamable(let id):
             lookedUp = await data(at: SiteAPIs.streamableURL(id: id), requests).flatMap(SiteAPIs.streamable)
+        case .redgifs(let id):
+            lookedUp = await redgifs(id: id, requests)
         case .tweet(let id):
             lookedUp = await data(at: SiteAPIs.tweetURL(id: id), requests).flatMap(SiteAPIs.tweet)
         case .blueskyPost(let actor, let rkey):
@@ -94,6 +99,36 @@ actor MediaFetcher {
         }
         let items = urls.map { MediaItem.image((ImageRules.fullSize(of: $0) + [$0]).uniqued()) }
         return items.isEmpty ? nil : Media(items: items)
+    }
+
+    private func redgifs(id: String, _ requests: Requests) async -> Media? {
+        guard let gif = await redgifsData(at: SiteAPIs.redgifsGifURL(id: id), requests).flatMap(SiteAPIs.redgifsGif) else { return nil }
+        // An image in a gallery shows the whole gallery, or itself when that can't be read.
+        guard let url = gif.gallery.flatMap(SiteAPIs.redgifsGalleryURL) else { return gif.media }
+        let gallery = await redgifsData(at: url, Requests()).flatMap(SiteAPIs.redgifsGallery)
+        return gallery ?? gif.media
+    }
+
+    /// RedGIFs' API answers only requests that carry a token. One that stops working, as when the Mac's address changes,
+    /// is replaced once.
+    private func redgifsData(at url: URL, _ requests: Requests) async -> Data? {
+        for attempt in 0..<2 {
+            if attempt > 0 || redgifsToken.map({ Date().timeIntervalSince($0.time) >= redgifsTokenLifetime }) ?? true {
+                guard let token = await data(at: SiteAPIs.redgifsTokenURL, requests).flatMap(SiteAPIs.redgifsToken) else { return nil }
+                redgifsToken = (token, Date())
+            }
+            guard let token = redgifsToken?.value else { return nil }
+            var request = URLRequest(url: url)
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            guard let (data, response) = try? await session.data(for: request, delegate: LocalRedirectGuard.shared) else { break }
+            switch (response as? HTTPURLResponse)?.statusCode {
+            case 200: return data
+            case 401: redgifsToken = nil
+            default: requests.failed = true; return nil
+            }
+        }
+        requests.failed = true
+        return nil
     }
 
     private func blueskyPost(actor: String, rkey: String, _ requests: Requests) async -> Media? {

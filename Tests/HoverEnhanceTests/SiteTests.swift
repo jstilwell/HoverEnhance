@@ -23,6 +23,16 @@ struct SiteLinksTests {
         #expect(source("https://www.reddit.com/gallery/1q2w3er") == .redditGallery(id: "1q2w3er"))
     }
 
+    @Test func redgifsLinks() {
+        #expect(source("https://www.redgifs.com/watch/carefulinfantiledromaeosaur") == .redgifs(id: "carefulinfantiledromaeosaur"))
+        #expect(source("https://v3.redgifs.com/watch/carefulinfantiledromaeosaur#rel=user") == .redgifs(id: "carefulinfantiledromaeosaur"))
+        #expect(source("https://redgifs.com/ifr/carefulinfantiledromaeosaur") == .redgifs(id: "carefulinfantiledromaeosaur"))
+        #expect(source("https://i.redgifs.com/i/CarefulInfantileDromaeosaur.jpg") == .redgifs(id: "carefulinfantiledromaeosaur"))
+        // Its media files are plain videos.
+        #expect(source("https://media.redgifs.com/CarefulInfantileDromaeosaur.mp4")
+            == .video(URL(string: "https://media.redgifs.com/CarefulInfantileDromaeosaur.mp4")!))
+    }
+
     @Test func otherLinksAreNotSources() {
         #expect(source("https://streamable.com/") == nil)
         #expect(source("https://x.com/Passengers") == nil)
@@ -31,6 +41,9 @@ struct SiteLinksTests {
         #expect(source("https://x.com/a/status/١٢٣") == nil)
         #expect(source("https://bsky.app/profile/bsky.app") == nil)
         #expect(source("https://i.imgur.com/AbCdEfG.jpg") == nil)
+        #expect(source("https://www.redgifs.com/watch/") == nil)
+        #expect(source("https://www.redgifs.com/users/someone") == nil)
+        #expect(source("https://www.redgifs.com/watch/a.b") == nil)
         #expect(source("https://example.com/article") == nil)
     }
 }
@@ -137,6 +150,49 @@ struct SiteAPIsTests {
         ])
     }
 
+    @Test func redgifsVideosAndImages() {
+        let video = """
+        {"gif": {"id": "carefulinfantiledromaeosaur", "type": 1, "width": 540, "height": 960, "gallery": null, "urls": {
+          "poster": "https://media.redgifs.com/CarefulInfantileDromaeosaur-poster.jpg",
+          "hd": "https://media.redgifs.com/CarefulInfantileDromaeosaur.mp4",
+          "sd": "https://media.redgifs.com/CarefulInfantileDromaeosaur-mobile.mp4"}}}
+        """
+        let gif = SiteAPIs.redgifsGif(Data(video.utf8))
+        #expect(gif?.media.items == [
+            .video(URL(string: "https://media.redgifs.com/CarefulInfantileDromaeosaur.mp4")!, size: CGSize(width: 540, height: 960)),
+        ])
+        #expect(gif?.gallery == nil)
+
+        let image = """
+        {"gif": {"id": "stiffperfecteuropeanfiresalamander", "type": 2, "width": 1536, "height": 2688,
+          "gallery": "1a081774aaa-0601-8b84-0000-9a730627ddb5", "urls": {
+          "hd": "https://media.redgifs.com/StiffPerfectEuropeanfiresalamander-large.jpg",
+          "sd": "https://media.redgifs.com/StiffPerfectEuropeanfiresalamander-mobile.jpg"}}}
+        """
+        let still = SiteAPIs.redgifsGif(Data(image.utf8))
+        #expect(still?.media.items == [.image([
+            URL(string: "https://media.redgifs.com/StiffPerfectEuropeanfiresalamander-large.jpg")!,
+            URL(string: "https://media.redgifs.com/StiffPerfectEuropeanfiresalamander-mobile.jpg")!,
+        ])])
+        #expect(still?.gallery.flatMap(SiteAPIs.redgifsGalleryURL)
+            == URL(string: "https://api.redgifs.com/v2/gallery/1a081774aaa-0601-8b84-0000-9a730627ddb5"))
+        #expect(SiteAPIs.redgifsGalleryURL(id: "../gifs/x") == nil)
+        #expect(SiteAPIs.redgifsGif(Data(#"{"error": {"code": "NotFound"}}"#.utf8)) == nil)
+    }
+
+    @Test func redgifsGalleriesBecomeAnAlbum() {
+        let json = """
+        {"id": "1a08", "gifs": [
+          {"type": 2, "urls": {"hd": "https://media.redgifs.com/A-large.jpg"}},
+          {"type": 1, "width": 720, "height": 1280, "urls": {"hd": "https://media.redgifs.com/B.mp4"}},
+          {"type": 2, "urls": {}}]}
+        """
+        #expect(SiteAPIs.redgifsGallery(Data(json.utf8))?.items == [
+            .image([URL(string: "https://media.redgifs.com/A-large.jpg")!]),
+            .video(URL(string: "https://media.redgifs.com/B.mp4")!, size: CGSize(width: 720, height: 1280)),
+        ])
+    }
+
     @Test func tweetVideoUsesTheHighestBitrateMP4() {
         let json = """
         {"text": "Plan your escape", "mediaDetails": [{"type": "video",
@@ -225,5 +281,49 @@ struct MediaFetcherTests {
         // As for a post without photos or video: no "Couldn't load" for that.
         let fetcher = MediaFetcher(configuration: StubAPIServer.configuration())
         #expect(await fetcher.lookUp(.streamable(id: "nothing\(UUID().uuidString.prefix(8))")) == .nothing)
+    }
+}
+
+/// RedGIFs' API, where only the second token issued works, as when the first was for another address.
+final class RedgifsStub: URLProtocol, @unchecked Sendable {
+    private static let tokens = OSAllocatedUnfairLock(initialState: 0)
+    static var tokensIssued: Int { tokens.withLock { $0 } }
+
+    static func configuration() -> URLSessionConfiguration {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [RedgifsStub.self]
+        return configuration
+    }
+
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override func stopLoading() {}
+
+    override func startLoading() {
+        guard let url = request.url else { return }
+        let (status, body): (Int, String)
+        if url.path() == "/v2/auth/temporary" {
+            let issued = Self.tokens.withLock { $0 += 1; return $0 }
+            (status, body) = (200, #"{"token": "t\#(issued)"}"#)
+        } else if request.value(forHTTPHeaderField: "Authorization") == "Bearer t2" {
+            (status, body) = (200, #"{"gif": {"type": 1, "urls": {"hd": "https://media.redgifs.com/A.mp4"}}}"#)
+        } else {
+            (status, body) = (401, "{}")
+        }
+        client?.urlProtocol(self, didReceive: HTTPURLResponse(url: url, statusCode: status, httpVersion: "HTTP/1.1", headerFields: nil)!,
+                            cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: Data(body.utf8))
+        client?.urlProtocolDidFinishLoading(self)
+    }
+}
+
+struct RedgifsFetcherTests {
+    @Test func aTokenThatStopsWorkingIsReplacedOnce() async {
+        let fetcher = MediaFetcher(configuration: RedgifsStub.configuration())
+        #expect(await fetcher.lookUp(.redgifs(id: "a")) == .found(Media(items: [.video(URL(string: "https://media.redgifs.com/A.mp4")!, size: nil)])))
+        #expect(RedgifsStub.tokensIssued == 2)
+        // A token that works is kept.
+        #expect(await fetcher.lookUp(.redgifs(id: "b")) != .failed)
+        #expect(RedgifsStub.tokensIssued == 2)
     }
 }

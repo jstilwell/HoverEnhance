@@ -32,9 +32,9 @@
 - **Images**: rest on a thumbnail or an image link and the full-size image appears. Scroll to zoom.
 - **Albums**: Reddit galleries and multi-photo posts on X, Bluesky, and Instagram, in its feed too,
   from the photo you're on. Scroll to step through. Immune to smooth-scrolling glitches.
-- **Videos**: Reddit, X, Bluesky, Instagram, Streamable, and Imgur clips play in the preview;
-  YouTube, Vimeo, TikTok, and Twitch play in their own players. Scroll on the notch under the cursor
-  for the volume, shown beside it, and on the video to move through it.
+- **Videos**: Reddit, X, Bluesky, Instagram, Streamable, Imgur, and RedGIFs clips play in the
+  preview; YouTube, Vimeo, TikTok, and Twitch play in their own players. Scroll on the notch under the
+  cursor for the volume, shown beside it, and on the video to move through it.
 - **YouTube cards**: on YouTube, rest on a video title for its length, views, likes, date, and who
   made it, or on a channel name for the channel's banner and numbers.
 
