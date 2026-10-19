@@ -39,7 +39,8 @@
   repository, issue, or pull request for its stars, state, and labels. On YouTube, a video title
   shows its length, views, likes, date, and who made it, and a channel name its banner and numbers.
 - **Copy and save**: while a preview is up, ⌘C copies the image, a video's address, or a card's link,
-  and ⌘S saves the image or video to Downloads.
+  ⌘S saves the image or video, and ⇧⌘S asks where. Images and videos have the same buttons under
+  them. Saves go to Downloads, or a folder you choose; the keys can be changed.
 
 Images the page already shows large are left alone unless their post has more photos, as are videos
 it's already playing. Move away, click, press Esc, or switch apps or Spaces, and the preview is gone.
@@ -93,7 +94,7 @@ Requires macOS 14 or later. Signed, notarized, and updates itself.
 ## Privacy
 
 - **Only what you hover**: HoverEnhance reads the thing under the cursor, never what you type. While
-  a preview is up, it listens only for ⌘C and ⌘S.
+  a preview is up, it listens only for its copy and save shortcuts.
 - **Only where you point**: it contacts the sites behind what you hover, GitHub to check for
   updates, addr.fyi for the network popup's public address, and Google only if you sign in to
   subscribe to YouTube channels.
@@ -121,7 +122,7 @@ From the menu bar icon:
 - **General**: a shortcut that pauses previews from any app, when they appear (always, or while
   holding a key), the hover delay, links in other apps, and apps to skip.
 - **Previews and Video**: what to preview, the largest image to download, the notch, scrolling, the
-  copy and save keys, and playback.
+  copy and save keys and folder, and playback.
 - **Sites**: websites to skip, webmail included by default; the menu can also skip the one you're on.
 - **Finder**: what file cards show, and when.
 - **Weather**: the provider, place, and units.

@@ -8,7 +8,9 @@ All notable changes to this project will be documented in this file.
 
 - Resting on a link to a Wikipedia article shows a card with its picture, description, and opening lines.
 - Resting on a link to a GitHub repository, issue, or pull request shows a card with its stars, state, labels, and changes.
-- While a preview is up, ⌘C copies the image, a video's address, or a card's link, and ⌘S saves the image or video to Downloads; turn this off under Settings → Previews.
+- While a preview is up, ⌘C copies the image, a video's address, or a card's link, ⌘S saves the image or video, and ⇧⌘S asks where to save it; the keys can be changed under Settings → Previews.
+- Images and videos have Copy, Save, and Save As buttons under them while the cursor is on them.
+- Settings → Previews can choose the folder saves go to, instead of Downloads.
 
 ### Changed
 
