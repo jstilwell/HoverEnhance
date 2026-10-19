@@ -109,3 +109,135 @@ struct WikipediaHoverRuleTests {
             language: "en", isRightToLeft: false))])) == nil)
     }
 }
+
+struct GitHubLinkTests {
+    private func ref(_ string: String) -> GitHubRef? {
+        GitHub.ref(fromLink: URL(string: string)!)
+    }
+
+    @Test func reposIssuesAndPulls() {
+        #expect(ref("https://github.com/swiftlang/swift") == .repo(owner: "swiftlang", name: "swift"))
+        #expect(ref("https://github.com/swiftlang/swift.git") == .repo(owner: "swiftlang", name: "swift"))
+        #expect(ref("https://github.com/sveltejs/svelte/tree/main/packages") == .repo(owner: "sveltejs", name: "svelte"))
+        #expect(ref("https://github.com/vercel/next.js/issues") == .repo(owner: "vercel", name: "next.js"))
+        #expect(ref("https://github.com/swiftlang/swift/issues/80000#issuecomment-1") == .issue(owner: "swiftlang", name: "swift", number: 80000))
+        #expect(ref("https://github.com/swiftlang/swift/pull/70000/files") == .pull(owner: "swiftlang", name: "swift", number: 70000))
+    }
+
+    @Test func otherPagesAreNotRepos() {
+        #expect(ref("https://github.com/swiftlang") == nil)
+        #expect(ref("https://github.com/settings/profile") == nil)
+        #expect(ref("https://github.com/orgs/swiftlang/repositories") == nil)
+        #expect(ref("https://github.com/a/..") == nil)
+        #expect(ref("https://gist.github.com/someone/abc123") == nil)
+        #expect(ref("https://github.com/swiftlang/swift/pull/99999999999999") == .repo(owner: "swiftlang", name: "swift"))
+    }
+
+    @Test func apiURLs() {
+        #expect(GitHub.apiURL(for: .pull(owner: "a", name: "b.c", number: 7)) == URL(string: "https://api.github.com/repos/a/b.c/pulls/7"))
+        #expect(GitHub.apiURL(for: .issue(owner: "a", name: "b", number: 7)) == URL(string: "https://api.github.com/repos/a/b/issues/7"))
+    }
+}
+
+/// Fixtures are trimmed copies of the API's answers.
+struct GitHubAnswerTests {
+    private let repo = .repo(owner: "swiftlang", name: "swift") as GitHubRef
+
+    @Test func aRepository() throws {
+        let json = """
+        {"full_name": "swiftlang/swift", "html_url": "https://github.com/swiftlang/swift", "description": "The Swift Programming Language",
+         "stargazers_count": 70513, "forks_count": 10856, "language": "Swift", "topics": [], "pushed_at": "2026-10-19T15:18:05Z",
+         "archived": false, "fork": false, "license": {"spdx_id": "Apache-2.0"},
+         "owner": {"login": "swiftlang", "type": "Organization", "avatar_url": "https://avatars.githubusercontent.com/u/42816656?v=4"}}
+        """
+        guard case .repo(let card) = try #require(GitHub.card(Data(json.utf8), for: repo)) else { Issue.record("not a repo"); return }
+        #expect(card.fullName == "swiftlang/swift")
+        #expect(card.stars == 70513)
+        #expect(card.license == "Apache-2.0")
+        #expect(card.isOrganization)
+        #expect(card.pushed == ISO8601DateFormatter().date(from: "2026-10-19T15:18:05Z"))
+        #expect(card.url == URL(string: "https://github.com/swiftlang/swift"))
+    }
+
+    @Test func licensesGitHubCouldntNameAreLeftOut() throws {
+        let json = """
+        {"full_name": "a/b", "html_url": "https://github.com/a/b", "stargazers_count": 1, "forks_count": 0,
+         "license": {"spdx_id": "NOASSERTION"}, "owner": {"login": "a", "type": "User"}}
+        """
+        guard case .repo(let card) = try #require(GitHub.card(Data(json.utf8), for: .repo(owner: "a", name: "b"))) else { return }
+        #expect(card.license == nil)
+        #expect(!card.isOrganization)
+    }
+
+    @Test func pullRequestsFromThePullsAPI() throws {
+        let json = """
+        {"number": 70000, "title": "GenericSpecializer: support specializing typed throws", "html_url": "https://github.com/swiftlang/swift/pull/70000",
+         "state": "closed", "draft": false, "merged_at": "2023-11-27T11:39:24Z", "user": {"login": "eeckstein"}, "created_at": "2023-11-22T11:05:31Z",
+         "body": "This means to support specializing functions with indirect error results.", "labels": [{"name": "swift", "color": "F05138"}],
+         "comments": 3, "additions": 437, "deletions": 107, "changed_files": 12}
+        """
+        guard case .issue(let pull) = try #require(GitHub.card(Data(json.utf8), for: .pull(owner: "swiftlang", name: "swift", number: 70000))) else { return }
+        #expect(pull.isPull)
+        #expect(pull.state == .merged)
+        #expect(pull.repo == "swiftlang/swift")
+        #expect(pull.additions == 437 && pull.deletions == 107 && pull.changedFiles == 12)
+        #expect(pull.labels == [GitHubIssue.Label(name: "swift", color: "F05138")])
+    }
+
+    @Test func issueStates() throws {
+        func state(_ fields: String, pull: Bool = false) throws -> GitHubIssue.State? {
+            let json = #"{"number": 1, "title": "T", "html_url": "https://github.com/a/b/\#(pull ? "pull" : "issues")/1", \#(fields)}"#
+            guard case .issue(let issue) = try #require(GitHub.card(Data(json.utf8), for: .issue(owner: "a", name: "b", number: 1))) else { return nil }
+            return issue.state
+        }
+        #expect(try state(#""state": "open""#) == .open)
+        #expect(try state(#""state": "closed", "state_reason": "completed""#) == .closed)
+        #expect(try state(#""state": "closed", "state_reason": "not_planned""#) == .notPlanned)
+        // A pull request reached through the issues API.
+        #expect(try state(#""state": "open", "draft": true, "pull_request": {"merged_at": null}"#, pull: true) == .draft)
+        #expect(try state(#""state": "closed", "pull_request": {"merged_at": "2023-11-27T11:39:24Z"}"#, pull: true) == .merged)
+        #expect(try state(#""state": "closed", "pull_request": {"merged_at": null}"#, pull: true) == .closed)
+    }
+
+    @Test func excerptsAreThePlainTextOfTheDescription() {
+        let body = """
+        <!-- Thanks for filing! Please fill in the template. -->
+        ## What happened
+
+        The **build** fails with `swift build` on [macOS](https://apple.com). ![shot](https://x/y.png)
+        - see <details>logs</details>
+        """
+        #expect(GitHub.excerpt(of: body) == "What happened The build fails with swift build on macOS. see logs")
+        #expect(GitHub.excerpt(of: String(repeating: "word ", count: 100), limit: 20) == "word word word word…")
+    }
+
+    @Test func counts() {
+        #expect(GitHubFormat.count(999) == "999")
+        #expect(GitHubFormat.count(1000) == "1k")
+        #expect(GitHubFormat.count(70513) == "70.5k")
+        #expect(GitHubFormat.count(1_500_000) == "1.5m")
+    }
+}
+
+struct GitHubHoverRuleTests {
+    private func info(link: String, page: String = "https://news.ycombinator.com/") -> HoverInfo {
+        var info = HoverInfo(pid: 1, appKind: .browser)
+        info.pageURL = URL(string: page)
+        info.linkURL = URL(string: link)
+        info.isOnText = true
+        return info
+    }
+
+    @Test func linksGetACard() {
+        #expect(MediaResolver.source(for: info(link: "https://github.com/swiftlang/swift")) == .github(.repo(owner: "swiftlang", name: "swift")))
+    }
+
+    @Test func gitHubHasItsOwnHovercards() {
+        #expect(MediaResolver.source(for: info(link: "https://github.com/swiftlang/swift", page: "https://github.com/trending")) == nil)
+    }
+
+    @Test func cardsCanBeTurnedOff() {
+        #expect(!PreviewFilter(cards: false).allows(.github(.repo(owner: "a", name: "b"))))
+        #expect(!PreviewFilter(disabledSites: [.github]).allows(.github(.repo(owner: "a", name: "b"))))
+    }
+}

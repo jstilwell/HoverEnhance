@@ -26,6 +26,8 @@ enum MediaSource: Sendable, Hashable {
     case youtubeChannel(YouTubeChannelRef)
     /// A link to a Wikipedia article, anywhere but Wikipedia.
     case wikipedia(WikipediaArticleRef)
+    /// A link to a GitHub repository, issue, or pull request, anywhere but GitHub.
+    case github(GitHubRef)
     /// In Finder: a file or folder, in a window or on the desktop.
     case file(URL, onDesktop: Bool)
     /// The Weather menu bar item, at `item`: its frame, for hanging the forecast under it.
@@ -39,7 +41,7 @@ extension MediaSource {
     var isPost: Bool {
         switch self {
         case .redditGallery, .tweet, .blueskyPost, .instagram, .erome: true
-        case .images, .video, .streamable, .redgifs, .embed, .youtubeChannel, .wikipedia, .file, .weather, .network: false
+        case .images, .video, .streamable, .redgifs, .embed, .youtubeChannel, .wikipedia, .github, .file, .weather, .network: false
         }
     }
 
@@ -63,6 +65,8 @@ enum MediaItem: Sendable, Equatable {
     case channel(YouTubeChannel, video: YouTubeVideo?)
     /// A card about a Wikipedia article.
     case article(WikipediaArticle)
+    /// A card about a GitHub repository, issue, or pull request.
+    case github(GitHubCard)
     /// A card about a file or folder.
     case file(URL)
     /// The forecast, under the menu bar item at `item`.
@@ -97,7 +101,7 @@ struct Media: Sendable, Equatable {
                 return web.isEmpty ? nil : .image(web)
             case .video(let url, _):
                 return isWeb(url) ? item : nil
-            case .embed, .channel, .article, .file, .weather, .network:
+            case .embed, .channel, .article, .github, .file, .weather, .network:
                 return item
             }
         }
@@ -145,11 +149,9 @@ enum MediaResolver {
             guard info.isOnText, let link = info.linkURL else { return nil }
             if let ref = YouTube.channelRef(fromLink: link) { return .youtubeChannel(ref) }
         }
-        // A link to an article gets a card about it, unless what's hovered is an image to enlarge. Not on
-        // Wikipedia itself, which has its own page previews.
-        if let link = info.linkURL, let ref = Wikipedia.articleRef(fromLink: link), !Wikipedia.isWikipedia(info.pageURL),
-           info.isOnText || imageCandidates(for: info).isEmpty {
-            return .wikipedia(ref)
+        // A link to an article or repository gets a card about it, unless what's hovered is an image to enlarge.
+        if let link = info.linkURL, let card = cardSource(forLink: link, on: info.pageURL), info.isOnText || imageCandidates(for: info).isEmpty {
+            return card
         }
         // A link to a post or video outranks the thumbnail inside it.
         if let link = info.linkURL, let source = SiteLinks.source(forLink: link) {
@@ -178,6 +180,13 @@ enum MediaResolver {
             urls += ImageRules.fullSize(of: image) + [image]
         }
         return urls.uniqued()
+    }
+
+    /// Not on the site itself: Wikipedia has its own page previews, and GitHub its own hovercards.
+    private static func cardSource(forLink link: URL, on page: URL?) -> MediaSource? {
+        if let ref = Wikipedia.articleRef(fromLink: link), !Wikipedia.isWikipedia(page) { return .wikipedia(ref) }
+        if let ref = GitHub.ref(fromLink: link), !GitHub.isGitHub(page) { return .github(ref) }
+        return nil
     }
 
     private static func isOnSite(_ page: URL?, of site: Embed.Site) -> Bool {

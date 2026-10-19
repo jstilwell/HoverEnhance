@@ -351,7 +351,7 @@ struct PreviewsSettingsView: View {
                 }
                 Toggle(isOn: $settings.showCards) {
                     Text("Cards")
-                    Text("Links to Wikipedia articles, and on YouTube, a video title or channel name shows its creator. Thumbnails are left to YouTube.")
+                    Text("Links to Wikipedia articles and GitHub repositories, issues, and pull requests. On YouTube, a video title or channel name shows its creator; thumbnails are left to YouTube.")
                 }
             }
             Section {
