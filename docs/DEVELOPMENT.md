@@ -120,6 +120,18 @@ app).
   page can't be read. The channel's page gives the rest (`YouTube.channel(inPage:)`: `ytInitialData`,
   with the banner and verified check in its header). Subscribing goes through `YouTubeAPI` with the
   user's own Google client (`YouTubeAccount`). YouTube shows dislike counts only to a video's owner.
+- Links to Wikipedia articles and GitHub repositories, issues, and pull requests get a card, except on
+  those sites, which have their own previews, and when the cursor is on an image in the link that can
+  be enlarged. `Wikipedia` reads the REST API's page summary (any language's wiki; pages other than
+  articles have none), asking for the image at the card's size, and `WikipediaCardView` draws it in
+  Wikipedia's colors. `GitHub` asks the REST API without signing in, one request a card (60 an hour
+  are allowed), and `GitHubCardView` draws it in GitHub's Primer colors.
+- `ShortcutTap`, an active event tap like `ScrollTap`, is on only while a preview shows an image, a
+  video from the web, or a card, and looks only for ⌘C and ⌘S, which it swallows so the app underneath
+  doesn't copy or save too; every other key passes untouched. `PreviewActions` copies an image as it
+  was downloaded (`ImageLoader.original(of:page:)`, usually from its disk cache), with a TIFF beside it,
+  and saves into Downloads with the browser's marks: the where-from list and quarantine. A saved
+  video's extension is always a movie's, whatever its address says. Streams (HLS) can't be saved.
 - `EmbedPlayer` hosts players in a web view loaded under an HTTPS origin (YouTube needs a
   Referer), with AirPlay and WebRTC off so nothing asks for local network access. Links clicked in a
   player open in the browser, and nothing else can take the page around the player elsewhere. A
@@ -184,7 +196,11 @@ rest are captures of the website's demos at [hoverenhance.com](https://hoverenha
 Playwright in a 1280×900 window.
 
 - **`browser.gif`**: the `#features` demo's stage (`.scaled`) at 1x, one full cycle (zoom, albums,
-  video, about 30 seconds), encoded with ffmpeg at 15 fps, 640 wide, with a 128-color palette.
+  video, cards, about 40 seconds), encoded with ffmpeg at 15 fps, 640 wide, with a 128-color palette
+  (`palettegen=max_colors=128:stats_mode=diff`, `paletteuse=dither=bayer:bayer_scale=5:diff_mode=rectangle`).
+  Take its frames as PNGs from Chrome's screencast (`Page.startScreencast` over CDP), with their
+  times for ffmpeg's concat demuxer: Playwright's recorded video is lossy, and its noise makes the GIF
+  several times larger.
 - **`finder.png`, `weather.png`, `network.png`**: the `#finder .finder-stage`, `#weather .scaled`,
   and `#network .scaled` demos at 2x, each at a moment with its card fully open.
 
