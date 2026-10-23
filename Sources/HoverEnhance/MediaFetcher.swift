@@ -29,6 +29,8 @@ actor MediaFetcher {
     private let redgifsTokenLifetime: TimeInterval = 23 * 60 * 60
     /// YouTube channel pages are about a megabyte, so each is read once per session.
     private var youtubeChannels: [URL: YouTubeChannel] = [:]
+    /// Letterboxd's posters, by film slug: rows of them on cards for people and lists repeat.
+    private var letterboxdPosters: [String: URL] = [:]
 
     init(configuration: URLSessionConfiguration = MediaFetcher.configuration()) {
         session = URLSession(configuration: configuration)
@@ -83,6 +85,8 @@ actor MediaFetcher {
                 .flatMap { GitHub.card($0, for: ref) }.map { Media(items: [.github($0)]) }
         case .youtubeChannel(let ref):
             lookedUp = await youtubeCard(ref, requests).map { Media(items: [.channel($0.channel, video: $0.video)]) }
+        case .letterboxd(let ref):
+            lookedUp = await letterboxdCard(ref, requests).map { Media(items: [.letterboxd($0)]) }
         }
         // A lookup cut short, as when the cursor moves on, is no answer to keep.
         guard !Task.isCancelled else { return .nothing }
@@ -181,6 +185,66 @@ actor MediaFetcher {
         guard let html = await data(at: page, requests), let channel = YouTube.channel(inPage: String(decoding: html, as: UTF8.self)) else { return nil }
         youtubeChannels[page] = channel
         return (channel, video)
+    }
+
+    /// The card for a Letterboxd page, with the posters it shows, which its page leaves for scripts to fetch.
+    private func letterboxdCard(_ ref: LetterboxdRef, _ requests: Requests) async -> LetterboxdCard? {
+        guard let page = await letterboxdPage(ref.pageURL, requests), let card = Letterboxd.card(inPage: page.html, at: page.url) else { return nil }
+        switch card {
+        case .film:
+            return card
+        case .review(var review):
+            review.poster = await letterboxdPoster(review.filmSlug)
+            return .review(review)
+        case .person(var person):
+            person.films = await withPosters(person.films)
+            return .person(person)
+        case .list(var list):
+            list.films = await withPosters(list.films)
+            return .list(list)
+        }
+    }
+
+    /// A Letterboxd page, and where it was after any redirect, as from a short link. Cloudflare answers some
+    /// of its pages, such as a member's later viewings of a film, with a check only a browser engine passes.
+    private func letterboxdPage(_ url: URL, _ requests: Requests) async -> (html: String, url: URL)? {
+        guard let (data, response) = try? await session.data(from: url, delegate: LocalRedirectGuard.shared),
+              let http = response as? HTTPURLResponse, let final = http.url else {
+            requests.failed = true
+            return nil
+        }
+        if http.statusCode == 200 { return (String(decoding: data, as: UTF8.self), final) }
+        // Only Letterboxd's own pages go to the web view, which follows redirects without the guard.
+        guard http.statusCode == 403, Letterboxd.isLetterboxd(final),
+              let page = await WebPageLoader.shared.page(at: final, once: #"meta[property="og:url"]"#) else {
+            requests.failed = true
+            return nil
+        }
+        return (page.html, page.url ?? final)
+    }
+
+    private func withPosters(_ films: [LetterboxdPoster]) async -> [LetterboxdPoster] {
+        let images = await withTaskGroup(of: (Int, URL?).self) { group in
+            for (index, film) in films.enumerated() {
+                group.addTask { (index, await self.letterboxdPoster(film.slug)) }
+            }
+            var images: [Int: URL] = [:]
+            for await (index, image) in group { images[index] = image }
+            return images
+        }
+        return films.enumerated().map { index, film in
+            var film = film
+            film.image = images[index]
+            return film
+        }
+    }
+
+    /// A film's poster, or nil when it has none to show, or can't be had: the card goes without.
+    private func letterboxdPoster(_ slug: String) async -> URL? {
+        if let known = letterboxdPosters[slug] { return known }
+        guard let url = Letterboxd.posterURL(film: slug), let poster = await data(at: url, Requests()).flatMap(Letterboxd.poster) else { return nil }
+        letterboxdPosters[slug] = poster
+        return poster
     }
 
     private func data(at url: URL, headers: [String: String] = [:], _ requests: Requests) async -> Data? {

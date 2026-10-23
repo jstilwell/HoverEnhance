@@ -24,7 +24,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/images/browser.gif" width="640" alt="Resting the cursor on a thumbnail shows the full-size image, then an album, a video, and cards for Wikipedia and GitHub links">
+  <img src="docs/images/browser.gif" width="640" alt="Resting the cursor on a thumbnail shows the full-size image, then an album, a video, cards for Wikipedia and GitHub links, and a friend's review on Letterboxd">
 </p>
 
 ## In your browser
@@ -38,6 +38,9 @@
 - **Cards**: rest on a link to a Wikipedia article for its picture and opening lines, or to a GitHub
   repository, issue, or pull request for its stars, state, and labels. On YouTube, a video title
   shows its length, views, likes, date, and who made it, and a channel name its banner and numbers.
+- **Letterboxd**: rest on a poster or film link for its rating, director, and synopsis; on a friend's
+  poster or a review, their stars, like, and full review, with spoilers covered until you click.
+  People, lists, and boxd.it links get cards too.
 - **Copy and save**: while a preview is up, ⌘C copies the image, a video's address, or a card's link,
   ⌘S saves the image or video, and ⇧⌘S asks where. Images and videos have the same buttons under
   them. Saves go to Downloads, or a folder you choose; the keys can be changed.

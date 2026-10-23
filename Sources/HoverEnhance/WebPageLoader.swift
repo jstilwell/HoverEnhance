@@ -17,6 +17,18 @@ final class WebPageLoader {
     /// The outer HTML of the first element matching `selector` once the page has one, or nil if it
     /// doesn't appear within `timeout`.
     func html(at url: URL, selector: String, timeout: Duration = .seconds(10)) async -> String? {
+        await evaluate("document.querySelector(\(Self.javaScriptString(selector)))?.outerHTML ?? null", at: url, timeout: timeout)?.result
+    }
+
+    /// The whole page once it's all been read and has an element matching `selector`, and where it ended
+    /// up after any redirects, or nil if that doesn't happen within `timeout`.
+    func page(at url: URL, once selector: String, timeout: Duration = .seconds(10)) async -> (html: String, url: URL?)? {
+        let script = "document.readyState !== 'loading' && document.querySelector(\(Self.javaScriptString(selector))) ? document.documentElement.outerHTML : null"
+        return await evaluate(script, at: url, timeout: timeout).map { ($0.result, $0.url) }
+    }
+
+    /// Loads `url` and runs `script` until it gives a string.
+    private func evaluate(_ script: String, at url: URL, timeout: Duration) async -> (result: String, url: URL?)? {
         generation += 1
         let mine = generation
         release?.cancel()
@@ -30,14 +42,13 @@ final class WebPageLoader {
             }
         }
 
-        let script = "document.querySelector(\(Self.javaScriptString(selector)))?.outerHTML ?? null"
         let deadline = ContinuousClock.now + timeout
         while ContinuousClock.now < deadline {
             try? await Task.sleep(for: .milliseconds(200))
             guard !Task.isCancelled, generation == mine else { return nil }
-            if let html = try? await webView.evaluateJavaScript(script) as? String {
-                await shareCookies(for: url, from: webView)
-                return html
+            if let result = try? await webView.evaluateJavaScript(script) as? String {
+                await shareCookies(for: webView.url ?? url, from: webView)
+                return (result, webView.url)
             }
         }
         return nil
