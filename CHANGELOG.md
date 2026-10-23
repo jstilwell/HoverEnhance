@@ -17,6 +17,10 @@ All notable changes to this project will be documented in this file.
 
 - With cards turned off under Settings → Previews, links that would get a card preview their images as they did before cards.
 
+### Fixed
+
+- A thumbnail whose link the browser hadn't finished setting up switches from its enlarged image to the card, post, or video the link leads to, instead of needing a second hover.
+
 ## 0.8.0 - 10-19-2026
 
 ### Added

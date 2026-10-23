@@ -47,6 +47,17 @@ extension MediaSource {
         }
     }
 
+    /// Whether a second look that found this should replace `shown`, already on screen. Only an image
+    /// gives way, to what a link around it leads to: the first look came before the page had the link
+    /// in its accessibility tree, as Chromium does with Letterboxd's posters, which a link overlays.
+    func replaces(onSecondLook shown: MediaSource) -> Bool {
+        guard case .images = shown else { return false }
+        switch self {
+        case .images, .file, .weather, .network: return false
+        default: return true
+        }
+    }
+
     /// For a menu bar item: its frame, which the popup hangs under.
     var menuBarItem: CGRect? {
         switch self {
