@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.9.0 - Unreleased
+
+### Added
+
+- Resting on a Letterboxd poster or film link shows a card with the poster, rating, director, runtime, tagline, and synopsis.
+- Resting on a poster in Letterboxd's "New from friends", or any link to a review or diary entry, shows the member's stars, like, rewatch, date, and full review.
+- Reviews marked as containing spoilers stay covered on their card until you click to show them.
+- Resting on a link to a director, actor, or other person on Letterboxd shows their photo, bio, other roles, and best-known films.
+- Resting on a link to a Letterboxd list shows its title, owner, size, notes, and first films.
+- Letterboxd's boxd.it short links get the same cards, on any website.
+
+### Changed
+
+- With cards turned off under Settings → Previews, links that would get a card preview their images as they did before cards.
+
 ## 0.8.0 - 10-19-2026
 
 ### Added

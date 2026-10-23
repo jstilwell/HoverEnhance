@@ -126,6 +126,15 @@ app).
   articles have none), asking for the image at the card's size, and `WikipediaCardView` draws it in
   Wikipedia's colors. `GitHub` asks the REST API without signing in, one request a card (60 an hour
   are allowed), and `GitHubCardView` draws it in GitHub's Primer colors.
+- Links to Letterboxd films, reviews and diary entries, people, and lists, and its boxd.it short links,
+  get `LetterboxdCardView`, in Letterboxd's dark colors, on Letterboxd too and even from a poster, which
+  the card shows; a link to the page being shown gets none. `Letterboxd` reads the page itself: a
+  film's JSON-LD, a review's header and body, a person's TMDB photo and bio, a list's preview tags,
+  with a review's spoiler warning in its description. Posters come from `/film/<slug>/poster/std/230/`,
+  the JSON Letterboxd's own pages ask for (none for posters it hides, as for adult films). Cloudflare
+  answers some pages, such as a member's later viewings of a film, with a bot check; those load in
+  `WebPageLoader` once the plain request is refused, Letterboxd's own pages only. Profiles and likes
+  are behind it too, so they get no card. With cards off, links to them preview as before.
 - `ShortcutTap`, an active event tap like `ScrollTap`, is on only while a preview shows an image, a
   video from the web, or a card, and looks only for the copy, save, and save-as shortcuts in Settings
   (⌘C, ⌘S, ⇧⌘S to start; `Shortcut.matches` goes by the character a letter key types, so they follow
