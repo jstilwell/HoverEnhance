@@ -24,7 +24,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/images/browser.gif" width="640" alt="Resting the cursor on a thumbnail shows the full-size image, then an album, a video, and cards for Wikipedia and GitHub links">
+  <img src="docs/images/browser.gif" width="640" alt="Resting the cursor on a thumbnail shows the full-size image, then an album, a video, cards for Wikipedia and GitHub links, and a friend's review on Letterboxd">
 </p>
 
 ## In your browser
