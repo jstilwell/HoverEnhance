@@ -212,7 +212,7 @@ rest are captures of the website's demos at [hoverenhance.com](https://hoverenha
 Playwright in a 1280×900 window.
 
 - **`browser.gif`**: the `#features` demo's stage (`.scaled`) at 1x, one full cycle (zoom, albums,
-  video and its buttons, cards, about 42 seconds), encoded with ffmpeg at 15 fps, 640 wide, with a 128-color palette
+  video and its buttons, cards, Letterboxd, about 55 seconds), encoded with ffmpeg at 15 fps, 640 wide, with a 128-color palette
   (`palettegen=max_colors=128:stats_mode=diff`, `paletteuse=dither=bayer:bayer_scale=5:diff_mode=rectangle`).
   Take its frames as PNGs from Chrome's screencast (`Page.startScreencast` over CDP), with their
   times for ffmpeg's concat demuxer: Playwright's recorded video is lossy, and its noise makes the GIF
