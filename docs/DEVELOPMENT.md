@@ -33,8 +33,10 @@ app).
   never under 50). It doesn't look while previews wait for a key that isn't held, and stops listening
   while paused. On a web page it looks again a few times over the next two seconds while the cursor
   stays put, since Chromium fills in its accessibility tree after scrolling and loading, unless the
-  first look found plain text; a second look can start a preview but never ends one, and clicks and
-  key presses stop them.
+  first look found plain text; a second look can start a preview but never ends one, and replaces one
+  only when it shows an image and the look finds a link around it to something more
+  (`MediaSource.replaces(onSecondLook:)`), as when Chromium adds the link over a Letterboxd poster
+  late. Clicks, key presses, and scrolling stop them.
 - `HoverInspector` hit-tests with `AXUIElementCopyElementAtPosition` on a background queue (AX
   calls are synchronous IPC into the target app) and walks up to the enclosing link and web area.
   A look the cursor has moved on from is dropped before its slow parts, and excluded apps

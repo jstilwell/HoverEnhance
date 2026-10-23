@@ -111,8 +111,9 @@ final class PreviewController {
         }
         // Still on the same thing: it's loading, showing, or was dismissed by a click.
         if target?.source == source { return }
-        // A second look doesn't replace what's already on screen.
-        if again, showing != nil { return }
+        // A second look doesn't replace what's already on screen, unless that's an image the link it
+        // has just found around it outranks.
+        if again, showing != nil, !(target.map { source.replaces(onSecondLook: $0.source) } ?? false) { return }
 
         reset(because: "new target")
         let elementFrame = info.imageFrame ?? info.frame

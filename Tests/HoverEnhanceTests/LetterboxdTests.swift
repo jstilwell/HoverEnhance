@@ -255,6 +255,20 @@ struct LetterboxdHoverRuleTests {
         #expect(source == .images([URL(string: "https://a.ltrbxd.com/resized/film-poster/3/9/0/5/2/0/390520-us-0-1000-0-1500-crop.jpg?v=1")!, URL(string: poster)!]))
     }
 
+    @Test func aSecondLookThatFindsThePostersLinkReplacesItsZoom() {
+        // Chromium can put the poster in its accessibility tree before the link over it: the first look
+        // finds only the image, and a second, the link.
+        let zoom = MediaSource.images([URL(string: poster)!])
+        let card = MediaSource.letterboxd(.review(member: "maddmattw", film: "us-2019", viewing: nil))
+        #expect(card.replaces(onSecondLook: zoom))
+        #expect(MediaSource.redditGallery(id: "abc").replaces(onSecondLook: zoom))
+        // Nothing replaces a card or a video, and an image doesn't replace an image.
+        #expect(!zoom.replaces(onSecondLook: card))
+        #expect(!card.replaces(onSecondLook: .letterboxd(.film("us-2019"))))
+        #expect(!MediaSource.images([URL(string: "https://example.com/other.jpg")!]).replaces(onSecondLook: zoom))
+        #expect(!card.replaces(onSecondLook: .video(URL(string: "https://example.com/clip.mp4")!)))
+    }
+
     @Test func withCardsOffPostersAreEnlargedAsBefore() {
         let source = MediaResolver.source(for: info(link: "https://letterboxd.com/maddmattw/film/us-2019/", image: poster), cards: false)
         #expect(source == .images([URL(string: "https://a.ltrbxd.com/resized/film-poster/3/9/0/5/2/0/390520-us-0-1000-0-1500-crop.jpg?v=1")!, URL(string: poster)!]))
