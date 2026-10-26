@@ -55,6 +55,7 @@ Rest on a file or folder for its path, size, dates, where it came from, and whic
   own tags say.
 - **Play, mute, and scrub** songs and videos, with the time under them.
 - **Click any detail** to copy it.
+- **Out of the way** in an app's installer window, so dragging it to Applications is never blocked.
 
 <br clear="right">
 

@@ -122,8 +122,8 @@ enum MediaResolver {
             return .network(item: frame)
         }
         if let file = info.fileURL {
-            // A card would cover Quick Look's panel, or the name being edited.
-            return info.finderIsBusy ? nil : .file(file, onDesktop: info.fileIsOnDesktop)
+            // A card would cover Quick Look's panel, the name being edited, or an installer's Applications folder.
+            return info.finderIsBusy || info.fileIsInInstaller ? nil : .file(file, onDesktop: info.fileIsOnDesktop)
         }
         // A video the page already shows under the cursor needs no preview, of it or of a still of it.
         if let video = info.videoFrame, video.width >= smallestWatchableVideo.width, video.height >= smallestWatchableVideo.height {

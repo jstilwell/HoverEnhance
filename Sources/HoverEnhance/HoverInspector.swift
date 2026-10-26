@@ -211,7 +211,8 @@ final class HoverInspector: @unchecked Sendable {
             info.fileURL = FinderItem.url(at: element)
             // The desktop is Finder's too, but isn't in a window.
             info.fileIsOnDesktop = info.fileURL != nil && !info.ancestry.contains(kAXWindowRole)
-            if info.fileURL != nil {
+            if let file = info.fileURL {
+                info.fileIsInInstaller = FinderItem.isInInstaller(file)
                 let finder = AXElement.application(pid: pid)
                 let focused = finder.focusedElement
                 info.finderIsBusy = FinderItem.isBusy(focusedRole: focused?.role, focusedSubrole: focused?.subrole,
