@@ -84,7 +84,7 @@ final class PreviewController {
             noPreview(because: "previews are off here")
             return
         }
-        guard let source = MediaResolver.source(for: info), settings.filter.allows(source) else {
+        guard let source = MediaResolver.source(for: info, cards: settings.filter.cards), settings.filter.allows(source) else {
             noPreview(because: "nothing to preview")
             return
         }
@@ -94,8 +94,10 @@ final class PreviewController {
             return
         }
         // An image the page already shows about as large as a preview could be has nothing to add,
-        // unless it's from a post with more to step through.
-        let shownLarge = info.imageFrame.map {
+        // unless it's from a post with more to step through. A Letterboxd card is about the poster's film,
+        // whatever its size.
+        let isLetterboxdCard = if case .letterboxd = source { true } else { false }
+        let shownLarge = !isLetterboxdCard && info.imageFrame.map {
             !PreviewGeometry.couldEnlarge(shown: $0.size, room: panel.room(at: cursor), by: settings.minimumEnlargement)
         } ?? false
         if shownLarge, !source.isPost {
@@ -109,8 +111,9 @@ final class PreviewController {
         }
         // Still on the same thing: it's loading, showing, or was dismissed by a click.
         if target?.source == source { return }
-        // A second look doesn't replace what's already on screen.
-        if again, showing != nil { return }
+        // A second look doesn't replace what's already on screen, unless that's an image the link it
+        // has just found around it outranks.
+        if again, showing != nil, !(target.map { source.replaces(onSecondLook: $0.source) } ?? false) { return }
 
         reset(because: "new target")
         let elementFrame = info.imageFrame ?? info.frame
@@ -246,7 +249,7 @@ final class PreviewController {
         switch item {
         case .image: [.copy, .save, .saveAs]
         case .video(let url, _): url.isFileURL ? [] : [.copy, .save, .saveAs]
-        case .article, .github: [.copy]
+        case .article, .github, .letterboxd: [.copy]
         case .embed, .channel, .file, .weather, .network: []
         }
     }
@@ -321,6 +324,9 @@ final class PreviewController {
         case (.copy, .github(let card)):
             PreviewActions.copy(link: card.url)
             panel.flash("Copied link")
+        case (.copy, .letterboxd(let card)):
+            PreviewActions.copy(link: card.url)
+            panel.flash("Copied link")
         default:
             return false
         }
@@ -387,7 +393,7 @@ final class PreviewController {
                 // The rocker shows the new level.
                 if input.up != 0 { playback.changeVolume(by: input.isPrecise ? input.up * 0.005 : (input.up > 0 ? 0.05 : -0.05)) }
             }
-        case .embed, .channel, .article, .github, .weather, .network:
+        case .embed, .channel, .article, .github, .letterboxd, .weather, .network:
             // On the player or card, scrolling belongs to it; on the notch, it mustn't move the page away.
             return !panel.isOnPreview(input.location)
         case .file:
@@ -520,6 +526,16 @@ final class PreviewController {
             playback.stop()
             panel.show(card, counter: counter, anchor: requested.anchor)
             log.infoPrivateInRelease("preview: GitHub card for \(github.url.absoluteString)")
+
+        case .letterboxd(let letterboxd):
+            let card = CardHostingView(rootView: LetterboxdCardView(card: letterboxd))
+            // Showing a review's spoilers changes its size.
+            card.onSizeChange = { [weak self, weak card] in
+                Task { @MainActor in if let self, let card { self.panel.refit(card) } }
+            }
+            playback.stop()
+            panel.show(card, counter: counter, anchor: requested.anchor)
+            log.infoPrivateInRelease("preview: Letterboxd card for \(letterboxd.url.absoluteString)")
 
         case .file(let url):
             // Cards wait longer than other previews, so sweeping across a folder doesn't flash them.

@@ -39,7 +39,7 @@ enum MediaSite: String, CaseIterable, Identifiable, Codable, Sendable {
         case .twitch: "Clips in Twitch's player"
         case .imgur: "Full-size images and GIF videos"
         case .wikimedia: "Large versions of article images, and cards for links to articles"
-        case .letterboxd: "Large posters"
+        case .letterboxd: "Cards for films, reviews, people, and lists, and large posters"
         case .github: "Cards for links to repositories, issues, and pull requests"
         case .redgifs: "Videos, images, and galleries"
         case .erome: "Albums of photos and videos"
@@ -60,7 +60,7 @@ enum MediaSite: String, CaseIterable, Identifiable, Codable, Sendable {
         else if on("twitch.tv") { self = .twitch }
         else if on("imgur.com") { self = .imgur }
         else if on("wikimedia.org", "wikipedia.org") { self = .wikimedia }
-        else if on("ltrbxd.com", "letterboxd.com") { self = .letterboxd }
+        else if on("ltrbxd.com", "letterboxd.com", "boxd.it") { self = .letterboxd }
         else if on("github.com") { self = .github }
         else if on("redgifs.com") { self = .redgifs }
         else if on("erome.com") { self = .erome }
@@ -84,6 +84,7 @@ extension MediaSource {
         case .youtubeChannel: .youtube
         case .wikipedia: .wikimedia
         case .github: .github
+        case .letterboxd: .letterboxd
         case .file, .weather, .network: nil
         case .embed(let embed):
             switch embed.site {
@@ -122,7 +123,7 @@ struct PreviewFilter: Sendable, Equatable {
         case .images, .redditGallery: return images
         case .video, .streamable: return videos
         case .embed: return embeds
-        case .youtubeChannel, .wikipedia, .github: return cards
+        case .youtubeChannel, .wikipedia, .github, .letterboxd: return cards
         case .weather: return weather
         case .network: return network
         case .file(let url, let onDesktop):
@@ -140,7 +141,7 @@ struct PreviewFilter: Sendable, Equatable {
             case .image: images
             case .video: videos
             case .embed: embeds
-            case .channel, .article, .github: cards
+            case .channel, .article, .github, .letterboxd: cards
             case .weather: weather
             case .network: network
             case .file: files
