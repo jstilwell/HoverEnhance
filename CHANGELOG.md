@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.8.1 - Unreleased
+
+### Fixed
+
+- File cards no longer appear in an app's installer window, where they got in the way of dragging the app to Applications.
+
 ## 0.8.0 - 10-19-2026
 
 ### Added

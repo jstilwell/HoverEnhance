@@ -93,6 +93,50 @@ struct FinderItemTests {
         #expect(MediaResolver.source(for: info) == nil)
     }
 
+    @Test func installerImagesGetNoCard() {
+        #expect(FinderItem.isInstaller(readOnly: true, deviceModel: "Disk Image"))
+        // A writable image kept for storage, and a read-only drive or share.
+        #expect(!FinderItem.isInstaller(readOnly: false, deviceModel: "Disk Image"))
+        #expect(!FinderItem.isInstaller(readOnly: true, deviceModel: "SSD"))
+        #expect(!FinderItem.isInstaller(readOnly: true, deviceModel: nil))
+
+        var info = HoverInfo(pid: 1, appName: "Finder", bundleID: FinderItem.bundleID)
+        info.fileURL = URL(filePath: "/Volumes/Firefox/Firefox.app")
+        info.fileIsInInstaller = true
+        #expect(MediaResolver.source(for: info) == nil)
+    }
+
+    @Test func mountedImagesAreToldApart() throws {
+        let folder = FileManager.default.temporaryDirectory.appending(path: "HoverEnhance-\(UUID().uuidString)")
+        let content = folder.appending(path: "content")
+        try FileManager.default.createDirectory(at: content, withIntermediateDirectories: true)
+        try FileManager.default.createSymbolicLink(at: content.appending(path: "Applications"), withDestinationURL: URL(filePath: "/Applications"))
+        try Data("hi".utf8).write(to: content.appending(path: "a.txt"))
+        defer { try? FileManager.default.removeItem(at: folder) }
+        #expect(!FinderItem.isInInstaller(content.appending(path: "a.txt")))
+
+        func hdiutil(_ arguments: String...) throws {
+            let process = Process()
+            process.executableURL = URL(filePath: "/usr/bin/hdiutil")
+            process.arguments = arguments + ["-quiet"]
+            try process.run()
+            process.waitUntilExit()
+            try #require(process.terminationStatus == 0, "hdiutil \(arguments.joined(separator: " "))")
+        }
+        // An installer is compressed, so read-only; a writable image is kept for storage.
+        for (format, isInstaller) in [("UDZO", true), ("UDRW", false)] {
+            let image = folder.appending(path: "\(format).dmg").path(percentEncoded: false)
+            let mount = folder.appending(path: "mount-\(format)")
+            try hdiutil("create", "-volname", "HoverEnhance Test", "-srcfolder", content.path(percentEncoded: false), "-format", format, image)
+            try hdiutil("attach", "-nobrowse", "-noverify", "-mountpoint", mount.path(percentEncoded: false), image)
+            defer { try? hdiutil("detach", "-force", mount.path(percentEncoded: false)) }
+            #expect(FinderItem.isInInstaller(mount.appending(path: "a.txt")) == isInstaller, "\(format)")
+            #expect(FinderItem.isInInstaller(mount.appending(path: "Applications")) == isInstaller, "\(format)")
+            // The image's own icon, as on the desktop.
+            #expect(!FinderItem.isInInstaller(mount))
+        }
+    }
+
     @Test func fileReferenceURLsResolveToPaths() throws {
         let file = FileManager.default.temporaryDirectory.appending(path: "HoverEnhance-\(UUID().uuidString).txt")
         try Data("hi".utf8).write(to: file)

@@ -1,4 +1,5 @@
 import ApplicationServices
+import DiskArbitration
 import Foundation
 
 /// The parts of an accessibility element the Finder item lookup reads, so it can be tested without Finder.
@@ -66,6 +67,24 @@ enum FinderItem {
         let renaming = focusedRole == kAXTextFieldRole && focusedSubrole != kAXSearchFieldSubrole
         let quickLook = windowSubroles.contains { $0?.replacingOccurrences(of: " ", with: "").localizedCaseInsensitiveContains("QuickLook") == true }
         return renaming || quickLook
+    }
+
+    /// Whether a file is inside an app's installer window: a read-only disk image, where a card would get
+    /// in the way of dragging the app to Applications. Writable images, kept for storage, still get cards,
+    /// as does the image's own icon.
+    static func isInInstaller(_ url: URL) -> Bool {
+        guard let values = try? url.resourceValues(forKeys: [.volumeIsReadOnlyKey, .volumeURLKey]),
+              values.volumeIsReadOnly == true, let volume = values.volume,
+              volume.standardizedFileURL.path != url.standardizedFileURL.path,
+              let session = DASessionCreate(nil),
+              let disk = DADiskCreateFromVolumePath(nil, session, volume as CFURL),
+              let description = DADiskCopyDescription(disk) as? [String: Any] else { return false }
+        return isInstaller(readOnly: true, deviceModel: description[kDADiskDescriptionDeviceModelKey as String] as? String)
+    }
+
+    /// What Disk Arbitration says of a mounted disk image, whatever its format or file system.
+    static func isInstaller(readOnly: Bool, deviceModel: String?) -> Bool {
+        readOnly && deviceModel == "Disk Image"
     }
 
     /// Item URLs among the children and grandchildren of `node`.
