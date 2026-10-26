@@ -33,8 +33,10 @@ app).
   never under 50). It doesn't look while previews wait for a key that isn't held, and stops listening
   while paused. On a web page it looks again a few times over the next two seconds while the cursor
   stays put, since Chromium fills in its accessibility tree after scrolling and loading, unless the
-  first look found plain text; a second look can start a preview but never ends one, and clicks and
-  key presses stop them.
+  first look found plain text; a second look can start a preview but never ends one, and replaces one
+  only when it shows an image and the look finds a link around it to something more
+  (`MediaSource.replaces(onSecondLook:)`), as when Chromium adds the link over a Letterboxd poster
+  late. Clicks, key presses, and scrolling stop them.
 - `HoverInspector` hit-tests with `AXUIElementCopyElementAtPosition` on a background queue (AX
   calls are synchronous IPC into the target app) and walks up to the enclosing link and web area.
   A look the cursor has moved on from is dropped before its slow parts, and excluded apps
@@ -128,6 +130,15 @@ app).
   articles have none), asking for the image at the card's size, and `WikipediaCardView` draws it in
   Wikipedia's colors. `GitHub` asks the REST API without signing in, one request a card (60 an hour
   are allowed), and `GitHubCardView` draws it in GitHub's Primer colors.
+- Links to Letterboxd films, reviews and diary entries, people, and lists, and its boxd.it short links,
+  get `LetterboxdCardView`, in Letterboxd's dark colors, on Letterboxd too and even from a poster, which
+  the card shows; a link to the page being shown gets none. `Letterboxd` reads the page itself: a
+  film's JSON-LD, a review's header and body, a person's TMDB photo and bio, a list's preview tags,
+  with a review's spoiler warning in its description. Posters come from `/film/<slug>/poster/std/230/`,
+  the JSON Letterboxd's own pages ask for (none for posters it hides, as for adult films). Cloudflare
+  answers some pages, such as a member's later viewings of a film, with a bot check; those load in
+  `WebPageLoader` once the plain request is refused, Letterboxd's own pages only. Profiles and likes
+  are behind it too, so they get no card. With cards off, links to them preview as before.
 - `ShortcutTap`, an active event tap like `ScrollTap`, is on only while a preview shows an image, a
   video from the web, or a card, and looks only for the copy, save, and save-as shortcuts in Settings
   (⌘C, ⌘S, ⇧⌘S to start; `Shortcut.matches` goes by the character a letter key types, so they follow
@@ -205,7 +216,7 @@ rest are captures of the website's demos at [hoverenhance.com](https://hoverenha
 Playwright in a 1280×900 window.
 
 - **`browser.gif`**: the `#features` demo's stage (`.scaled`) at 1x, one full cycle (zoom, albums,
-  video and its buttons, cards, about 42 seconds), encoded with ffmpeg at 15 fps, 640 wide, with a 128-color palette
+  video and its buttons, cards, Letterboxd, about 55 seconds), encoded with ffmpeg at 15 fps, 640 wide, with a 128-color palette
   (`palettegen=max_colors=128:stats_mode=diff`, `paletteuse=dither=bayer:bayer_scale=5:diff_mode=rectangle`).
   Take its frames as PNGs from Chrome's screencast (`Page.startScreencast` over CDP), with their
   times for ffmpeg's concat demuxer: Playwright's recorded video is lossy, and its noise makes the GIF

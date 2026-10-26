@@ -2,11 +2,30 @@
 
 All notable changes to this project will be documented in this file.
 
-## 0.8.1 - Unreleased
+## 0.9.1 - 10-26-2026
 
 ### Fixed
 
 - File cards no longer appear in an app's installer window, where they got in the way of dragging the app to Applications.
+
+## 0.9.0 - 10-23-2026
+
+### Added
+
+- Resting on a Letterboxd poster or film link shows a card with the poster, rating, director, runtime, tagline, and synopsis.
+- Resting on a poster in Letterboxd's "New from friends", or any link to a review or diary entry, shows the member's stars, like, rewatch, date, and full review.
+- Reviews marked as containing spoilers stay covered on their card until you click to show them.
+- Resting on a link to a director, actor, or other person on Letterboxd shows their photo, bio, other roles, and best-known films.
+- Resting on a link to a Letterboxd list shows its title, owner, size, notes, and first films.
+- Letterboxd's boxd.it short links get the same cards, on any website.
+
+### Changed
+
+- With cards turned off under Settings → Previews, links that would get a card preview their images as they did before cards.
+
+### Fixed
+
+- A thumbnail whose link the browser hadn't finished setting up switches from its enlarged image to the card, post, or video the link leads to, instead of needing a second hover.
 
 ## 0.8.0 - 10-19-2026
 

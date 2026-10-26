@@ -28,6 +28,8 @@ enum MediaSource: Sendable, Hashable {
     case wikipedia(WikipediaArticleRef)
     /// A link to a GitHub repository, issue, or pull request, anywhere but GitHub.
     case github(GitHubRef)
+    /// A link to a film, review, person, or list on Letterboxd, there or anywhere else.
+    case letterboxd(LetterboxdRef)
     /// In Finder: a file or folder, in a window or on the desktop.
     case file(URL, onDesktop: Bool)
     /// The Weather menu bar item, at `item`: its frame, for hanging the forecast under it.
@@ -41,7 +43,18 @@ extension MediaSource {
     var isPost: Bool {
         switch self {
         case .redditGallery, .tweet, .blueskyPost, .instagram, .erome: true
-        case .images, .video, .streamable, .redgifs, .embed, .youtubeChannel, .wikipedia, .github, .file, .weather, .network: false
+        case .images, .video, .streamable, .redgifs, .embed, .youtubeChannel, .wikipedia, .github, .letterboxd, .file, .weather, .network: false
+        }
+    }
+
+    /// Whether a second look that found this should replace `shown`, already on screen. Only an image
+    /// gives way, to what a link around it leads to: the first look came before the page had the link
+    /// in its accessibility tree, as Chromium does with Letterboxd's posters, which a link overlays.
+    func replaces(onSecondLook shown: MediaSource) -> Bool {
+        guard case .images = shown else { return false }
+        switch self {
+        case .images, .file, .weather, .network: return false
+        default: return true
         }
     }
 
@@ -67,6 +80,8 @@ enum MediaItem: Sendable, Equatable {
     case article(WikipediaArticle)
     /// A card about a GitHub repository, issue, or pull request.
     case github(GitHubCard)
+    /// A card about a film, review, person, or list on Letterboxd.
+    case letterboxd(LetterboxdCard)
     /// A card about a file or folder.
     case file(URL)
     /// The forecast, under the menu bar item at `item`.
@@ -101,7 +116,7 @@ struct Media: Sendable, Equatable {
                 return web.isEmpty ? nil : .image(web)
             case .video(let url, _):
                 return isWeb(url) ? item : nil
-            case .embed, .channel, .article, .github, .file, .weather, .network:
+            case .embed, .channel, .article, .github, .letterboxd, .file, .weather, .network:
                 return item
             }
         }
@@ -114,7 +129,8 @@ enum MediaResolver {
     /// Videos on a page smaller than this, such as looping thumbnails, still get a preview.
     static let smallestWatchableVideo = CGSize(width: 120, height: 90)
 
-    static func source(for info: HoverInfo) -> MediaSource? {
+    /// `cards` off leaves links to what would get a card previewing as any other link would.
+    static func source(for info: HoverInfo, cards: Bool = true) -> MediaSource? {
         if WeatherTrigger.matches(info), let frame = info.frame {
             return .weather(item: frame)
         }
@@ -149,8 +165,13 @@ enum MediaResolver {
             guard info.isOnText, let link = info.linkURL else { return nil }
             if let ref = YouTube.channelRef(fromLink: link) { return .youtubeChannel(ref) }
         }
+        // A link to a film, review, person, or list on Letterboxd gets a card, even from its poster: the card
+        // shows the poster too. Not a link to the page being shown, such as a film's own poster.
+        if cards, let link = info.linkURL, let ref = Letterboxd.ref(fromLink: link), ref != info.pageURL.flatMap(Letterboxd.ref(fromLink:)) {
+            return .letterboxd(ref)
+        }
         // A link to an article or repository gets a card about it, unless what's hovered is an image to enlarge.
-        if let link = info.linkURL, let card = cardSource(forLink: link, on: info.pageURL), info.isOnText || imageCandidates(for: info).isEmpty {
+        if cards, let link = info.linkURL, let card = cardSource(forLink: link, on: info.pageURL), info.isOnText || imageCandidates(for: info).isEmpty {
             return card
         }
         // A link to a post or video outranks the thumbnail inside it.
