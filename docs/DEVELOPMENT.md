@@ -66,8 +66,10 @@ app).
   the notch; on the video, its position.
 - In Finder, `FinderItem` finds the hovered item: each one is an element with `AXFilename` and a
   file reference `AXURL`, reached from other cells of a list row or the label under an icon through
-  the row or the item's group. `FileDetails` reads the card's details from Spotlight and Finder's
-  records first, so protected folders aren't opened just to describe a file, and reads nothing of a
+  the row or the item's group. Items in an app's installer window, a read-only disk image
+  (`FinderItem.isInInstaller`, asking Disk Arbitration for the volume's device model), get no card, so
+  it doesn't cover the Applications folder the app is dragged to. `FileDetails` reads the card's
+  details from Spotlight and Finder's records first, so protected folders aren't opened just to describe a file, and reads nothing of a
   file that's only in the cloud (the app also turns off downloading such files on read, in
   `main.swift`); `FileStatus` covers tags, iCloud, quarantine, and aliases, `ZipSummary` reads a
   zip's central directory, `AppBundleInfo` an app's Info.plist and signature (a developer's name only
