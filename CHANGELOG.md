@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.9.2 - Unreleased
+
+### Changed
+
+- The copyright holder is Jesse Stilwell, and the app no longer says "All rights reserved", which didn't fit the MIT license.
+
 ## 0.9.1 - 10-26-2026
 
 ### Fixed
