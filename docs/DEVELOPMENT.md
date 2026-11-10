@@ -195,7 +195,8 @@ update only if it's signed with the key whose public half is `SUPublicEDKey`. To
 The script builds a universal app signed with Developer ID and the hardened runtime, puts it in a
 signed DMG, notarizes and staples it, signs the update and the appcast, and publishes both as a
 GitHub release tagged at the commit it built (as a draft first, so the latest release never lacks
-either file). Without `--upload` it stops before publishing and prints the command that would.
+either file). It runs the tests first, and refuses a version older than the latest release. Without
+`--upload` it stops before publishing.
 
 It needs, once: a Developer ID Application certificate for team `G65RD22S57` (`TEAM_ID` in the
 Makefile and the script; the release is refused if it's signed by any other team, and is signed by the

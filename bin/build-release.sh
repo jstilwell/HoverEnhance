@@ -156,6 +156,21 @@ if git rev-parse -q --verify "refs/tags/v${VERSION}" > /dev/null \
     exit 1
 fi
 
+# The latest release is where new downloads and the update feed come from: an older version published
+# over it, as from a branch that missed a release, would hand everyone the older app.
+if [ "$UPLOAD" = true ]; then
+    LATEST=$(gh release view --repo "$REPO" --json tagName --jq .tagName 2> /dev/null || true)
+    if [ -n "$LATEST" ] && [ "$(printf '%s\n' "${LATEST#v}" "$VERSION" | sort -V | tail -1)" != "$VERSION" ]; then
+        echo -e "${RED}Error: ${LATEST} is already out, and ${VERSION} is older. Is this branch missing that release?${NC}"
+        exit 1
+    fi
+fi
+
+# Nothing ships with a failing test. The tests make Git repositories of their own, which a global
+# configuration that signs commits would hold up.
+echo -e "${YELLOW}Running the tests...${NC}"
+GIT_CONFIG_GLOBAL=/dev/null make test
+
 echo -e "${GREEN}Building ${APP_NAME} ${VERSION}${NC}"
 rm -rf "$RELEASE_DIR"
 make release-app TEAM_ID="$TEAM_ID"
@@ -270,11 +285,14 @@ if [ "$UPLOAD" = true ]; then
     echo -e "${YELLOW}Creating the GitHub release...${NC}"
     gh release create "v${VERSION}" "$DMG_PATH" "$APPCAST" --draft --title "Version ${VERSION}" \
         --notes "$GITHUB_NOTES" --target "$(git rev-parse HEAD)" --repo "$REPO"
-    gh release edit "v${VERSION}" --draft=false --latest --repo "$REPO"
+    gh release edit "v${VERSION}" --draft=false --latest --repo "$REPO" || {
+        echo -e "${RED}The release is on GitHub as a draft, but publishing it failed. Publish it with:${NC}"
+        echo "  gh release edit v${VERSION} --draft=false --latest --repo ${REPO}"
+        exit 1
+    }
     echo -e "${GREEN}Released: https://github.com/${REPO}/releases/tag/v${VERSION}${NC}"
 else
-    echo -e "${YELLOW}Next:${NC} ./bin/build-release.sh --upload builds and publishes it as a GitHub release."
-    echo "Or publish these by hand, with the appcast attached as appcast.xml:"
-    echo "  gh release create v${VERSION} ${DMG_PATH} ${APPCAST} --title \"Version ${VERSION}\" --latest --repo ${REPO}"
+    # Not by hand: only --upload checks that what's tagged is what was built.
+    echo -e "${YELLOW}Not published.${NC} ./bin/build-release.sh --upload builds it again from committed, pushed code and publishes it."
 fi
 echo -e "${GREEN}Done!${NC}"
