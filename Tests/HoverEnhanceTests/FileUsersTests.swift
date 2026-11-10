@@ -64,13 +64,19 @@ struct FileUsersTests {
     }
 
     @Test func aCardThatsGoneStopsLooking() async {
+        let here = URL(filePath: FileManager.default.currentDirectoryPath, directoryHint: .isDirectory)
         let found = await Task {
             withUnsafeCurrentTask { $0?.cancel() }
-            // Everything is using the startup disk's root, so only stopping early leaves this empty.
-            return await FileUsers.find(URL(filePath: "/"))
+            // This process is working here, so only stopping early leaves this empty.
+            return await FileUsers.find(here, excluding: 0)
         }.value
         #expect(found.isEmpty)
-        #expect(!(await FileUsers.find(URL(filePath: "/"))).isEmpty)
+        #expect(!(await FileUsers.find(here, excluding: 0)).isEmpty)
+    }
+
+    @Test func theStartupDiskIsntInUseByEverything() async {
+        // Most processes work in "/" and never leave, which says nothing about the disk.
+        #expect(await FileUsers.find(URL(filePath: "/")).allSatisfy { $0.use == .window })
     }
 
     @Test func nothingUsesAFreshFile() async throws {

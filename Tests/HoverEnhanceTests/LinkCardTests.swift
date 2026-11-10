@@ -11,7 +11,7 @@ struct WikipediaLinkTests {
         #expect(ref("https://en.wikipedia.org/wiki/Matterhorn") == WikipediaArticleRef(language: "en", title: "Matterhorn"))
         #expect(ref("https://de.m.wikipedia.org/wiki/Z%C3%BCrich#Geschichte") == WikipediaArticleRef(language: "de", title: "Z%C3%BCrich"))
         #expect(ref("https://zh-yue.wikipedia.org/wiki/%E9%A6%99%E6%B8%AF") == WikipediaArticleRef(language: "zh-yue", title: "%E9%A6%99%E6%B8%AF"))
-        #expect(ref("https://en.wikipedia.org/wiki/AC/DC") == nil, "an unencoded slash isn't one title")
+        #expect(ref("https://en.wikipedia.org/wiki/AC/DC") == WikipediaArticleRef(language: "en", title: "AC%2FDC"), "Wikipedia writes a title's slash as it is")
         #expect(ref("https://en.wikipedia.org/wiki/AC%2FDC") == WikipediaArticleRef(language: "en", title: "AC%2FDC"))
     }
 
@@ -128,9 +128,25 @@ struct GitHubLinkTests {
         #expect(ref("https://github.com/swiftlang") == nil)
         #expect(ref("https://github.com/settings/profile") == nil)
         #expect(ref("https://github.com/orgs/swiftlang/repositories") == nil)
+        #expect(ref("https://github.com/users/someone/projects") == nil)
+        #expect(ref("https://github.com/stars/someone") == nil)
+        #expect(ref("https://github.com/account/billing") == nil)
         #expect(ref("https://github.com/a/..") == nil)
         #expect(ref("https://gist.github.com/someone/abc123") == nil)
         #expect(ref("https://github.com/swiftlang/swift/pull/99999999999999") == .repo(owner: "swiftlang", name: "swift"))
+    }
+
+    @Test func usedUpRequestsSayWhenToAskAgain() throws {
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        func answer(_ status: Int, _ headers: [String: String]) throws -> HTTPURLResponse {
+            try #require(HTTPURLResponse(url: URL(string: "https://api.github.com/repos/a/b")!, statusCode: status, httpVersion: nil, headerFields: headers))
+        }
+        #expect(GitHub.limitedUntil(try answer(403, ["x-ratelimit-remaining": "0", "x-ratelimit-reset": "1000600"]), now: now) == Date(timeIntervalSince1970: 1_000_600))
+        #expect(GitHub.limitedUntil(try answer(429, ["x-ratelimit-remaining": "0"]), now: now) == now.addingTimeInterval(60))
+        #expect(GitHub.limitedUntil(try answer(403, ["x-ratelimit-remaining": "0", "x-ratelimit-reset": "9999999999"]), now: now) == now.addingTimeInterval(3600),
+                "never longer than GitHub's hour")
+        #expect(GitHub.limitedUntil(try answer(403, ["x-ratelimit-remaining": "12"]), now: now) == nil, "refused for another reason")
+        #expect(GitHub.limitedUntil(try answer(200, ["x-ratelimit-remaining": "0"]), now: now) == nil)
     }
 
     @Test func apiURLs() {

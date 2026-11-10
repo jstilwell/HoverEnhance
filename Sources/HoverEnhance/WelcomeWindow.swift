@@ -160,6 +160,8 @@ struct WelcomeView: View {
             .multilineTextAlignment(.center)
             .foregroundStyle(.secondary)
             if AppLocation.isTemporary { MoveToApplicationsNote() }
+            // Off until asked for: without it, HoverEnhance is gone after the next restart.
+            LaunchAtLoginToggle()
             HStack(spacing: 10) {
                 Button("Open Settings") {
                     openSettings()

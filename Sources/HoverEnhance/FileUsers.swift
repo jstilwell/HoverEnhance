@@ -84,10 +84,12 @@ enum FileUsers {
     }
 
     /// Processes with `path` open, mapped, or as their working folder; for a volume other than the
-    /// startup disk, those with anything open on it.
+    /// startup disk, those with anything open on it. None for the startup disk: most processes work in
+    /// "/" and never leave, which says nothing about the disk.
     private static func processesUsing(_ path: String) -> [pid_t: FileUser.Use] {
         guard !Task.isCancelled else { return [:] }
         let values = try? URL(filePath: path).resourceValues(forKeys: [.isDirectoryKey, .isVolumeKey, .volumeIsRootFileSystemKey])
+        if values?.isVolume == true, values?.volumeIsRootFileSystem == true { return [:] }
         let isVolume = values?.isVolume == true && values?.volumeIsRootFileSystem != true
         // Watchers such as Finder's open files only to hear about changes; they don't count.
         var flags = UInt32(PROC_LISTPIDSPATH_EXCLUDE_EVTONLY)

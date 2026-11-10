@@ -55,8 +55,23 @@ struct UpdatesTests {
         #expect(!Updates.isConfigured(["SUFeedURL": "http://updates.example.com/appcast.xml", "SUPublicEDKey": key]))
     }
 
+    @Test func checksAreOffOnlyWhenSwitchedOff() throws {
+        let name = "HoverEnhanceTests.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: name))
+        defer { defaults.removePersistentDomain(forName: name) }
+        // Versions before 0.10.0 saved "off" at first launch, before anyone was asked.
+        defaults.set(false, forKey: "SUEnableAutomaticChecks")
+        Updates.forgetUnaskedOff(in: defaults)
+        #expect(defaults.object(forKey: "SUEnableAutomaticChecks") == nil)
+        // Switched off after that, it stays off.
+        defaults.set(false, forKey: "SUEnableAutomaticChecks")
+        Updates.forgetUnaskedOff(in: defaults)
+        #expect(defaults.object(forKey: "SUEnableAutomaticChecks") as? Bool == false)
+    }
+
     @Test func theShippedInfoPlistHasTheKey() throws {
         let info = try #require(NSDictionary(contentsOfFile: "Resources/Info.plist") as? [String: Any])
+        #expect(info["SUEnableAutomaticChecks"] as? Bool == true, "a new install checks for updates without being set up")
         #expect(info["SUPublicEDKey"] as? String == key)
         #expect(info["SURequireSignedFeed"] as? Bool == true)
         #expect(info["SUFeedURL"] as? String == "https://github.com/jstilwell/HoverEnhance/releases/latest/download/appcast.xml")

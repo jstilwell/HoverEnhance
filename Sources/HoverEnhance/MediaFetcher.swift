@@ -31,6 +31,8 @@ actor MediaFetcher {
     private var youtubeChannels: [URL: YouTubeChannel] = [:]
     /// Letterboxd's posters, by film slug: rows of them on cards for people and lists repeat.
     private var letterboxdPosters: [String: URL] = [:]
+    /// GitHub has said it won't answer until then; see `GitHub.limitedUntil`.
+    private var gitHubLimitedUntil: Date?
 
     init(configuration: URLSessionConfiguration = MediaFetcher.configuration()) {
         session = URLSession(configuration: configuration)
@@ -81,8 +83,7 @@ actor MediaFetcher {
             lookedUp = await data(at: url, headers: ["User-Agent": Wikipedia.userAgent], requests)
                 .flatMap(Wikipedia.article).map { Media(items: [.article($0)]) }
         case .github(let ref):
-            lookedUp = await data(at: GitHub.apiURL(for: ref), headers: GitHub.headers, requests)
-                .flatMap { GitHub.card($0, for: ref) }.map { Media(items: [.github($0)]) }
+            lookedUp = await gitHubCard(ref, requests).map { Media(items: [.github($0)]) }
         case .youtubeChannel(let ref):
             lookedUp = await youtubeCard(ref, requests).map { Media(items: [.channel($0.channel, video: $0.video)]) }
         case .letterboxd(let ref):
@@ -91,6 +92,7 @@ actor MediaFetcher {
         // A lookup cut short, as when the cursor moves on, is no answer to keep.
         guard !Task.isCancelled else { return .nothing }
         if let media = lookedUp?.webOnly() {
+            looked = looked.filter { Date().timeIntervalSince($0.value.time) < lookupLifetime }
             looked[source] = (media, Date())
             missed[source] = nil
             return .found(media)
@@ -103,7 +105,7 @@ actor MediaFetcher {
     private func redditGallery(id: String, _ requests: Requests) async -> Media? {
         let url = RedditGallery.pageURL(id: id)
         var urls = await data(at: url, requests).map { RedditGallery.imageURLs(inPage: String(decoding: $0, as: UTF8.self)) } ?? []
-        if urls.isEmpty {
+        if urls.isEmpty, !Task.isCancelled {
             // Without a cookie from an earlier visit Reddit serves a JavaScript check instead of the
             // page; a real browser engine passes it. Whether that answers decides whether this failed.
             let carousel = await WebPageLoader.shared.html(at: url, selector: "gallery-carousel")
@@ -245,6 +247,23 @@ actor MediaFetcher {
         guard let url = Letterboxd.posterURL(film: slug), let poster = await data(at: url, Requests()).flatMap(Letterboxd.poster) else { return nil }
         letterboxdPosters[slug] = poster
         return poster
+    }
+
+    /// A link GitHub has nothing public for (a private repository, a page that isn't one) and the hour's
+    /// requests running out are nothing to show, not failures. Once out, nothing is asked until the reset.
+    private func gitHubCard(_ ref: GitHubRef, _ requests: Requests) async -> GitHubCard? {
+        if let until = gitHubLimitedUntil, Date() < until { return nil }
+        var request = URLRequest(url: GitHub.apiURL(for: ref))
+        GitHub.headers.forEach { request.setValue($1, forHTTPHeaderField: $0) }
+        guard let (data, response) = try? await session.data(for: request, delegate: LocalRedirectGuard.shared),
+              let response = response as? HTTPURLResponse else {
+            requests.failed = true
+            return nil
+        }
+        gitHubLimitedUntil = GitHub.limitedUntil(response)
+        if response.statusCode == 200 { return GitHub.card(data, for: ref) }
+        requests.failed = response.statusCode != 404 && gitHubLimitedUntil == nil
+        return nil
     }
 
     private func data(at url: URL, headers: [String: String] = [:], _ requests: Requests) async -> Data? {

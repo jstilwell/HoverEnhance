@@ -1,15 +1,20 @@
 import AppKit
 
-/// A small click-through panel in the corner of the screen showing the latest hover result.
+/// A small click-through panel in the corner of the screen showing the latest hover result, or news
+/// with no preview up to say it on.
 @MainActor
 final class HUD {
+    /// For news: previews paused by their shortcut, a save that ended after its preview closed.
+    static let toast = HUD(font: .systemFont(ofSize: 13, weight: .medium))
+    private var flashes = 0
+
     private let panel = NSPanel(
         contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: true
     )
     private let background = NSVisualEffectView()
     private let label = NSTextField(wrappingLabelWithString: "")
 
-    init() {
+    init(font: NSFont = .monospacedSystemFont(ofSize: 11, weight: .regular)) {
         panel.level = .statusBar
         panel.isOpaque = false
         panel.backgroundColor = .clear
@@ -26,7 +31,7 @@ final class HUD {
         background.layer?.cornerRadius = 10
         background.layer?.masksToBounds = true
 
-        label.font = .monospacedSystemFont(ofSize: 11, weight: .regular)
+        label.font = font
         label.isSelectable = false
         label.lineBreakMode = .byCharWrapping
         label.preferredMaxLayoutWidth = 520
@@ -54,6 +59,17 @@ final class HUD {
         let origin = NSPoint(x: visible.maxX - size.width - 16, y: visible.minY + 16)
         panel.setFrame(NSRect(origin: origin, size: size), display: true)
         panel.orderFrontRegardless()
+    }
+
+    /// Shows `text` for a moment.
+    func flash(_ text: String) {
+        show(text)
+        flashes += 1
+        let mine = flashes
+        Task {
+            try? await Task.sleep(for: .seconds(2))
+            if flashes == mine { hide() }
+        }
     }
 
     func hide() {

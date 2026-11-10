@@ -44,7 +44,7 @@ struct PirateWeather: WeatherSource {
         ))
         report.minutely = points("minutely").compactMap { minute in
             guard let time = JSON.double(minute["time"]) else { return nil }
-            return .init(time: Date(timeIntervalSince1970: time), intensity: JSON.double(minute["precipIntensity"]) ?? 0, chance: percent(minute["precipProbability"]))
+            return .init(time: Date(timeIntervalSince1970: time), intensity: JSON.double(minute["precipIntensity"]) ?? 0)
         }
         report.hourly = points("hourly").compactMap { hour -> WeatherReport.Hour? in
             guard let time = JSON.double(hour["time"]), let temperature = JSON.double(hour["temperature"]) else { return nil }
@@ -52,8 +52,7 @@ struct PirateWeather: WeatherSource {
                 time: Date(timeIntervalSince1970: time), condition: condition(hour), isDay: isDay(hour["icon"] as? String, at: time, days: points("daily")),
                 temperature: temperature, feelsLike: JSON.double(hour["apparentTemperature"]), precipitationChance: percent(hour["precipProbability"]),
                 // An hour at so many millimeters an hour, of liquid water.
-                precipitation: JSON.double(hour["precipIntensity"]), pressure: JSON.double(hour["pressure"]),
-                uvIndex: JSON.double(hour["uvIndex"]), windSpeed: JSON.double(hour["windSpeed"]))
+                precipitation: JSON.double(hour["precipIntensity"]), pressure: JSON.double(hour["pressure"]))
         }
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = timeZone
@@ -67,26 +66,24 @@ struct PirateWeather: WeatherSource {
                 precipitation: JSON.double(day["precipIntensity"]).map { $0 * 24 },
                 sunrise: JSON.double(day["sunriseTime"]).map(Date.init(timeIntervalSince1970:)),
                 sunset: JSON.double(day["sunsetTime"]).map(Date.init(timeIntervalSince1970:)),
-                uvIndexMax: JSON.double(day["uvIndex"]), windSpeedMax: JSON.double(day["windSpeed"]))
+                uvIndexMax: JSON.double(day["uvIndex"]))
         }
         // With SI units the index is Europe's 0–100 scale.
         let pm25 = JSON.double(now["pm25"]), pm10 = JSON.double(now["pm10"])
         if let index = JSON.int(now["airQualityIndex"]) {
-            report.air = .init(usIndex: WeatherReport.AirQuality.usIndex(pm25: pm25, pm10: pm10), europeanIndex: index, pm25: pm25, pm10: pm10)
+            report.air = .init(usIndex: WeatherReport.AirQuality.usIndex(pm25: pm25, pm10: pm10), europeanIndex: index, pm25: pm25)
         }
         report.alerts = ((json["alerts"] as? [[String: Any]]) ?? []).compactMap { alert -> WeatherAlert? in
             guard let title = alert["title"] as? String else { return nil }
-            let expires = JSON.double(alert["expires"]).flatMap { $0 > 0 ? Date(timeIntervalSince1970: $0) : nil }
-            if let expires, expires < fetched { return nil }
             return WeatherAlert(title: title, severity: .init(alert["severity"] as? String),
-                                starts: JSON.double(alert["time"]).map(Date.init(timeIntervalSince1970:)), ends: expires,
-                                detail: alert["description"] as? String, source: (alert["regions"] as? [String])?.first,
+                                ends: JSON.double(alert["expires"]).flatMap { $0 > 0 ? Date(timeIntervalSince1970: $0) : nil },
+                                source: (alert["regions"] as? [String])?.first,
                                 // Opened with a click, so only a web page: not a file or another app's link.
                                 url: (alert["uri"] as? String).flatMap(URL.init(string:)).flatMap {
                                     ["http", "https"].contains($0.scheme?.lowercased()) ? $0 : nil
                                 })
         }
-        .sorted { $0.severity > $1.severity }
+        .current(at: fetched)
         return report
     }
 

@@ -165,8 +165,17 @@ enum PreviewActions {
     /// Moves a downloaded file to where it's being saved.
     static func saveDownload(at temporary: URL, from url: URL, page: URL?, type: UTType?, to destination: Destination) -> URL? {
         let file = destination.file(for: url, type: type)
-        if case .file = destination { try? FileManager.default.removeItem(at: file) }
-        guard (try? FileManager.default.moveItem(at: temporary, to: file)) != nil else { return nil }
+        if case .file = destination {
+            // Beside the file it replaces first: a move that fails, as onto a full disk, leaves that one alone.
+            let arriving = file.deletingLastPathComponent().appending(path: ".\(UUID().uuidString).download")
+            guard (try? FileManager.default.moveItem(at: temporary, to: arriving)) != nil else { return nil }
+            guard (try? FileManager.default.replaceItemAt(file, withItemAt: arriving)) != nil else {
+                try? FileManager.default.removeItem(at: arriving)
+                return nil
+            }
+        } else {
+            guard (try? FileManager.default.moveItem(at: temporary, to: file)) != nil else { return nil }
+        }
         finishDownload(file, from: url, page: page)
         return file
     }

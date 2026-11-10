@@ -278,7 +278,7 @@ private struct SaveFolderPicker: View {
     }
 }
 
-private struct LaunchAtLoginToggle: View {
+struct LaunchAtLoginToggle: View {
     @State private var isOn = SMAppService.mainApp.status == .enabled
     @State private var note: String?
 
@@ -592,6 +592,7 @@ private struct SkippedWebsitesEditor: View {
 
 struct FinderSettingsView: View {
     @Bindable var settings: AppSettings
+    @State private var confirmsRestore = false
 
     var body: some View {
         Form {
@@ -658,7 +659,12 @@ struct FinderSettingsView: View {
                 Section {
                     HStack {
                         Spacer()
-                        Button("Restore Defaults") { settings.restoreFinderDefaults() }
+                        Button("Restore Defaults…") { confirmsRestore = true }
+                            .confirmationDialog("Restore the Finder settings to their defaults?", isPresented: $confirmsRestore) {
+                                Button("Restore Defaults") { settings.restoreFinderDefaults() }
+                            } message: {
+                                Text("Which details file cards show, and how, go back to how they started.")
+                            }
                     }
                 }
             }
@@ -857,10 +863,13 @@ struct AccountsSettingsView: View {
                     SecureField("Client secret", text: $account.clientSecret, prompt: Text("GOCSPX-…"))
                     HStack {
                         Spacer()
-                        Button(account.status == .signingIn ? "Waiting for the Browser…" : "Sign In with Google…") {
-                            Task { await account.signIn() }
+                        if account.status == .signingIn {
+                            Text("Waiting for the browser…").foregroundStyle(.secondary)
+                            Button("Cancel") { account.cancelSignIn() }
+                        } else {
+                            Button("Sign In with Google…") { Task { await account.signIn() } }
+                                .disabled(!account.canSignIn)
                         }
-                        .disabled(!account.canSignIn)
                     }
                 }
                 if let error = account.lastError {

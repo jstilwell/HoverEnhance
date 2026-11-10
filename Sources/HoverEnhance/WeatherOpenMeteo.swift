@@ -9,11 +9,11 @@ struct OpenMeteo: WeatherSource {
             "longitude": String(format: "%.2f", coordinate.longitude),
             "current": "temperature_2m,relative_humidity_2m,apparent_temperature,is_day,precipitation,weather_code,cloud_cover,pressure_msl,"
                 + "wind_speed_10m,wind_direction_10m,wind_gusts_10m,dew_point_2m,visibility,uv_index",
-            "hourly": "temperature_2m,apparent_temperature,weather_code,precipitation_probability,precipitation,is_day,pressure_msl,uv_index,wind_speed_10m",
+            "hourly": "temperature_2m,apparent_temperature,weather_code,precipitation_probability,precipitation,is_day,pressure_msl",
             "minutely_15": "precipitation",
             "forecast_minutely_15": "8",
             "daily": "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,precipitation_sum,sunrise,sunset,"
-                + "uv_index_max,wind_speed_10m_max",
+                + "uv_index_max",
             "timezone": "auto",
             "timeformat": "unixtime",
             "forecast_days": "10",
@@ -25,7 +25,7 @@ struct OpenMeteo: WeatherSource {
         URLComponents.request("https://air-quality-api.open-meteo.com/v1/air-quality", [
             "latitude": String(format: "%.2f", coordinate.latitude),
             "longitude": String(format: "%.2f", coordinate.longitude),
-            "current": "us_aqi,european_aqi,pm2_5,pm10,ozone,nitrogen_dioxide",
+            "current": "us_aqi,european_aqi,pm2_5",
             "timeformat": "unixtime",
         ])
     }
@@ -76,7 +76,6 @@ struct OpenMeteo: WeatherSource {
             let feels = JSON.doubles(hourly["apparent_temperature"]), codes = JSON.doubles(hourly["weather_code"])
             let chances = JSON.doubles(hourly["precipitation_probability"]), amounts = JSON.doubles(hourly["precipitation"])
             let days = JSON.doubles(hourly["is_day"]), pressures = JSON.doubles(hourly["pressure_msl"])
-            let uv = JSON.doubles(hourly["uv_index"]), winds = JSON.doubles(hourly["wind_speed_10m"])
             report.hourly = times.indices.compactMap { index -> WeatherReport.Hour? in
                 guard let time = times[index], let temperature = temperatures[safe: index] ?? nil else { return nil }
                 // Rain and its chance are for the hour before their time, so an hour's come from the next entry.
@@ -84,7 +83,7 @@ struct OpenMeteo: WeatherSource {
                     time: Date(timeIntervalSince1970: time), condition: condition((codes[safe: index] ?? nil).map { Int($0) }),
                     isDay: (days[safe: index] ?? nil) != 0, temperature: temperature, feelsLike: feels[safe: index] ?? nil,
                     precipitationChance: chances[safe: index + 1] ?? nil, precipitation: amounts[safe: index + 1] ?? nil,
-                    pressure: pressures[safe: index] ?? nil, uvIndex: uv[safe: index] ?? nil, windSpeed: winds[safe: index] ?? nil)
+                    pressure: pressures[safe: index] ?? nil)
             }
         }
 
@@ -104,7 +103,7 @@ struct OpenMeteo: WeatherSource {
             let highs = JSON.doubles(daily["temperature_2m_max"]), lows = JSON.doubles(daily["temperature_2m_min"])
             let chances = JSON.doubles(daily["precipitation_probability_max"]), amounts = JSON.doubles(daily["precipitation_sum"])
             let sunrises = JSON.doubles(daily["sunrise"]), sunsets = JSON.doubles(daily["sunset"])
-            let uv = JSON.doubles(daily["uv_index_max"]), winds = JSON.doubles(daily["wind_speed_10m_max"])
+            let uv = JSON.doubles(daily["uv_index_max"])
             report.daily = times.indices.compactMap { index -> WeatherReport.Day? in
                 guard let time = times[index], let high = highs[safe: index] ?? nil, let low = lows[safe: index] ?? nil else { return nil }
                 // Days start at midnight by the offset when asked, even across a daylight saving change, so
@@ -115,14 +114,13 @@ struct OpenMeteo: WeatherSource {
                     precipitationChance: chances[safe: index] ?? nil, precipitation: amounts[safe: index] ?? nil,
                     sunrise: (sunrises[safe: index] ?? nil).map(Date.init(timeIntervalSince1970:)),
                     sunset: (sunsets[safe: index] ?? nil).map(Date.init(timeIntervalSince1970:)),
-                    uvIndexMax: uv[safe: index] ?? nil, windSpeedMax: winds[safe: index] ?? nil)
+                    uvIndexMax: uv[safe: index] ?? nil)
             }
         }
 
         if let air, let airJSON = try? JSON.object(air), let now = airJSON["current"] as? [String: Any] {
             let quality = WeatherReport.AirQuality(
-                usIndex: JSON.int(now["us_aqi"]), europeanIndex: JSON.int(now["european_aqi"]), pm25: JSON.double(now["pm2_5"]),
-                pm10: JSON.double(now["pm10"]), ozone: JSON.double(now["ozone"]), nitrogenDioxide: JSON.double(now["nitrogen_dioxide"]))
+                usIndex: JSON.int(now["us_aqi"]), europeanIndex: JSON.int(now["european_aqi"]), pm25: JSON.double(now["pm2_5"]))
             if quality.usIndex != nil || quality.europeanIndex != nil { report.air = quality }
         }
         return report

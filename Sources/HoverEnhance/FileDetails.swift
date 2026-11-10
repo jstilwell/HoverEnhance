@@ -181,7 +181,7 @@ struct FileDetails: Sendable, Equatable {
     func rows(pathStyle: PathStyle, signature: Lookup<String>? = nil) -> [DetailRow] {
         var rows: [DetailRow] = []
         func add(_ field: FileCardField, _ label: String, _ text: String?, copy: String? = nil) {
-            guard let text else { return }
+            guard let text, !text.isEmpty else { return }
             rows.append(DetailRow(field: field, label: label, value: .text(text), copyText: copy ?? text))
         }
         add(.created, "Created", created.map(Self.formatDate), copy: created.map(Self.formatFullDate))
@@ -339,9 +339,11 @@ struct FileDetails: Sendable, Equatable {
         func number(_ value: Double) -> String {
             value.rounded() == value ? String(Int(value)) : String(format: "%.1f", value)
         }
-        let shutter = exposure.seconds.map { $0 < 1 ? "1/\(Int((1 / $0).rounded())) s" : "\(number($0)) s" }
-        return [exposure.fNumber.map { "ƒ/" + number($0) }, shutter, exposure.iso.map { "ISO \($0)" },
-                exposure.focalLength.map { "\(Int($0.rounded())) mm" }].compactMap { $0 }.joined(separator: " · ")
+        // Files can hold anything: zero, infinity, and numbers too big for Int would crash the rounding below.
+        func real(_ value: Double?) -> Double? { value.flatMap { $0 > 1e-6 && $0 < 1e6 ? $0 : nil } }
+        let shutter = real(exposure.seconds).map { $0 < 1 ? "1/\(Int((1 / $0).rounded())) s" : "\(number($0)) s" }
+        return [real(exposure.fNumber).map { "ƒ/" + number($0) }, shutter, exposure.iso.map { "ISO \($0)" },
+                real(exposure.focalLength).map { "\(Int($0.rounded())) mm" }].compactMap { $0 }.joined(separator: " · ")
     }
 
     /// "24 fps", "29.97 fps".

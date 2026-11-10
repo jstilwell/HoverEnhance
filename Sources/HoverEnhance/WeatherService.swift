@@ -47,20 +47,23 @@ final class WeatherService {
 
     /// A forecast from the provider, unless one fetched in the last ten minutes is here. Lookups for the
     /// same place share one request.
-    func report(_ provider: WeatherProviderID, at place: WeatherPlace, alertsFromNWS: Bool) async -> Result<WeatherReport, WeatherError> {
+    func report(_ provider: WeatherProviderID, at place: WeatherPlace, alertsFromNWS: Bool, now: Date = Date()) async -> Result<WeatherReport, WeatherError> {
         let key = Key(provider: provider, coordinate: place.coordinate.rounded)
-        if let report = reports[key], Date().timeIntervalSince(report.fetched) < Self.freshFor { return .success(report) }
+        if let report = reports[key], now.timeIntervalSince(report.fetched) < Self.freshFor { return .success(report) }
         if let task = loading[key] { return await task.value }
         let apiKey = savedKey(provider)
         let http = http
+        let asksNWS = alertsFromNWS && !provider.hasAlerts && NWSAlerts.covers(place)
+        let lastAlerts = reports[key]?.alerts ?? []
         let task = Task { () -> Result<WeatherReport, WeatherError> in
             if provider.needsKey, apiKey?.isEmpty != false { return .failure(.needsKey) }
+            // Alongside the forecast, so a slow answer doesn't hold it up.
+            async let alerts = asksNWS ? try? await NWSAlerts.alerts(at: place.coordinate, using: http) : nil
             do throws(WeatherError) {
                 var report = try await provider.source.report(at: place.coordinate, key: apiKey, timeZone: place.timeZone, using: http)
-                if alertsFromNWS, !provider.hasAlerts, NWSAlerts.covers(place) {
-                    // Alerts are extra: the forecast stands without them.
-                    report.alerts = (try? await NWSAlerts.alerts(at: place.coordinate, using: http)) ?? []
-                }
+                // Alerts are extra: the forecast stands without them. A lookup that failed says nothing
+                // about the alerts found last time, which stay until they end.
+                if asksNWS { report.alerts = await alerts ?? lastAlerts }
                 return .success(report)
             } catch {
                 return .failure(error)
@@ -86,6 +89,8 @@ final class WeatherPopupModel {
     private(set) var state: State = .loading
     /// A newer forecast is loading behind the one shown.
     private(set) var isRefreshing = false
+    /// The newer forecast didn't come, so the one shown is the old one.
+    private(set) var refreshFailed = false
     /// Whether the place is wherever the Mac is, rather than one picked.
     var isCurrentLocation: Bool { location == .current }
     let provider: WeatherProviderID
@@ -137,13 +142,15 @@ final class WeatherPopupModel {
             state = .problem(error)
             return
         }
+        refreshFailed = false
         if let kept = service.kept(provider, at: place) {
             state = .report(kept, place: place)
             if Date().timeIntervalSince(kept.fetched) >= WeatherService.freshFor {
                 isRefreshing = true
                 Task {
-                    if case .success(let report) = await service.report(provider, at: place, alertsFromNWS: alertsFromNWS) {
-                        state = .report(report, place: place)
+                    switch await service.report(provider, at: place, alertsFromNWS: alertsFromNWS) {
+                    case .success(let report): state = .report(report, place: place)
+                    case .failure: refreshFailed = true
                     }
                     isRefreshing = false
                 }

@@ -149,8 +149,8 @@ struct URLSessionWeatherHTTP: WeatherHTTP {
         let data: Data, response: URLResponse
         do {
             (data, response) = try await session.data(for: request)
-        } catch let error as URLError where [.notConnectedToInternet, .networkConnectionLost, .cannotFindHost, .timedOut,
-                                             .dnsLookupFailed, .cannotConnectToHost].contains(error.code) {
+        } catch let error as URLError where [.notConnectedToInternet, .networkConnectionLost, .cannotFindHost,
+                                             .dnsLookupFailed].contains(error.code) {
             throw .offline
         } catch {
             throw .unavailable(nil)

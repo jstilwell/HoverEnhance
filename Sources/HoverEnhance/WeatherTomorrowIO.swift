@@ -39,7 +39,7 @@ struct TomorrowIO: WeatherSource {
                 precipitationChance: JSON.double(values["precipitationProbabilityMax"]),
                 precipitation: amount.isEmpty ? nil : amount.reduce(0, +),
                 sunrise: JSON.date(values["sunriseTime"]), sunset: JSON.date(values["sunsetTime"]),
-                uvIndexMax: JSON.double(values["uvIndexMax"]), windSpeedMax: JSON.double(values["windSpeedMax"]))
+                uvIndexMax: JSON.double(values["uvIndexMax"]))
         }
         func isDay(_ time: Date) -> Bool {
             if let day = daily.first(where: { calendar.isDate($0.date, inSameDayAs: time) }), let sunrise = day.sunrise, let sunset = day.sunset {
@@ -53,13 +53,11 @@ struct TomorrowIO: WeatherSource {
             return WeatherReport.Hour(
                 time: time, condition: condition(JSON.int(values["weatherCode"])), isDay: isDay(time), temperature: temperature,
                 feelsLike: JSON.double(values["temperatureApparent"]), precipitationChance: JSON.double(values["precipitationProbability"]),
-                precipitation: amount.isEmpty ? nil : amount.reduce(0, +), pressure: JSON.double(values["pressureSeaLevel"]),
-                uvIndex: JSON.double(values["uvIndex"]), windSpeed: JSON.double(values["windSpeed"]))
+                precipitation: amount.isEmpty ? nil : amount.reduce(0, +), pressure: JSON.double(values["pressureSeaLevel"]))
         }
         let minutely = entries("minutely").map { time, values in
             WeatherReport.Minute(
-                time: time, intensity: ["rainIntensity", "snowIntensity", "sleetIntensity", "freezingRainIntensity"].compactMap { JSON.double(values[$0]) }.reduce(0, +),
-                chance: JSON.double(values["precipitationProbability"]))
+                time: time, intensity: ["rainIntensity", "snowIntensity", "sleetIntensity", "freezingRainIntensity"].compactMap { JSON.double(values[$0]) }.reduce(0, +))
         }
 
         // Now: realtime's values, or else the hour under way.

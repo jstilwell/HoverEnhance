@@ -307,7 +307,7 @@ private struct InternetSection: View {
                     Text("Looking up…").foregroundStyle(.secondary)
                 }
             case .failed:
-                Text("The internet isn't answering.").foregroundStyle(.secondary)
+                Text("Couldn't look up the public address.").foregroundStyle(.secondary)
                 Button("Try Again", action: retry).controlSize(.small)
             case .found(let address):
                 CopyRow(label: "Public IP", value: address.ip, copied: $copied)

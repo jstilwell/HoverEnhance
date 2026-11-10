@@ -31,17 +31,12 @@ enum NWSAlerts {
         guard let features = try JSON.object(data)["features"] as? [[String: Any]] else { throw .unreadable }
         // The point's forecast page, which lists its alerts in full.
         let page = URL(string: String(format: "https://forecast.weather.gov/MapClick.php?lat=%.2f&lon=%.2f", coordinate.latitude, coordinate.longitude))
-        var seen = Set<String>()
         return features.compactMap { feature -> WeatherAlert? in
             guard let properties = feature["properties"] as? [String: Any], let event = properties["event"] as? String else { return nil }
-            let ends = JSON.date(properties["ends"]) ?? JSON.date(properties["expires"])
-            if let ends, ends < now { return nil }
-            guard seen.insert("\(event)|\(ends?.timeIntervalSince1970 ?? 0)").inserted else { return nil }
             return WeatherAlert(title: event, severity: .init(properties["severity"] as? String),
-                                starts: JSON.date(properties["onset"]) ?? JSON.date(properties["effective"]), ends: ends,
-                                detail: properties["headline"] as? String ?? properties["description"] as? String,
+                                ends: JSON.date(properties["ends"]) ?? JSON.date(properties["expires"]),
                                 source: properties["senderName"] as? String, url: page)
         }
-        .sorted { $0.severity > $1.severity }
+        .current(at: now)
     }
 }

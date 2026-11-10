@@ -14,17 +14,30 @@ final class Updates: NSObject {
     /// A version a scheduled check found, which the menu offers until the user looks at it.
     private(set) var waitingVersion: String?
     var checksAutomatically = false {
-        didSet { controller?.updater.automaticallyChecksForUpdates = checksAutomatically }
+        didSet {
+            // Only a change: Sparkle saves whatever it's given, even the value it already had, as the user's choice.
+            guard let updater = controller?.updater, updater.automaticallyChecksForUpdates != checksAutomatically else { return }
+            updater.automaticallyChecksForUpdates = checksAutomatically
+        }
     }
 
     @ObservationIgnored private var controller: SPUStandardUpdaterController?
 
     func start() {
         guard controller == nil, Self.isConfigured(Bundle.main.infoDictionary ?? [:]) else { return }
+        Self.forgetUnaskedOff(in: .standard)
         let controller = SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: self, userDriverDelegate: self)
         self.controller = controller
         isAvailable = true
         checksAutomatically = controller.updater.automaticallyChecksForUpdates
+    }
+
+    /// Versions before 0.10.0 saved "don't check automatically" at first launch, before anyone chose it.
+    /// Forgets that once, so Info.plist's default (checking) applies; switched off after that, it stays off.
+    nonisolated static func forgetUnaskedOff(in defaults: UserDefaults) {
+        guard !defaults.bool(forKey: "updateChecksDefaultRestored") else { return }
+        defaults.set(true, forKey: "updateChecksDefaultRestored")
+        if defaults.object(forKey: "SUEnableAutomaticChecks") as? Bool == false { defaults.removeObject(forKey: "SUEnableAutomaticChecks") }
     }
 
     /// Whether `info` names a feed and the key its updates are signed with.

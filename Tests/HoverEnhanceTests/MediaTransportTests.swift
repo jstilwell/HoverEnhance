@@ -63,3 +63,14 @@ struct MediaTransportTests {
         #expect(VideoPlayback.clock(3723) == "1:02:03")
     }
 }
+
+@MainActor
+struct VideoPlaybackTests {
+    @Test func aVideoThatNeverStartedKeepsItsPlace() async {
+        let playback = VideoPlayback()
+        playback.positions["film"] = 30
+        #expect(await playback.start(URL(fileURLWithPath: "/nonexistent/film.mp4"), key: "film") == nil)
+        playback.stop()
+        #expect(playback.positions["film"] == 30)
+    }
+}

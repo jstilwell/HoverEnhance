@@ -36,6 +36,8 @@ final class YouTubeAccount {
     @ObservationIgnored private var tokens: GoogleOAuth.Tokens?
     /// The refresh under way, which cards appearing together share rather than each asking Google.
     @ObservationIgnored private var refreshing: Task<GoogleOAuth.Tokens, Error>?
+    /// The sign-in waiting for the browser to come back.
+    @ObservationIgnored private var redirect: LoopbackRedirect?
 
     init() {
         clientID = UserDefaults.standard.string(forKey: Key.clientID) ?? ""
@@ -59,7 +61,11 @@ final class YouTubeAccount {
         do {
             let state = UUID().uuidString
             let redirect = try await LoopbackRedirect.start(expecting: state)
-            defer { redirect.stop() }
+            self.redirect = redirect
+            defer {
+                redirect.stop()
+                self.redirect = nil
+            }
             let verifier = GoogleOAuth.codeVerifier()
             NSWorkspace.shared.open(GoogleOAuth.authorizationURL(
                 clientID: trimmedID, redirectURI: redirect.redirectURI,
@@ -88,10 +94,15 @@ final class YouTubeAccount {
             await checkAccess()
         } catch {
             status = .signedOut
-            lastError = error.localizedDescription
+            lastError = error is CancellationError ? nil : error.localizedDescription
         }
         // Come back from the browser to Settings.
         NSApp.activate()
+    }
+
+    /// Stops waiting for the browser: it may have shown an error page, or its tab was closed.
+    func cancelSignIn() {
+        redirect?.cancel()
     }
 
     /// Makes a small API call to confirm YouTube access works, and learns the account's name.
