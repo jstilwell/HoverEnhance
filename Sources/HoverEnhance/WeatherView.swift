@@ -18,7 +18,7 @@ struct WeatherPopupView: View {
                 ProgressView().controlSize(.small).frame(width: 120, height: 60)
             case .report(let report, let place):
                 WeatherDashboard(report: report, place: place, isCurrentLocation: model.isCurrentLocation, units: model.units,
-                                 hidden: model.hidden, isRefreshing: model.isRefreshing)
+                                 hidden: model.hidden, isRefreshing: model.isRefreshing, refreshFailed: model.refreshFailed)
             case .problem(let problem):
                 WeatherProblemView(problem: problem, provider: model.provider, useCurrentLocation: useCurrentLocation,
                                    openSettings: openSettings, retry: retry)
@@ -36,6 +36,7 @@ private struct WeatherDashboard: View {
     let units: WeatherUnits
     let hidden: Set<WeatherSection>
     let isRefreshing: Bool
+    let refreshFailed: Bool
 
     private var times: WeatherTimes { WeatherTimes(timeZone: report.timeZone) }
 
@@ -82,14 +83,15 @@ private struct WeatherDashboard: View {
                     }
                 }
             }
-            if !hidden.contains(.alerts), !report.alerts.isEmpty {
+            let alerts = report.activeAlerts()
+            if !hidden.contains(.alerts), !alerts.isEmpty {
                 Divider()
-                AlertList(alerts: report.alerts, times: times)
+                AlertList(alerts: alerts, times: times)
                     .padding(.horizontal, 18)
                     .padding(.vertical, 10)
             }
             Divider()
-            Footer(report: report, times: times, isRefreshing: isRefreshing)
+            Footer(report: report, times: times, isRefreshing: isRefreshing, refreshFailed: refreshFailed)
                 .padding(.horizontal, 18)
                 .padding(.vertical, 8)
         }
@@ -611,7 +613,7 @@ private struct AlertList: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            ForEach(Array(alerts.sorted { $0.severity > $1.severity }.prefix(3).enumerated()), id: \.offset) { _, alert in
+            ForEach(Array(alerts.prefix(3).enumerated()), id: \.offset) { _, alert in
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .foregroundStyle(Self.color(alert.severity))
@@ -649,6 +651,7 @@ private struct Footer: View {
     let report: WeatherReport
     let times: WeatherTimes
     let isRefreshing: Bool
+    let refreshFailed: Bool
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
@@ -676,7 +679,7 @@ private struct Footer: View {
             if isRefreshing {
                 ProgressView().controlSize(.mini)
             }
-            Text("Updated \(Self.updated(report.fetched))")
+            Text((refreshFailed ? "Couldn't update · " : "") + "Updated \(Self.updated(report.fetched))")
         }
         .font(.caption)
         .foregroundStyle(.tertiary)

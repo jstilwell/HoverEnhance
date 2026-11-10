@@ -17,21 +17,35 @@
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>0.9.1</string>
+	<string>0.10.0</string>
 	<key>CFBundleVersion</key>
-	<string>0.9.1</string>
+	<string>0.10.0</string>
 	<key>LSApplicationCategoryType</key>
 	<string>public.app-category.utilities</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>14.0</string>
 	<key>LSUIElement</key>
 	<true/>
+	<key>NSDesktopFolderUsageDescription</key>
+	<string>HoverEnhance reads the files and folders here to show their details when you rest the cursor on them in Finder.</string>
+	<key>NSDocumentsFolderUsageDescription</key>
+	<string>HoverEnhance reads the files and folders here to show their details when you rest the cursor on them in Finder.</string>
+	<key>NSDownloadsFolderUsageDescription</key>
+	<string>HoverEnhance reads the files and folders here to show their details when you rest the cursor on them in Finder.</string>
 	<key>NSHumanReadableCopyright</key>
 	<string>Copyright © 2026 Jesse Stilwell.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>HoverEnhance loads previews for pages on your own network, such as a media server's, when you rest the cursor on their images and videos.</string>
 	<key>NSLocationUsageDescription</key>
 	<string>HoverEnhance shows the weather where you are when you rest the cursor on the Weather item in the menu bar.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>HoverEnhance shows the weather where you are when you rest the cursor on the Weather item in the menu bar.</string>
+	<key>NSNetworkVolumesUsageDescription</key>
+	<string>HoverEnhance reads the files and folders on network volumes to show their details when you rest the cursor on them in Finder.</string>
+	<key>NSRemovableVolumesUsageDescription</key>
+	<string>HoverEnhance reads the files and folders on removable volumes to show their details when you rest the cursor on them in Finder.</string>
+	<key>SUEnableAutomaticChecks</key>
+	<true/>
 	<key>SUFeedURL</key>
 	<string>https://github.com/jstilwell/HoverEnhance/releases/latest/download/appcast.xml</string>
 	<key>SUPublicEDKey</key>

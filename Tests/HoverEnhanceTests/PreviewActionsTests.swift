@@ -19,6 +19,11 @@ struct PreviewShortcutTests {
         #expect(PreviewShortcut.matching(key(9, "v", .command), in: shortcuts) == nil)
     }
 
+    @Test func menusShowShortcutsACharacterStandsFor() {
+        #expect(Shortcut(keyCode: 35, modifiers: [.control, .option], key: "P").menuKeyEquivalent == "p")
+        #expect(Shortcut(keyCode: 96, modifiers: .command, key: "F5").menuKeyEquivalent == "")
+    }
+
     @Test func lettersMatchByTheCharacterTheyType() {
         // On Dvorak, the key that types C isn't QWERTY's C key.
         #expect(PreviewShortcut.matching(key(34, "c", .command), in: PreviewShortcut.defaults) == .copy)
@@ -79,6 +84,29 @@ struct SavingTests {
         let chosen = folder.appending(path: "a.png")
         #expect(PreviewActions.save(Data("3".utf8), from: source, page: nil, type: .png, to: .file(chosen)) == chosen)
         #expect(try Data(contentsOf: chosen) == Data("3".utf8))
+    }
+
+    @Test func aDownloadReplacesTheChosenFileOnlyOnceItsThere() throws {
+        let folder = FileManager.default.temporaryDirectory.appending(path: "HoverEnhanceTests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let source = URL(string: "https://example.com/a.mp4")!
+        let chosen = folder.appending(path: "a.mp4"), download = folder.appending(path: "download.tmp")
+        try Data("old".utf8).write(to: chosen)
+
+        // The download went missing: the file that was there stays.
+        #expect(PreviewActions.saveDownload(at: download, from: source, page: nil, type: .mpeg4Movie, to: .file(chosen)) == nil)
+        #expect(try Data(contentsOf: chosen) == Data("old".utf8))
+
+        try Data("new".utf8).write(to: download)
+        #expect(PreviewActions.saveDownload(at: download, from: source, page: nil, type: .mpeg4Movie, to: .file(chosen)) == chosen)
+        #expect(try Data(contentsOf: chosen) == Data("new".utf8))
+        #expect(try FileManager.default.contentsOfDirectory(atPath: folder.path(percentEncoded: false)) == ["a.mp4"], "nothing left beside it")
+
+        try Data("first".utf8).write(to: download)
+        let fresh = folder.appending(path: "b.mp4")
+        #expect(PreviewActions.saveDownload(at: download, from: source, page: nil, type: .mpeg4Movie, to: .file(fresh)) == fresh)
+        #expect(try Data(contentsOf: fresh) == Data("first".utf8))
     }
 
     @Test func streamsCantBeSaved() {

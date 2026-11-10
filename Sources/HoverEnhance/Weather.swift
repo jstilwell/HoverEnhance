@@ -71,8 +71,6 @@ struct WeatherReport: Sendable, Equatable {
         var time: Date
         /// Millimeters an hour.
         var intensity: Double
-        /// Percent, where given.
-        var chance: Double?
     }
 
     struct Hour: Sendable, Equatable {
@@ -86,8 +84,6 @@ struct WeatherReport: Sendable, Equatable {
         /// Millimeters in the hour.
         var precipitation: Double?
         var pressure: Double?
-        var uvIndex: Double?
-        var windSpeed: Double?
     }
 
     struct Day: Sendable, Equatable {
@@ -103,7 +99,6 @@ struct WeatherReport: Sendable, Equatable {
         var sunrise: Date?
         var sunset: Date?
         var uvIndexMax: Double?
-        var windSpeedMax: Double?
     }
 
     struct AirQuality: Sendable, Equatable {
@@ -134,9 +129,6 @@ struct WeatherReport: Sendable, Equatable {
         var mainPollutant: String?
         /// Micrograms per cubic meter.
         var pm25: Double?
-        var pm10: Double?
-        var ozone: Double?
-        var nitrogenDioxide: Double?
     }
 
     /// A provider's word for a level, as "Moderate", and where it stands, from 0 for the least up to 5.
@@ -188,14 +180,16 @@ struct WeatherReport: Sendable, Equatable {
     /// the hourly forecast.
     func pressureTrend(from now: Date = Date()) -> PressureTrend? {
         if let tendency = current.pressureTendency { return tendency }
-        let hours = upcomingHours(Int(4 * 3600 / stepLength), from: now)
-        guard let first = current.pressure ?? hours.first?.pressure,
-              let later = hours.first(where: { $0.time >= now.addingTimeInterval(3 * 3600 - stepLength / 2) })?.pressure else { return nil }
+        guard let first = current.pressure ?? upcomingHours(1, from: now).first?.pressure,
+              let later = hourly.first(where: { $0.time >= now.addingTimeInterval(3 * 3600 - stepLength / 2) })?.pressure else { return nil }
         let change = later - first
         return abs(change) < 1 ? .steady : change > 0 ? .rising : .falling
     }
 
     enum PressureTrend: Sendable { case rising, steady, falling }
+
+    /// Alerts that haven't ended: a report is kept a while, and an alert in it can end meanwhile.
+    func activeAlerts(at now: Date = Date()) -> [WeatherAlert] { alerts.current(at: now) }
 
     /// What the next hour holds for rain or snow, from minute-by-minute data where there is some, or the
     /// next hour's chance otherwise.
@@ -327,9 +321,7 @@ struct WeatherAlert: Sendable, Equatable {
 
     var title: String
     var severity: Severity = .unknown
-    var starts: Date?
     var ends: Date?
-    var detail: String?
     /// Who issued it.
     var source: String?
     /// More about it, on the web.
@@ -373,5 +365,17 @@ enum WeatherTrigger {
 
     static func matches(_ info: HoverInfo) -> Bool {
         info.bundleID == bundleID && info.subrole == "AXMenuExtra"
+    }
+}
+
+extension [WeatherAlert] {
+    /// Without those that have ended or that repeat another, as updates to an alert do; most severe first.
+    func current(at now: Date) -> [WeatherAlert] {
+        var seen = Set<String>()
+        return filter { alert in
+            if let ends = alert.ends, ends < now { return false }
+            return seen.insert("\(alert.title)|\(alert.ends?.timeIntervalSince1970 ?? 0)").inserted
+        }
+        .sorted { $0.severity > $1.severity }
     }
 }

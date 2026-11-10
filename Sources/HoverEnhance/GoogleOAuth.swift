@@ -141,6 +141,7 @@ final class LoopbackRedirect: @unchecked Sendable {
     private var readyContinuation: CheckedContinuation<UInt16, Error>?
     private var callbackContinuation: CheckedContinuation<[String: String], Error>?
     private var received: [String: String]?
+    private var cancelled = false
 
     private(set) var port: UInt16 = 0
     var redirectURI: String { "http://127.0.0.1:\(port)" }
@@ -180,6 +181,8 @@ final class LoopbackRedirect: @unchecked Sendable {
             queue.async {
                 if let received = self.received {
                     continuation.resume(returning: received)
+                } else if self.cancelled {
+                    continuation.resume(throwing: CancellationError())
                 } else {
                     self.callbackContinuation = continuation
                 }
@@ -189,6 +192,14 @@ final class LoopbackRedirect: @unchecked Sendable {
 
     func stop() {
         queue.async { self.listener.cancel() }
+    }
+
+    /// Ends the wait for the browser, as when it showed an error page or its tab was closed.
+    func cancel() {
+        queue.async {
+            self.cancelled = true
+            self.finish(.failure(CancellationError()))
+        }
     }
 
     private func listenerChanged(_ state: NWListener.State) {

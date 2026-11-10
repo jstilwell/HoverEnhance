@@ -283,18 +283,20 @@ final class PreviewController {
             guard let image = shownImage else { return false }
             Task {
                 guard let data = await loader.original(of: image.url, page: page) else {
-                    if self.target == target { panel.flash("Couldn't save") }
+                    say("Couldn't save", on: target)
                     return
                 }
                 let type = PreviewActions.imageType(of: data)
                 if action == .saveAs {
                     chooseFile(for: image.url, type: type) { file in
-                        _ = PreviewActions.save(data, from: image.url, page: page, type: type, to: .file(file))
+                        if PreviewActions.save(data, from: image.url, page: page, type: type, to: .file(file)) == nil {
+                            HUD.toast.flash("Couldn't save \(file.lastPathComponent)")
+                        }
                     }
                 } else {
                     let folder = settings.saveFolderInUse
                     let saved = PreviewActions.save(data, from: image.url, page: page, type: type, to: .folder(folder))
-                    if self.target == target { panel.flash(saved == nil ? "Couldn't save" : "Saved to \(Self.name(of: folder))") }
+                    say(saved == nil ? "Couldn't save" : "Saved to \(Self.name(of: folder))", on: target)
                 }
             }
         case (.copy, .video(let url, _)):
@@ -307,7 +309,11 @@ final class PreviewController {
             }
             if action == .saveAs {
                 chooseFile(for: url, type: PreviewActions.videoType(mimeType: nil, url: url)) { file in
-                    Task { _ = await PreviewActions.save(video: url, page: page, to: .file(file)) }
+                    Task {
+                        // The preview closed for the save panel, and a video takes a while.
+                        let saved = await PreviewActions.save(video: url, page: page, to: .file(file))
+                        HUD.toast.flash(saved == nil ? "Couldn't save \(file.lastPathComponent)" : "Saved \(file.lastPathComponent)")
+                    }
                 }
             } else {
                 let folder = settings.saveFolderInUse
@@ -315,7 +321,7 @@ final class PreviewController {
                 // The download goes on if the preview closes; Downloads in the Dock bounces when it's done there.
                 Task {
                     let saved = await PreviewActions.save(video: url, page: page, to: .folder(folder))
-                    if self.target == target { panel.flash(saved == nil ? "Couldn't save" : "Saved to \(Self.name(of: folder))") }
+                    say(saved == nil ? "Couldn't save" : "Saved to \(Self.name(of: folder))", on: target)
                 }
             }
         case (.copy, .article(let article)):
@@ -336,6 +342,11 @@ final class PreviewController {
     /// Save As: asks where, starting in the save folder, then calls `save` with the file chosen. The
     /// panel brings HoverEnhance forward, which ends the preview, and the app that was in front comes
     /// back once it's done.
+    /// How a save went: on the preview it was made from, or in the corner of the screen once that's gone.
+    private func say(_ text: String, on target: Target) {
+        if self.target == target { panel.flash(text) } else { HUD.toast.flash(text) }
+    }
+
     private func chooseFile(for url: URL, type: UTType?, then save: @escaping @MainActor (URL) -> Void) {
         let previous = NSWorkspace.shared.frontmostApplication
         let savePanel = NSSavePanel()

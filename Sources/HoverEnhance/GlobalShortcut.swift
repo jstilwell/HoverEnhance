@@ -19,6 +19,12 @@ struct Shortcut: Codable, Hashable, Sendable {
             + (flags.contains(.command) ? "⌘" : "") + key
     }
 
+    /// What a menu item shows it by, with `modifierFlags`. Keys no character stands for, such as F5, go
+    /// unshown.
+    var menuKeyEquivalent: String {
+        Self.keyNames[keyCode] == nil && key.count == 1 ? key.lowercased() : ""
+    }
+
     init(keyCode: UInt16, modifiers: NSEvent.ModifierFlags, key: String) {
         self.keyCode = keyCode
         self.modifiers = modifiers.intersection([.command, .option, .control, .shift]).rawValue

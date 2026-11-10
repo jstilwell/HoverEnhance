@@ -6,8 +6,10 @@ import AVFoundation
 final class VideoPlayback {
     private(set) var player: AVPlayer?
     private var key: String?
+    /// Whether the current video got as far as playing. One that didn't has no position to remember.
+    private var started = false
     /// Seconds into each video, by key, for videos closed partway through.
-    private var positions: [String: Double] = [:]
+    var positions: [String: Double] = [:]
     private var loopObserver: NSObjectProtocol?
     /// Where an in-flight scrub is headed, so quick scrolls add up instead of restarting from a
     /// position that hasn't caught up yet.
@@ -73,6 +75,7 @@ final class VideoPlayback {
                     await player.seek(to: CMTime(seconds: seconds, preferredTimescale: 600))
                 }
                 guard self.player === player else { return nil }
+                started = true
                 player.play()
                 return item.presentationSize
             }
@@ -133,7 +136,8 @@ final class VideoPlayback {
         let duration = player.currentItem?.duration.seconds ?? .nan
         // Remember partway positions; a video watched to the end starts over next time.
         let partway = AppSettings.shared.resumeVideos && time.isFinite && time > 1 && !(duration.isFinite && time > duration - 1)
-        positions[key] = partway ? time : nil
+        if started { positions[key] = partway ? time : nil }
+        started = false
 
         player.pause()
         scrubTarget = nil

@@ -80,9 +80,10 @@ enum GitHub {
 
     /// The first part of github.com paths that aren't an owner's.
     private static let reserved: Set<String> = [
-        "about", "apps", "codespaces", "collections", "contact", "customer-stories", "enterprise", "events", "explore",
+        "about", "account", "apps", "codespaces", "collections", "contact", "customer-stories", "enterprise", "events", "explore",
         "features", "issues", "join", "login", "logout", "marketplace", "new", "notifications", "orgs", "organizations",
-        "pricing", "pulls", "readme", "search", "security", "settings", "site", "sponsors", "team", "topics", "trending",
+        "pricing", "pulls", "readme", "resources", "search", "security", "settings", "site", "solutions", "sponsors", "stars", "team", "topics",
+        "trending", "users",
     ]
 
     /// github.com/<owner>/<repo>, its issues/<n> and pull/<n>, and anything else inside it, which is about
@@ -120,6 +121,14 @@ enum GitHub {
     }
 
     static let headers = ["Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"]
+
+    /// When to ask again, if `response` says this network address has used up its requests: 60 an hour
+    /// without signing in, shared by everyone behind the address.
+    static func limitedUntil(_ response: HTTPURLResponse, now: Date = Date()) -> Date? {
+        guard [403, 429].contains(response.statusCode), response.value(forHTTPHeaderField: "x-ratelimit-remaining") == "0" else { return nil }
+        let reset = response.value(forHTTPHeaderField: "x-ratelimit-reset").flatMap(Double.init).map(Date.init(timeIntervalSince1970:))
+        return min(reset ?? now.addingTimeInterval(60), now.addingTimeInterval(3600))
+    }
 
     static func card(_ data: Data, for ref: GitHubRef) -> GitHubCard? {
         let decoder = JSONDecoder()

@@ -91,7 +91,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             updateActivity()
         }
         whenChanged({ AppSettings.shared.inspectionPolicy }) { [weak self] _ in self?.monitor.settingsChanged() }
-        pauseShortcut.action = { [weak self] in self?.togglePreviews() }
+        pauseShortcut.action = { [weak self] in
+            self?.togglePreviews()
+            // From the menu the checkmark says it; the shortcut works with nothing of HoverEnhance's in sight.
+            HUD.toast.flash(AppSettings.shared.previewsEnabled ? "Previews on" : "Previews off")
+        }
         registerPauseShortcut(settings.pauseShortcut)
         whenChanged({ AppSettings.shared.pauseShortcut }) { [weak self] shortcut in self?.registerPauseShortcut(shortcut) }
         whenChanged({ Updates.shared.waitingVersion }) { [weak self] version in
@@ -219,9 +223,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         versionItem = NSMenuItem(title: "Version \(AdvancedSettingsView.shortVersion)", action: nil, keyEquivalent: "")
         versionItem.isEnabled = false
         grantItem = menuItem("Grant Accessibility Access…", action: #selector(grantAccess), symbol: "hand.raised")
-        previewsItem = menuItem("Show Previews", action: #selector(togglePreviews), key: "e", symbol: "eye")
+        previewsItem = menuItem("Show Previews", action: #selector(togglePreviews), symbol: "eye")
         skipSiteItem = menuItem("Skip Previews on This Website", action: #selector(toggleSkippedSite), symbol: "nosign")
-        copyItem = menuItem("Copy Inspector Result", action: #selector(copyLastResult), key: "c", symbol: "doc.on.doc")
+        copyItem = menuItem("Copy Inspector Result", action: #selector(copyLastResult), symbol: "doc.on.doc")
         updateItem = menuItem("Check for Updates…", action: #selector(checkForUpdates), symbol: "arrow.triangle.2.circlepath")
 
         let menu = NSMenu()
@@ -288,6 +292,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let granted = access.isGranted
         grantItem.isHidden = granted
         previewsItem.state = settings.previewsEnabled ? .on : .off
+        // The shortcut recorded in Settings, which works in every app; a key of the menu's own wouldn't.
+        previewsItem.keyEquivalent = settings.pauseShortcut?.menuKeyEquivalent ?? ""
+        previewsItem.keyEquivalentModifierMask = settings.pauseShortcut?.modifierFlags ?? []
         if let domain = lastWebsite {
             skipSiteItem.isHidden = false
             // Webmail skipped as webmail, in Settings → Sites, has nothing to skip here.

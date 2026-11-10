@@ -7,10 +7,6 @@ import WebKit
 final class WebPageLoader {
     static let shared = WebPageLoader()
 
-    /// Made when a load needs it and let go a minute after the last one: a web view keeps a web
-    /// content process running. Its cookies outlive it, in the shared website data store.
-    private var webView: WKWebView?
-    private var release: Task<Void, Never>?
     /// Bumped per load; an older load still polling gives up when it sees a newer one.
     private var generation = 0
 
@@ -31,16 +27,11 @@ final class WebPageLoader {
     private func evaluate(_ script: String, at url: URL, timeout: Duration) async -> (result: String, url: URL?)? {
         generation += 1
         let mine = generation
-        release?.cancel()
-        let webView = self.webView ?? WKWebView(frame: CGRect(x: 0, y: 0, width: 1280, height: 900))
-        self.webView = webView
+        // A view per load: a reused one would run `script` in the last page until the new one arrives.
+        // Its cookies outlive it, in the shared website data store.
+        let webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 1280, height: 900))
         webView.load(URLRequest(url: url))
-        defer {
-            if generation == mine {
-                webView.stopLoading()
-                releaseSoon()
-            }
-        }
+        defer { webView.stopLoading() }
 
         let deadline = ContinuousClock.now + timeout
         while ContinuousClock.now < deadline {
@@ -52,14 +43,6 @@ final class WebPageLoader {
             }
         }
         return nil
-    }
-
-    private func releaseSoon() {
-        release = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(60))
-            guard !Task.isCancelled else { return }
-            self?.webView = nil
-        }
     }
 
     /// Cookies and storage the offscreen view and the embedded players have collected.

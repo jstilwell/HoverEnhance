@@ -123,8 +123,8 @@ Requires macOS 14 or later. Signed, notarized, and updates itself.
 
 From the menu bar icon:
 
-- **General**: a shortcut that pauses previews from any app, when they appear (always, or while
-  holding a key), the hover delay, links in other apps, and apps to skip.
+- **General**: opening at login, a shortcut that pauses previews from any app, when they appear
+  (always, or while holding a key), the hover delay, links in other apps, and apps to skip.
 - **Previews and Video**: what to preview, the largest image to download, the notch, scrolling, the
   copy and save keys and folder, and playback.
 - **Sites**: websites to skip, webmail included by default; the menu can also skip the one you're on.
@@ -132,6 +132,7 @@ From the menu bar icon:
 - **Weather**: the provider, place, and units.
 - **macOS**: the network popup and its public IP lookup.
 - **Accounts**: sign in to YouTube to subscribe from its cards.
+- **Advanced**: automatic update checks, stored data, and permissions.
 
 ## Building from source
 

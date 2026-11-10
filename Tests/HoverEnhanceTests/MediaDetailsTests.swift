@@ -11,6 +11,11 @@ struct MediaDetailsTests {
         #expect(FileDetails.formatExposure(.init(seconds: 30)) == "30 s")
     }
 
+    @Test func exposureValuesNoCameraWritesAreLeftOut() {
+        #expect(FileDetails.formatExposure(.init(fNumber: 0, seconds: 0, iso: 100, focalLength: .infinity)) == "ISO 100")
+        #expect(FileDetails.formatExposure(.init(fNumber: .nan, seconds: -1, focalLength: 1e300)) == "")
+    }
+
     @Test func camerasSayTheirMakerOnce() {
         #expect(FileDetails.cameraName(make: "Apple", model: "iPhone 15 Pro") == "Apple iPhone 15 Pro")
         #expect(FileDetails.cameraName(make: "Canon", model: "Canon EOS R5") == "Canon EOS R5")

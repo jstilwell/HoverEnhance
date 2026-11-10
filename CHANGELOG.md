@@ -2,11 +2,41 @@
 
 All notable changes to this project will be documented in this file.
 
-## 0.9.2 - Unreleased
+## 0.10.0 - 11-10-2026
+
+### Added
+
+- The last page of the welcome window offers to open HoverEnhance at login.
+- Pausing or resuming previews with the shortcut says so in the corner of the screen.
+- Save As… says when a video has finished saving, and when an image or video couldn't be saved.
+- Signing in to Google can be cancelled while it waits for the browser.
 
 ### Changed
 
+- HoverEnhance checks for updates automatically unless you turn that off under Settings → Advanced; earlier versions left it off without asking, so this update turns it on once.
+- The menu shows the shortcut you recorded for pausing previews instead of ⌘E, which only worked while the menu was open.
+- A GitHub link to a private repository, or to a page that isn't a repository, shows nothing instead of "Couldn't load a preview".
+- When GitHub's hourly limit runs out, its cards pause until the limit resets instead of showing an error on every link.
+- Restore Defaults under Settings → Finder asks before it resets anything.
+- macOS says why when HoverEnhance needs access to the Desktop, Documents, or Downloads folders, other disks, or the local network.
 - The copyright holder is Jesse Stilwell, and the app no longer says "All rights reserved", which didn't fit the MIT license.
+
+### Fixed
+
+- A photo whose exposure time is recorded as zero no longer crashes HoverEnhance when its file card appears.
+- A Reddit gallery or Letterboxd page looked up within a minute of another no longer shows the other one's photos or review.
+- A weather alert no longer disappears when the alert lookup fails, or stays after it has ended.
+- Weather alerts load alongside the forecast instead of after it, so a slow alert lookup holds the popup up less.
+- The weather popup says when it couldn't update instead of showing an old forecast as current.
+- A slow weather provider is no longer reported as "No connection".
+- The pressure trend no longer disappears in the second half of each hour.
+- A video's remembered position is no longer lost when the cursor passes over it again briefly.
+- Wikipedia articles with a slash in their title, such as AC/DC, get a card.
+- The network popup no longer says the internet isn't answering when only the public address lookup failed.
+- The startup disk's file card no longer lists nearly every running app as using it.
+- Resting on one app after another in Finder no longer checks all their signatures at once.
+- Saving a video over an existing file no longer deletes that file when the download can't be moved into place.
+- Memory use no longer creeps up as more links are looked up.
 
 ## 0.9.1 - 10-26-2026
 

@@ -380,6 +380,15 @@ struct WeatherModelTests {
         var report = WeatherReport(provider: .openMeteo, fetched: now, timeZone: .current, current: .init(time: now, condition: .clear, temperature: 10))
         report.hourly = (0..<4).map { .init(time: now.addingTimeInterval(Double($0) * 3600), condition: .clear, temperature: 10, pressure: 1010 + Double($0)) }
         #expect(report.pressureTrend(from: now) == .rising)
+        report.hourly = (0..<48).map { .init(time: now.addingTimeInterval(Double($0) * 3600), condition: .clear, temperature: 10, pressure: 1010 + Double($0)) }
+        #expect(report.pressureTrend(from: now.addingTimeInterval(40 * 60)) == .rising, "late in the hour too")
+    }
+
+    @Test func alertsThatHaveEndedArentShown() {
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        var report = WeatherReport(provider: .openMeteo, fetched: now, timeZone: .current, current: .init(time: now, condition: .clear, temperature: 10))
+        report.alerts = [.init(title: "Over", ends: now.addingTimeInterval(-60)), .init(title: "On", ends: now.addingTimeInterval(60)), .init(title: "Open")]
+        #expect(report.activeAlerts(at: now).map(\.title) == ["On", "Open"])
     }
 
     @Test func onlyAppleWeatherInTheMenuBarTriggersIt() {
@@ -422,6 +431,7 @@ private final class FixtureHTTP: WeatherHTTP, @unchecked Sendable {
     private let lock = NSLock()
     private(set) var requests: [URL] = []
     var failNWS = false
+    var nwsAnswer = Data(#"{"features":[]}"#.utf8)
 
     func data(for request: URLRequest) async throws(WeatherError) -> Data {
         guard let url = request.url else { throw .unreadable }
@@ -430,7 +440,7 @@ private final class FixtureHTTP: WeatherHTTP, @unchecked Sendable {
             switch url.host() {
             case "api.open-meteo.com": return try fixture("open-meteo-forecast")
             case "air-quality-api.open-meteo.com": return try fixture("open-meteo-air")
-            case "api.weather.gov": if failNWS { throw WeatherError.unavailable(400) } else { return Data(#"{"features":[]}"#.utf8) }
+            case "api.weather.gov": if failNWS { throw WeatherError.unavailable(400) } else { return nwsAnswer }
             case "api.weatherapi.com": return try fixture("weatherapi-forecast")
             case "dataservice.accuweather.com":
                 let path = url.path()
@@ -469,6 +479,18 @@ struct WeatherServiceTests {
         let service = WeatherService(http: http, currentLocation: { () async throws(WeatherError) in throw .noLocation }, key: { _ in nil })
         guard case .success(let report) = await service.report(.openMeteo, at: newYork, alertsFromNWS: true) else { Issue.record("no report"); return }
         #expect(report.alerts.isEmpty)
+    }
+
+    @Test func alertsFailingKeepsTheOnesFromLastTime() async {
+        let http = FixtureHTTP()
+        http.nwsAnswer = Data(#"{"features":[{"properties":{"event":"Flood Watch","severity":"Severe","ends":"2999-01-01T00:00:00Z"}}]}"#.utf8)
+        let service = WeatherService(http: http, currentLocation: { () async throws(WeatherError) in throw .noLocation }, key: { _ in nil })
+        guard case .success(let first) = await service.report(.openMeteo, at: newYork, alertsFromNWS: true) else { Issue.record("no report"); return }
+        #expect(first.alerts.map(\.title) == ["Flood Watch"])
+        http.failNWS = true
+        let later = Date().addingTimeInterval(WeatherService.freshFor + 60)
+        guard case .success(let second) = await service.report(.openMeteo, at: newYork, alertsFromNWS: true, now: later) else { Issue.record("no report"); return }
+        #expect(second.alerts.map(\.title) == ["Flood Watch"] && http.requests.count == 6)
     }
 
     @Test func providersWithAlertsOfTheirOwnDontAskTheNWS() async {

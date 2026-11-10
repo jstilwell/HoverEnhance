@@ -93,6 +93,8 @@ struct AppBundleInfo: Sendable, Equatable {
         }
         private static let state = OSAllocatedUnfairLock(initialState: State())
         private static let lifetime: TimeInterval = 5 * 60
+        /// One check at a time: each reads its whole app, and a sweep down Applications would start them all.
+        private static let queue = DispatchQueue(label: "com.jessestilwell.HoverEnhance.seals", qos: .utility)
 
         static func check(_ url: URL, timeout: TimeInterval) -> Seal? {
             let modified = (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
@@ -104,7 +106,7 @@ struct AppBundleInfo: Sendable, Equatable {
                 let group = DispatchGroup()
                 group.enter()
                 current.running[key] = group
-                DispatchQueue.global(qos: .utility).async {
+                queue.async {
                     let seal = fullCheck(url)
                     state.withLock {
                         $0.known[key] = (seal, Date())

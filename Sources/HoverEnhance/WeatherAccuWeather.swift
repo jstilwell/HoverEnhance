@@ -95,8 +95,7 @@ struct AccuWeather: WeatherSource {
             return WeatherReport.Hour(
                 time: Date(timeIntervalSince1970: time), condition: condition(JSON.int(hour["WeatherIcon"]), intensity: hour["PrecipitationIntensity"] as? String),
                 isDay: hour["IsDaylight"] as? Bool ?? true, temperature: temperature, feelsLike: metric(hour["RealFeelTemperature"]),
-                precipitationChance: JSON.double(hour["PrecipitationProbability"]), precipitation: metric(hour["TotalLiquid"]),
-                uvIndex: JSON.double(hour["UVIndexFloat"]) ?? JSON.double(hour["UVIndex"]), windSpeed: speed(hour["Wind"] as? [String: Any]))
+                precipitationChance: JSON.double(hour["PrecipitationProbability"]), precipitation: metric(hour["TotalLiquid"]))
         }
 
         let forecast = try JSON.object(daily)
@@ -119,8 +118,7 @@ struct AccuWeather: WeatherSource {
                 precipitation: amounts.isEmpty ? nil : amounts.reduce(0, +),
                 sunrise: JSON.double(sun?["EpochRise"]).map(Date.init(timeIntervalSince1970:)),
                 sunset: JSON.double(sun?["EpochSet"]).map(Date.init(timeIntervalSince1970:)),
-                uvIndexMax: airAndPollen(entry)["uvindex"].flatMap { JSON.double($0["Value"]) },
-                windSpeedMax: parts.compactMap { speed($0["Wind"] as? [String: Any]) }.max())
+                uvIndexMax: airAndPollen(entry)["uvindex"].flatMap { JSON.double($0["Value"]) })
         }
 
         // Air and pollen are forecast by the day: today's stand for now.

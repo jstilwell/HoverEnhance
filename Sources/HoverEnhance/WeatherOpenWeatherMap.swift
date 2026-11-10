@@ -64,8 +64,7 @@ struct OpenWeatherMap: WeatherSource {
                 time: Date(timeIntervalSince1970: time), condition: condition(JSON.int((step["weather"] as? [[String: Any]])?.first?["id"])),
                 isDay: (step["sys"] as? [String: Any])?["pod"] as? String != "n", temperature: temperature, feelsLike: JSON.double(main["feels_like"]),
                 precipitationChance: JSON.double(step["pop"]).map { $0 * 100 }, precipitation: amount,
-                pressure: JSON.double(main["sea_level"]) ?? JSON.double(main["pressure"]),
-                windSpeed: JSON.double((step["wind"] as? [String: Any])?["speed"]))
+                pressure: JSON.double(main["sea_level"]) ?? JSON.double(main["pressure"]))
             return (hour, JSON.double(main["temp_max"]) ?? temperature, JSON.double(main["temp_min"]) ?? temperature)
         }
         report.hourly = steps.map(\.hour)
@@ -73,8 +72,7 @@ struct OpenWeatherMap: WeatherSource {
 
         if let air, let entry = (try? JSON.object(air))?["list"] as? [[String: Any]], let components = entry.first?["components"] as? [String: Any] {
             let pm25 = JSON.double(components["pm2_5"]), pm10 = JSON.double(components["pm10"])
-            report.air = .init(usIndex: WeatherReport.AirQuality.usIndex(pm25: pm25, pm10: pm10), pm25: pm25, pm10: pm10,
-                               ozone: JSON.double(components["o3"]), nitrogenDioxide: JSON.double(components["no2"]))
+            report.air = .init(usIndex: WeatherReport.AirQuality.usIndex(pm25: pm25, pm10: pm10), pm25: pm25)
         }
         return report
     }

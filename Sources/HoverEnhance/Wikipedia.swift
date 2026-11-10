@@ -37,9 +37,9 @@ enum Wikipedia {
               !language.isEmpty, language != "www", language.allSatisfy({ $0.isASCII && ($0.isLowercase || $0 == "-") }) else { return nil }
         let path = url.path(percentEncoded: true)
         guard path.hasPrefix("/wiki/") else { return nil }
-        let title = String(path.dropFirst("/wiki/".count))
-        // A title is one path segment; a slash in one comes encoded.
-        guard !title.isEmpty, !title.contains("/") else { return nil }
+        // Wikipedia links to "AC/DC" with its slash as it is; the API wants a title as one path segment.
+        let title = path.dropFirst("/wiki/".count).replacingOccurrences(of: "/", with: "%2F")
+        guard !title.isEmpty else { return nil }
         return WikipediaArticleRef(language: String(language), title: title)
     }
 

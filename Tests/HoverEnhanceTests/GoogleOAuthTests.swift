@@ -69,6 +69,14 @@ struct LoopbackRedirectTests {
         #expect(try await callback == ["code": "real", "state": "s1"])
     }
 
+    @Test func cancellingEndsTheWait() async throws {
+        let redirect = try await LoopbackRedirect.start(expecting: "s1")
+        defer { redirect.stop() }
+        let waiting = Task { try await redirect.callback(timeout: .seconds(30)) }
+        redirect.cancel()
+        await #expect(throws: CancellationError.self) { try await waiting.value }
+    }
+
     @Test func givesUpAfterTheTimeout() async throws {
         let redirect = try await LoopbackRedirect.start(expecting: "s1")
         defer { redirect.stop() }
