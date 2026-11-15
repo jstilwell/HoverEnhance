@@ -10,6 +10,8 @@ actor MediaFetcher {
     /// once, or load Reddit's page in a web view again.
     private var missed: [MediaSource: (failed: Bool, time: Date)] = [:]
     private let missLifetime: TimeInterval = 60
+    /// A lookup that failed is asked again much sooner: the network may be back.
+    private let failLifetime: TimeInterval
 
     enum Lookup: Sendable, Equatable {
         case found(Media)
@@ -34,7 +36,8 @@ actor MediaFetcher {
     /// GitHub has said it won't answer until then; see `GitHub.limitedUntil`.
     private var gitHubLimitedUntil: Date?
 
-    init(configuration: URLSessionConfiguration = MediaFetcher.configuration()) {
+    init(configuration: URLSessionConfiguration = MediaFetcher.configuration(), failLifetime: TimeInterval = 5) {
+        self.failLifetime = failLifetime
         session = URLSession(configuration: configuration)
     }
 
@@ -48,7 +51,7 @@ actor MediaFetcher {
 
     func lookUp(_ source: MediaSource) async -> Lookup {
         if let cached = looked[source], Date().timeIntervalSince(cached.time) < lookupLifetime { return .found(cached.media) }
-        if let miss = missed[source], Date().timeIntervalSince(miss.time) < missLifetime { return miss.failed ? .failed : .nothing }
+        if let miss = missed[source], Date().timeIntervalSince(miss.time) < (miss.failed ? failLifetime : missLifetime) { return miss.failed ? .failed : .nothing }
         let requests = Requests()
         let lookedUp: Media?
         switch source {
@@ -191,7 +194,7 @@ actor MediaFetcher {
 
     /// The card for a Letterboxd page, with the posters it shows, which its page leaves for scripts to fetch.
     private func letterboxdCard(_ ref: LetterboxdRef, _ requests: Requests) async -> LetterboxdCard? {
-        guard let page = await letterboxdPage(ref.pageURL, requests), let card = Letterboxd.card(inPage: page.html, at: page.url) else { return nil }
+        guard let page = await letterboxdPage(ref, requests), let card = Letterboxd.card(inPage: page.html, at: page.url) else { return nil }
         switch card {
         case .film:
             return card
@@ -204,21 +207,37 @@ actor MediaFetcher {
         case .list(var list):
             list.films = await withPosters(list.films)
             return .list(list)
+        case .member(var member):
+            member.favorites = await withPosters(member.favorites)
+            return .member(member)
         }
     }
 
     /// A Letterboxd page, and where it was after any redirect, as from a short link. Cloudflare answers some
-    /// of its pages, such as a member's later viewings of a film, with a check only a browser engine passes.
-    private func letterboxdPage(_ url: URL, _ requests: Requests) async -> (html: String, url: URL)? {
+    /// of its pages, such as a member's later viewings of a film, with a check only a browser engine passes,
+    /// and profiles always, so those aren't asked for plainly first.
+    private func letterboxdPage(_ ref: LetterboxdRef, _ requests: Requests) async -> (html: String, url: URL)? {
+        let url = ref.pageURL
+        // A page that has what a card needs, or Letterboxd's own "not found".
+        let arrived = #"meta[property="og:url"], body.error"#
+        if case .member = ref {
+            guard let page = await WebPageLoader.shared.page(at: url, once: arrived) else {
+                requests.failed = true
+                return nil
+            }
+            return (page.html, page.url ?? url)
+        }
         guard let (data, response) = try? await session.data(from: url, delegate: LocalRedirectGuard.shared),
               let http = response as? HTTPURLResponse, let final = http.url else {
             requests.failed = true
             return nil
         }
         if http.statusCode == 200 { return (String(decoding: data, as: UTF8.self), final) }
+        // Nothing there, as for a series on IMDb that Letterboxd doesn't list: nothing to show, not a failure.
+        if http.statusCode == 404 { return nil }
         // Only Letterboxd's own pages go to the web view, which follows redirects without the guard.
         guard http.statusCode == 403, Letterboxd.isLetterboxd(final),
-              let page = await WebPageLoader.shared.page(at: final, once: #"meta[property="og:url"]"#) else {
+              let page = await WebPageLoader.shared.page(at: final, once: arrived) else {
             requests.failed = true
             return nil
         }
@@ -241,10 +260,11 @@ actor MediaFetcher {
         }
     }
 
-    /// A film's poster, or nil when it has none to show, or can't be had: the card goes without.
+    /// A film's poster, or nil when it has none to show, or can't be had soon: the card goes without
+    /// rather than wait on it.
     private func letterboxdPoster(_ slug: String) async -> URL? {
         if let known = letterboxdPosters[slug] { return known }
-        guard let url = Letterboxd.posterURL(film: slug), let poster = await data(at: url, Requests()).flatMap(Letterboxd.poster) else { return nil }
+        guard let url = Letterboxd.posterURL(film: slug), let poster = await data(at: url, timeout: 3, Requests()).flatMap(Letterboxd.poster) else { return nil }
         letterboxdPosters[slug] = poster
         return poster
     }
@@ -266,8 +286,9 @@ actor MediaFetcher {
         return nil
     }
 
-    private func data(at url: URL, headers: [String: String] = [:], _ requests: Requests) async -> Data? {
+    private func data(at url: URL, headers: [String: String] = [:], timeout: TimeInterval? = nil, _ requests: Requests) async -> Data? {
         var request = URLRequest(url: url)
+        if let timeout { request.timeoutInterval = timeout }
         headers.forEach { request.setValue($1, forHTTPHeaderField: $0) }
         guard let (data, response) = try? await session.data(for: request, delegate: LocalRedirectGuard.shared),
               (response as? HTTPURLResponse)?.statusCode == 200 else {

@@ -69,6 +69,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         monitor.onModifiersChanged = { [weak self] flags in self?.modifiersChanged(flags) }
         monitor.onKeyDown = { [weak self] isEscape in self?.preview.keyPressed(isEscape: isEscape) }
         monitor.policy = { AppSettings.shared.inspectionPolicy }
+        // The inspector shows every look; a preview only needs the ones that could change it.
+        monitor.wantsSecondLook = { [weak self] in AppSettings.shared.showsInspector || self?.preview.secondLookCouldHelp ?? true }
         monitor.shouldInspect = { AppSettings.shared.inspectsOnRest(holding: NSEvent.modifierFlags) }
         // Paused or not before it starts, so a paused launch switches nothing on in the app in front.
         updateActivity()

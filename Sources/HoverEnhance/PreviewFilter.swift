@@ -39,7 +39,7 @@ enum MediaSite: String, CaseIterable, Identifiable, Codable, Sendable {
         case .twitch: "Clips in Twitch's player"
         case .imgur: "Full-size images and GIF videos"
         case .wikimedia: "Large versions of article images, and cards for links to articles"
-        case .letterboxd: "Cards for films, reviews, people, and lists, and large posters"
+        case .letterboxd: "Cards for films, reviews, members, and lists, large posters, and IMDb and TMDB links"
         case .github: "Cards for links to repositories, issues, and pull requests"
         case .redgifs: "Videos, images, and galleries"
         case .erome: "Albums of photos and videos"

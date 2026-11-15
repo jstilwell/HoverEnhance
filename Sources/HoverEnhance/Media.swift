@@ -28,7 +28,8 @@ enum MediaSource: Sendable, Hashable {
     case wikipedia(WikipediaArticleRef)
     /// A link to a GitHub repository, issue, or pull request, anywhere but GitHub.
     case github(GitHubRef)
-    /// A link to a film, review, person, or list on Letterboxd, there or anywhere else.
+    /// A link to a film, review, person, list, or member on Letterboxd, there or anywhere else, or to a
+    /// film on IMDb or TMDB.
     case letterboxd(LetterboxdRef)
     /// In Finder: a file or folder, in a window or on the desktop.
     case file(URL, onDesktop: Bool)
@@ -165,9 +166,12 @@ enum MediaResolver {
             guard info.isOnText, let link = info.linkURL else { return nil }
             if let ref = YouTube.channelRef(fromLink: link) { return .youtubeChannel(ref) }
         }
-        // A link to a film, review, person, or list on Letterboxd gets a card, even from its poster: the card
-        // shows the poster too. Not a link to the page being shown, such as a film's own poster.
-        if cards, let link = info.linkURL, let ref = Letterboxd.ref(fromLink: link), ref != info.pageURL.flatMap(Letterboxd.ref(fromLink:)) {
+        // A link to a film, review, person, list, or member on Letterboxd gets a card, even from its poster:
+        // the card shows the poster too. Not a link to the page being shown, such as a film's own poster.
+        // A link to a film on IMDb or TMDB gets the film's card as other sites' links get theirs: not
+        // from an image there is to enlarge.
+        if cards, let link = info.linkURL, let ref = Letterboxd.ref(fromLink: link), ref != info.pageURL.flatMap(Letterboxd.ref(fromLink:)),
+           !ref.isExternal || info.isOnText || imageCandidates(for: info).isEmpty {
             return .letterboxd(ref)
         }
         // A link to an article or repository gets a card about it, unless what's hovered is an image to enlarge.

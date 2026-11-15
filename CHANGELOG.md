@@ -2,6 +2,28 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.11.0 - 11-15-2026
+
+### Added
+
+- Resting on a member's name or avatar on Letterboxd shows their profile: bio, films watched, followers, and favorite films.
+- A link to a film on IMDb or TMDB, on any website, shows the film's Letterboxd card.
+- Links to a Letterboxd film's reviews, crew, and other pages show the film's card.
+- A Letterboxd film's card says how many reviews it has.
+- Letterboxd reviews keep their italics and bold.
+
+### Changed
+
+- A preview that couldn't load is tried again after a few seconds instead of a minute.
+- The pictures on cards load without cookies for sites outside Settings → Sites, and within the image size limit, as previews do.
+- Pages read in the background, such as Reddit galleries and some Letterboxd pages, no longer load their images, videos, and fonts, so they arrive sooner and contact fewer servers.
+
+### Fixed
+
+- A slow or busy browser no longer holds up the next preview after the cursor has moved on.
+- A Letterboxd person or list card no longer waits on a poster that is slow to arrive.
+- A Letterboxd link to a page that doesn't exist shows nothing instead of "Couldn't load a preview".
+
 ## 0.10.0 - 11-10-2026
 
 ### Added

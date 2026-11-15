@@ -7,7 +7,7 @@ import WebKit
 @MainActor
 final class PreviewController {
     private let fetcher = MediaFetcher()
-    private let loader = ImageLoader()
+    private let loader = ImageLoader.shared
     private let playback = VideoPlayback()
     private let embeds = EmbedPlayer()
     private let panel = PreviewPanel()
@@ -67,6 +67,14 @@ final class PreviewController {
         ) { [weak self] _ in
             MainActor.assumeIsolated { self?.reset(because: "space switched") }
         }
+    }
+
+    /// Whether a second look could still change the preview: nothing is up yet, or only an image, which
+    /// a link found around it would replace (see `MediaSource.replaces`).
+    var secondLookCouldHelp: Bool {
+        guard showing != nil, let target else { return true }
+        if case .images = target.source { return true }
+        return false
     }
 
     /// `again` is a second look at the spot the cursor stopped on, after the page had a moment to fill
@@ -736,7 +744,7 @@ final class PreviewController {
     }
 
     /// Longest screen edge in pixels; larger images are downsampled to this when decoded.
-    private static func maxPixelSize() -> Int {
+    static func maxPixelSize() -> Int {
         Int(NSScreen.screens.map { max($0.frame.width, $0.frame.height) * $0.backingScaleFactor }.max() ?? 4096)
     }
 }

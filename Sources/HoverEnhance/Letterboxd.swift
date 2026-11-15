@@ -10,8 +10,13 @@ enum LetterboxdRef: Sendable, Hashable {
     case person(role: String, slug: String)
     /// /<member>/list/<slug>/
     case list(member: String, slug: String)
+    /// /<member>/, a member's profile.
+    case member(String)
     /// boxd.it/<code>, the short links Letterboxd shares, to any of the above.
     case short(String)
+    /// "imdb/tt0111161" or "tmdb/278": Letterboxd's addresses for the film IMDb or TMDB knows by that ID,
+    /// which lead to its page. Links to the film on IMDb and TMDB themselves count as these.
+    case external(String)
 
     var pageURL: URL {
         let path = switch self {
@@ -19,13 +24,19 @@ enum LetterboxdRef: Sendable, Hashable {
         case .review(let member, let film, let viewing): "\(member)/film/\(film)/" + (viewing.map { "\($0)/" } ?? "")
         case .person(let role, let slug): "\(role)/\(slug)/"
         case .list(let member, let slug): "\(member)/list/\(slug)/"
+        case .member(let member): "\(member)/"
         case .short(let code): code
+        case .external(let path): "\(path)/"
         }
         return URL(string: (self.isShort ? "https://boxd.it/" : "https://letterboxd.com/") + path)!
     }
 
     private var isShort: Bool {
         if case .short = self { true } else { false }
+    }
+
+    var isExternal: Bool {
+        if case .external = self { true } else { false }
     }
 }
 
@@ -41,6 +52,8 @@ struct LetterboxdFilm: Sendable, Equatable {
     /// little rated to have one.
     let rating: Double?
     let ratings: Int?
+    /// How many members have reviewed it.
+    let reviews: Int?
     let tagline: String?
     let synopsis: String
     let cast: [String]
@@ -64,6 +77,8 @@ struct LetterboxdReview: Sendable, Equatable {
     let watched: String?
     /// Paragraphs, as plain text. Empty for a diary entry.
     let text: String
+    /// The same, with the italics and bold the member wrote.
+    let styled: AttributedString
     let hasSpoilers: Bool
     let likes: Int?
     var poster: URL? = nil
@@ -105,6 +120,27 @@ struct LetterboxdList: Sendable, Equatable {
     let url: URL
 }
 
+/// A member, as their profile describes them.
+struct LetterboxdMember: Sendable, Equatable {
+    /// Their display name.
+    let name: String
+    let username: String
+    /// "Patron" or "Pro".
+    let badge: String?
+    let avatar: URL?
+    let bio: String
+    /// What the profile counts, in its order: films, this year, lists, following, followers.
+    let stats: [Stat]
+    /// Their favorite films, up to four.
+    var favorites: [LetterboxdPoster]
+    let url: URL
+
+    struct Stat: Sendable, Equatable {
+        let name: String
+        let count: Int
+    }
+}
+
 /// A film in a row of posters: its slug, which finds the poster, and its name.
 struct LetterboxdPoster: Sendable, Equatable {
     let slug: String
@@ -117,6 +153,7 @@ enum LetterboxdCard: Sendable, Equatable {
     case review(LetterboxdReview)
     case person(LetterboxdPerson)
     case list(LetterboxdList)
+    case member(LetterboxdMember)
 
     var url: URL {
         switch self {
@@ -124,6 +161,7 @@ enum LetterboxdCard: Sendable, Equatable {
         case .review(let review): review.url
         case .person(let person): person.url
         case .list(let list): list.url
+        case .member(let member): member.url
         }
     }
 }
@@ -143,6 +181,14 @@ enum Letterboxd {
         "stunts", "choreography", "title-design", "camera-operator", "lighting", "additional-directing",
     ]
 
+    /// Pages at the top of the site, where a member's profile would be: none of them is anyone's name.
+    static let reserved: Set<String> = [
+        "about", "activity", "ajs", "api", "apps", "collection", "contact", "country", "create", "crew", "csi", "decade", "errors",
+        "esi", "film", "films", "genre", "gift", "imdb", "journal", "language", "legal", "list", "lists", "members", "news",
+        "patron", "people", "podcast", "pro", "register", "reviews", "s", "search", "service", "services", "settings", "showdown",
+        "showdowns", "static", "stats", "studio", "tag", "tags", "tmdb", "user", "welcome", "year",
+    ]
+
     static func ref(fromLink url: URL) -> LetterboxdRef? {
         guard ["http", "https"].contains(url.scheme?.lowercased()), let host = url.host()?.lowercased() else { return nil }
         let parts = Array(url.pathComponents.dropFirst())
@@ -150,10 +196,30 @@ enum Letterboxd {
             guard parts.count == 1, (1...12).contains(parts[0].count), parts[0].allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber) }) else { return nil }
             return .short(parts[0])
         }
+        if ["imdb.com", "www.imdb.com", "m.imdb.com"].contains(host) {
+            // /title/tt0111161/ and the pages under it, after a language when there is one (/de/title/…, /es-es/title/…).
+            let isLanguage = parts.first.map { $0.count == 2 || ($0.count == 5 && $0.dropFirst(2).first == "-") } ?? false
+            let title = isLanguage ? 1 : 0
+            guard parts.count > title + 1, parts[title] == "title", isIMDbID(parts[title + 1]) else { return nil }
+            return .external("imdb/\(parts[title + 1])")
+        }
+        if host == "themoviedb.org" || host == "www.themoviedb.org" {
+            // /movie/496243-parasite; Letterboxd has films, so not /tv/.
+            guard parts.count >= 2, parts[0] == "movie" else { return nil }
+            let id = String(parts[1].prefix { $0.isASCII && $0.isNumber })
+            return SiteLinks.isNumericID(id) && id.count <= 9 ? .external("tmdb/\(id)") : nil
+        }
         guard host == "letterboxd.com" || host == "www.letterboxd.com" else { return nil }
         switch parts.count {
-        case 2 where parts[0] == "film" && isSlug(parts[1]):
+        // A film's own page, and the pages under it: its reviews, its crew, who has seen it.
+        case 2... where parts[0] == "film" && isSlug(parts[1]):
             return .film(parts[1])
+        case 2 where parts[0] == "imdb" && isIMDbID(parts[1]):
+            return .external("imdb/\(parts[1])")
+        case 2 where parts[0] == "tmdb" && SiteLinks.isNumericID(parts[1]) && parts[1].count <= 9:
+            return .external("tmdb/\(parts[1])")
+        case 1 where isMember(parts[0]) && !reserved.contains(parts[0].lowercased()) && !roles.contains(parts[0].lowercased()):
+            return .member(parts[0])
         case 2 where roles.contains(parts[0]) && isSlug(parts[1]):
             return .person(role: parts[0], slug: parts[1])
         case 3 where isMember(parts[0]) && parts[1] == "film" && isSlug(parts[2]):
@@ -170,6 +236,11 @@ enum Letterboxd {
     /// Lowercase letters, digits, and hyphens, as Letterboxd writes film, person, and list slugs.
     private static func isSlug(_ string: String) -> Bool {
         (1...200).contains(string.count) && string.allSatisfy { $0.isASCII && ($0.isLowercase || $0.isNumber || $0 == "-") }
+    }
+
+    /// "tt0111161": IMDb's name for a film, or for a series or episode, which Letterboxd mostly lacks.
+    private static func isIMDbID(_ string: String) -> Bool {
+        string.hasPrefix("tt") && (7...12).contains(string.count) && string.dropFirst(2).allSatisfy { $0.isASCII && $0.isNumber }
     }
 
     private static func isMember(_ string: String) -> Bool {
@@ -199,7 +270,9 @@ enum Letterboxd {
         case .review: review(inPage: html, at: url).map(LetterboxdCard.review)
         case .person(let role, _): person(inPage: html, role: role, at: url).map(LetterboxdCard.person)
         case .list: list(inPage: html, at: url).map(LetterboxdCard.list)
-        case .short, nil: nil
+        case .member(let username): member(inPage: html, username: username, at: url).map(LetterboxdCard.member)
+        // Neither is where a page ends up: both lead on to one of the others.
+        case .short, .external, nil: nil
         }
     }
 
@@ -222,6 +295,7 @@ enum Letterboxd {
             genres: object["genre"] as? [String] ?? [],
             rating: rating?["ratingValue"] as? Double,
             ratings: rating?["ratingCount"] as? Int,
+            reviews: rating?["reviewCount"] as? Int,
             tagline: html.firstMatch(of: /<h4 class="tagline">([\s\S]*?)<\/h4>/).map { HTMLText.plain(String($0.1)) }.flatMap { $0.isEmpty ? nil : $0 },
             synopsis: HTMLText.decode(object["description"] as? String ?? ""),
             cast: Array(names("actor").prefix(4)).map(HTMLText.decode),
@@ -243,7 +317,7 @@ enum Letterboxd {
         // elsewhere on the page draw every possible rating.
         let header = section(of: html, from: "content-reactions-strip", to: "</section>") ?? ""
         let date = header.firstMatch(of: /<p class="view-date">\s*(\w*)\s*<a[^>]*>(\d+)<\/a>\s*<a[^>]*>(\w+)<\/a>\s*<a[^>]*>(\d{4})<\/a>/)
-        let body = html.firstMatch(of: /<div class="js-review-body"[^>]*>([\s\S]*?)<\/div>/).map { HTMLText.plain(String($0.1)) } ?? ""
+        let body = html.firstMatch(of: /<div class="js-review-body"[^>]*>([\s\S]*?)<\/div>/).map { String($0.1) } ?? ""
         let likes = html.firstMatch(of: /<p class="[^"]*review-like"[^>]*>/).flatMap { $0.0.firstMatch(of: /data-count="(\d+)"/) }.flatMap { Int($0.1) }
         let (member, avatar) = owner(in: html)
         return LetterboxdReview(
@@ -256,7 +330,8 @@ enum Letterboxd {
             liked: header.contains(#"aria-label="Liked""#),
             rewatch: date?.1 == "Rewatched",
             watched: date.map { "\(Int($0.2) ?? 0) \($0.3) \($0.4)" },
-            text: body,
+            text: HTMLText.plain(body),
+            styled: HTMLText.styled(body),
             // The page shows the review in full, but tells search engines and link previews to keep away.
             hasSpoilers: meta("og:description", in: html)?.hasPrefix("This review may contain spoilers") == true,
             likes: likes,
@@ -311,6 +386,27 @@ enum Letterboxd {
             likes: html.firstMatch(of: /data-like-count="(\d+)"/).flatMap { Int($0.1) },
             isRanked: html.contains("numbered-list-item"),
             films: posters(in: html),
+            url: url
+        )
+    }
+
+    /// From a profile, which only a browser engine is served: the page as its scripts left it.
+    static func member(inPage html: String, username: String, at url: URL) -> LetterboxdMember? {
+        guard let header = section(of: html, from: #"<section class="profile-header"#, to: "</section>") else { return nil }
+        let name = header.firstMatch(of: /<span class="displayname[^"]*"[^>]*>\s*<span class="label">([^<]+)<\/span>/).map { HTMLText.decode(String($0.1)) }
+        let stats = header.matches(of: /<span class="value">([\d,]+)<\/span>\s*<span class="definition[^"]*">([^<]+)<\/span>/).compactMap { match -> LetterboxdMember.Stat? in
+            Int(match.1.replacingOccurrences(of: ",", with: "")).map { LetterboxdMember.Stat(name: HTMLText.decode(String(match.2)), count: $0) }
+        }
+        let bio = section(of: html, from: #"<section class="profile-person-bio"#, to: "</section>")
+            .flatMap { $0.firstMatch(of: /<div class="collapsible-text[^>]*>([\s\S]*?)<\/div>/) }.map { HTMLText.plain(String($0.1)) }
+        return LetterboxdMember(
+            name: name ?? username,
+            username: header.firstMatch(of: /data-person="([^"]+)"/).map { HTMLText.decode(String($0.1)) } ?? username,
+            badge: header.firstMatch(of: /<span class="badge -(?:patron|pro)[^"]*">([^<]+)<\/span>/).map { String($0.1) },
+            avatar: header.firstMatch(of: /<img src="([^"]+)"/).flatMap { URL(string: HTMLText.decode(String($0.1))) }.flatMap(webImage),
+            bio: bio ?? "",
+            stats: stats,
+            favorites: section(of: html, from: #"<section id="favourites""#, to: "</section>").map { posters(in: String($0), limit: 4) } ?? [],
             url: url
         )
     }
@@ -376,6 +472,39 @@ enum HTMLText {
         let lines = decode(text).split(separator: "\n", omittingEmptySubsequences: false)
             .map { $0.split(whereSeparator: { $0 == " " || $0 == "\t" }).joined(separator: " ") }
         return lines.joined(separator: "\n").replacing(/\n{3,}/, with: "\n\n").trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// As `plain`, keeping italics and bold.
+    static func styled(_ html: String) -> AttributedString {
+        // The tags become marks that outlast `plain`, which drops every tag.
+        let marks: [Character: (intent: InlinePresentationIntent, on: Bool)] = [
+            "\u{E000}": (.emphasized, true), "\u{E001}": (.emphasized, false),
+            "\u{E002}": (.stronglyEmphasized, true), "\u{E003}": (.stronglyEmphasized, false),
+        ]
+        let marked = html.replacing(/[\u{E000}-\u{E003}]/, with: "").replacing(/<(\/?)(em|i|strong|b)>/) { match in
+            let strong = match.2 == "strong" || match.2 == "b"
+            return String(UnicodeScalar(0xE000 + (strong ? 2 : 0) + (match.1.isEmpty ? 0 : 1))!)
+        }
+        var result = AttributedString()
+        var intent: InlinePresentationIntent = []
+        var run = ""
+        func flush() {
+            guard !run.isEmpty else { return }
+            var piece = AttributedString(run)
+            if !intent.isEmpty { piece.inlinePresentationIntent = intent }
+            result += piece
+            run = ""
+        }
+        for character in plain(marked) {
+            guard let mark = marks[character] else {
+                run.append(character)
+                continue
+            }
+            flush()
+            if mark.on { intent.insert(mark.intent) } else { intent.remove(mark.intent) }
+        }
+        flush()
+        return result
     }
 
     /// Character references: named ones pages use, and numbered ones.

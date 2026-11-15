@@ -113,7 +113,10 @@ final class HoverInspector: @unchecked Sendable {
             if let retried = systemWide.element(at: point).0 { element = retried }
         }
         guard isWanted() else { return .failure(.superseded) }
-        return .success(describe(element, pid: pid, at: point))
+        let info = describe(element, pid: pid, at: point, isWanted: isWanted)
+        // The walk stops partway once the cursor has moved on, and what it found by then isn't the whole story.
+        guard isWanted() else { return .failure(.superseded) }
+        return .success(info)
     }
 
     /// Whether previews could appear in `app`, so its web tree is worth having.
@@ -146,7 +149,9 @@ final class HoverInspector: @unchecked Sendable {
         return true
     }
 
-    private func describe(_ element: AXElement, pid: pid_t, at point: CGPoint) -> HoverInfo {
+    /// `isWanted` is asked through the walk, which is many questions to an app that may be slow to answer:
+    /// once the cursor has moved on, the rest aren't asked, so the next look isn't kept waiting.
+    private func describe(_ element: AXElement, pid: pid_t, at point: CGPoint, isWanted: () -> Bool) -> HoverInfo {
         var element = element
         // A system menu bar item sits in a view a little taller than itself; at its edge, that's what's hit.
         if element.subrole == "AXHostingView", let item = element.children.first(where: { $0.subrole == "AXMenuExtra" }) {
@@ -168,7 +173,7 @@ final class HoverInspector: @unchecked Sendable {
         // handy while exploring.
         var webArea: AXElement?
         var node: AXElement? = element
-        while let current = node, info.ancestry.count < 40 {
+        while let current = node, info.ancestry.count < 40, isWanted() {
             let role = current.role ?? "?"
             info.ancestry.append(role)
             if role == kAXWindowRole { break }
@@ -190,24 +195,24 @@ final class HoverInspector: @unchecked Sendable {
             info.imageURL = url
             info.imageFrame = info.frame
             imageElement = element
-        } else if info.pageURL != nil, let image = image(at: point, near: element) {
+        } else if info.pageURL != nil, let image = image(at: point, near: element, isWanted: isWanted) {
             info.imageURL = image.url
             info.imageFrame = image.frame
             imageElement = image.element
         }
         if info.pageURL != nil, info.linkURL != nil, info.imageURL == nil {
-            info.isOnText = isText(at: point, element: element)
+            info.isOnText = isText(at: point, element: element, isWanted: isWanted)
         }
         // Only worth the look where there'd be a preview of a link or an image.
         if info.pageURL != nil, !info.isOnText, info.linkURL != nil || info.imageURL != nil {
-            info.videoFrame = video(at: point, near: element)
+            info.videoFrame = video(at: point, near: element, isWanted: isWanted)
         }
         // A photo outside any link, as in Instagram's feed: the post it's from, which may hold more.
-        if info.linkURL == nil, info.videoFrame == nil, let webArea, let image = imageElement, let frame = info.imageFrame,
+        if isWanted(), info.linkURL == nil, info.videoFrame == nil, let webArea, let image = imageElement, let frame = info.imageFrame,
            let site = info.pageURL?.host().flatMap(MediaSite.init(host:)) {
             (info.postURL, info.postSearch) = postLink(before: image, frame: frame, in: webArea, site: site)
         }
-        if info.bundleID == FinderItem.bundleID {
+        if isWanted(), info.bundleID == FinderItem.bundleID {
             info.fileURL = FinderItem.url(at: element)
             // The desktop is Finder's too, but isn't in a window.
             info.fileIsOnDesktop = info.fileURL != nil && !info.ancestry.contains(kAXWindowRole)
@@ -224,11 +229,11 @@ final class HoverInspector: @unchecked Sendable {
 
     /// Whether the point is on text. Chromium hit-tests to the text itself; WebKit stops at the link
     /// around it, so look for the text run under the point among a few descendants.
-    private func isText(at point: CGPoint, element: AXElement) -> Bool {
+    private func isText(at point: CGPoint, element: AXElement, isWanted: () -> Bool) -> Bool {
         if element.role == "AXStaticText" { return true }
         var budget = 24
         var queue = element.children
-        while !queue.isEmpty, budget > 0 {
+        while !queue.isEmpty, budget > 0, isWanted() {
             let node = queue.removeFirst()
             budget -= 1
             guard let frame = node.frame, frame.contains(point) else { continue }
@@ -241,14 +246,14 @@ final class HoverInspector: @unchecked Sendable {
     /// Sites often cover images with transparent links or buttons, so the hit element isn't the image.
     /// Look for one under the point among the descendants of the element, its parent, and its
     /// grandparent. Each node costs a few AX round-trips, so the search is capped.
-    private func image(at point: CGPoint, near element: AXElement) -> (element: AXElement, url: URL, frame: CGRect)? {
+    private func image(at point: CGPoint, near element: AXElement, isWanted: () -> Bool) -> (element: AXElement, url: URL, frame: CGRect)? {
         var budget = 40
         var searched: AXElement?
         var root: AXElement? = element
         for _ in 0..<3 {
             guard let current = root, current.role != "AXWebArea" else { return nil }
             var queue = [current]
-            while !queue.isEmpty, budget > 0 {
+            while !queue.isEmpty, budget > 0, isWanted() {
                 for child in queue.removeFirst().children {
                     if let searched, CFEqual(child.ref, searched.ref) { continue }
                     budget -= 1
@@ -291,11 +296,11 @@ final class HoverInspector: @unchecked Sendable {
     /// they do images, so look among the element, its parent, and its grandparent. Chromium shows a
     /// video as a plain group, told apart only by its search for graphics (images and videos); WebKit
     /// gives it the video's URL, and the AXVideo subrole when it has controls. The search is capped.
-    private func video(at point: CGPoint, near element: AXElement) -> CGRect? {
+    private func video(at point: CGPoint, near element: AXElement, isWanted: () -> Bool) -> CGRect? {
         var budget = 24
         var root: AXElement? = element
         for _ in 0..<3 {
-            guard let current = root, current.role != "AXWebArea" else { return nil }
+            guard isWanted(), let current = root, current.role != "AXWebArea" else { return nil }
             for graphic in current.search("AXGraphicSearchKey", limit: 8) where budget > 0 {
                 budget -= 1
                 if graphic.role == kAXGroupRole, let frame = graphic.frame, frame.contains(point) { return frame }

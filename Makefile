@@ -22,7 +22,7 @@ DEVELOPER_ID   ?= $(shell security find-identity -v -p codesigning | awk '/"Deve
 # an exported signing key (which .gitignore keeps out of git), can end up in a release.
 RESOURCES      := $(filter-out Resources/Info.plist,$(shell git ls-files Resources))
 
-.PHONY: build app run stop test log clean release-app release print-developer-id
+.PHONY: build app run stop test live log clean release-app release print-developer-id
 
 build:
 	$(SWIFT) build -c $(CONFIG) $(BUILD_FLAGS)
@@ -54,6 +54,10 @@ run: app stop
 
 test:
 	$(SWIFT) test
+
+# The parsers against the real sites, which the other tests never ask.
+live:
+	HOVERENHANCE_LIVE=1 $(SWIFT) test --filter Live
 
 stop:
 	@pkill -x $(APP_NAME) && sleep 0.5 || true
