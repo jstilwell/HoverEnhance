@@ -85,9 +85,7 @@ private struct ArticleImage: View {
     let size: CGSize
 
     var body: some View {
-        AsyncImage(url: url) { image in
-            image.resizable().scaledToFill()
-        } placeholder: {
+        CardImage(url: url) {
             WikipediaTheme.placeholder
         }
         .frame(width: size.width, height: size.height)

@@ -10,6 +10,7 @@ make run     # build, bundle, sign, and launch build/HoverEnhance.app
 make log     # stream hover results from the unified log (debug builds)
 make stop
 make test    # unit tests
+make live    # the Letterboxd parsers against the real site (needs the network)
 make release # a notarized DMG and a signed appcast (bin/build-release.sh)
 ```
 
@@ -36,20 +37,23 @@ app).
   first look found plain text; a second look can start a preview but never ends one, and replaces one
   only when it shows an image and the look finds a link around it to something more
   (`MediaSource.replaces(onSecondLook:)`), as when Chromium adds the link over a Letterboxd poster
-  late. Clicks, key presses, and scrolling stop them.
+  late. Clicks, key presses, and scrolling stop them, as does a preview another look couldn't better
+  (`PreviewController.secondLookCouldHelp`), unless the inspector is showing each look.
 - `HoverInspector` hit-tests with `AXUIElementCopyElementAtPosition` on a background queue (AX
   calls are synchronous IPC into the target app) and walks up to the enclosing link and web area.
-  A look the cursor has moved on from is dropped before its slow parts, and excluded apps
-  (`InspectionPolicy`) get only the hit-test.
+  A look the cursor has moved on from is dropped before its slow parts and partway through its walk,
+  so a slow app doesn't hold up the next look, and excluded apps (`InspectionPolicy`) get only the
+  hit-test.
 - `MediaResolver` turns the hovered image or link into a `MediaSource` (`ImageRules` for full-size
   image URLs, `SiteLinks` for posts and videos), following `file:` URLs only from local pages, and
   to the local network (`LocalNetwork`: loopback, private ranges, `.local`, and IPv4 addresses
   inside NAT64 and 6to4 ones) only from local pages, redirects included, apart from a video's,
   which AVPlayer follows itself. `ImageLoader` sends and keeps cookies only for the sites in
   `MediaSite` (`LimitedDownloader` handles them itself, from the shared storage), so an image host
-  can't track the user across sites; AVPlayer keeps its own. `MediaFetcher` does any
+  can't track the user across sites; AVPlayer keeps its own. The pictures on cards load through it
+  too (`CardImage`, never `AsyncImage`, whose shared session keeps any host's cookies). `MediaFetcher` does any
   lookup the site needs (`SiteAPIs`, `RedditGallery`), giving `Media`: one item or an album, with
-  web addresses only; lookups that fail are remembered for a minute. Nothing is previewed over a
+  web addresses only; lookups that find nothing are remembered for a minute, and ones that fail for a few seconds, as the network may be back. Nothing is previewed over a
   video the page shows (WebKit gives videos their URL; Chromium shows them as plain groups, found
   through its search for graphics), or over an image it already shows about as large as a preview
   could be, unless it's from a post holding more. A photo outside any link, as in Instagram's feed,
@@ -130,15 +134,22 @@ app).
   articles have none), asking for the image at the card's size, and `WikipediaCardView` draws it in
   Wikipedia's colors. `GitHub` asks the REST API without signing in, one request a card (60 an hour
   are allowed), and `GitHubCardView` draws it in GitHub's Primer colors.
-- Links to Letterboxd films, reviews and diary entries, people, and lists, and its boxd.it short links,
-  get `LetterboxdCardView`, in Letterboxd's dark colors, on Letterboxd too and even from a poster, which
-  the card shows; a link to the page being shown gets none. `Letterboxd` reads the page itself: a
-  film's JSON-LD, a review's header and body, a person's TMDB photo and bio, a list's preview tags,
-  with a review's spoiler warning in its description. Posters come from `/film/<slug>/poster/std/230/`,
-  the JSON Letterboxd's own pages ask for (none for posters it hides, as for adult films). Cloudflare
-  answers some pages, such as a member's later viewings of a film, with a bot check; those load in
-  `WebPageLoader` once the plain request is refused, Letterboxd's own pages only. Profiles and likes
-  are behind it too, so they get no card. With cards off, links to them preview as before.
+- Links to Letterboxd films (and the pages under them), reviews and diary entries, people, lists, and
+  members, and its boxd.it short links, get `LetterboxdCardView`, in Letterboxd's dark colors, on
+  Letterboxd too and even from a poster or avatar, which the card shows; a link to the page being shown
+  gets none. Links to a film on IMDb (`/title/tt…`) and TMDB (`/movie/…`) get the film's card through
+  Letterboxd's `/imdb/<id>/` and `/tmdb/<id>/`, which redirect to its page, but as other sites' cards
+  do: not from an image there is to enlarge. `Letterboxd` reads the page itself: a film's JSON-LD, a
+  review's header and body (`HTMLText.styled` keeps its italics and bold), a person's TMDB photo and
+  bio, a list's preview tags, a profile's header, bio, and favorites, with a review's spoiler warning
+  in its description. Posters come from `/film/<slug>/poster/std/230/`, the JSON Letterboxd's own
+  pages ask for (none for posters it hides, as for adult films), and a card doesn't wait long for one.
+  Cloudflare answers some pages, such as a member's later viewings of a film, with a bot check; those
+  load in `WebPageLoader` once the plain request is refused, Letterboxd's own pages only, and
+  profiles, which it always checks, load there from the start. A page that isn't there (a series on
+  IMDb, a name that's no member's) is nothing to show, not a failure. Likes are behind the check
+  too, and get no card. With cards off, links to them preview as before. The unit tests read
+  trimmed pages; `make live` asks the real site, to notice when its pages change.
 - `ShortcutTap`, an active event tap like `ScrollTap`, is on only while a preview shows an image, a
   video from the web, or a card, and looks only for the copy, save, and save-as shortcuts in Settings
   (⌘C, ⌘S, ⇧⌘S to start; `Shortcut.matches` goes by the character a letter key types, so they follow
@@ -170,7 +181,8 @@ app).
   their media, but its video servers want a Referer from its pages, which `VideoPlayback.headers(for:)`
   gives AVPlayer.
 - Reddit answers scripted requests with a JavaScript check; `WebPageLoader` passes it in an
-  offscreen WebKit view and shares the cookie with URLSession.
+  offscreen WebKit view and shares the cookie with URLSession. The view loads no images, media, or
+  fonts (a content rule list): only the page's text is read.
 - Chromium browsers and Electron apps only expose web content to accessibility on request, so the
   inspector sets `AXEnhancedUserInterface` (Chromium) or `AXManualAccessibility` (Electron) on them
   the first time it sees them, if previews could appear there (not excluded; Electron apps only with

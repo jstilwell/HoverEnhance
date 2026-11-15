@@ -40,7 +40,8 @@
   shows its length, views, likes, date, and who made it, and a channel name its banner and numbers.
 - **Letterboxd**: rest on a poster or film link for its rating, director, and synopsis; on a friend's
   poster or a review, their stars, like, and full review, with spoilers covered until you click.
-  People, lists, and boxd.it links get cards too.
+  Members, people, lists, and boxd.it links get cards too, and so do links to films on IMDb and
+  TMDB, anywhere on the web.
 - **Copy and save**: while a preview is up, ⌘C copies the image, a video's address, or a card's link,
   ⌘S saves the image or video, and ⇧⌘S asks where. Images and videos have the same buttons under
   them. Saves go to Downloads, or a folder you choose; the keys can be changed.
@@ -99,13 +100,13 @@ Requires macOS 14 or later. Signed, notarized, and updates itself.
 
 - **Only what you hover**: HoverEnhance reads the thing under the cursor, never what you type. While
   a preview is up, it listens only for its copy and save shortcuts.
-- **Only where you point**: it contacts the sites behind what you hover, GitHub to check for
-  updates, addr.fyi for the network popup's public address, and Google only if you sign in to
-  subscribe to YouTube channels.
+- **Only where you point**: it contacts the sites behind what you hover (Letterboxd for a link to a
+  film on IMDb or TMDB), GitHub to check for updates, addr.fyi for the network popup's public
+  address, and Google only if you sign in to subscribe to YouTube channels.
 - **Not your network**: links and images on a web page that point at your router, printer, or
   anything else on your local network are left alone.
 - **No tracking cookies**: images from anywhere but the sites under Settings → Sites load without
-  cookies, so they can't follow you from site to site.
+  cookies, the pictures on cards included, so they can't follow you from site to site.
 - **Weather where you say**: nothing is looked up until you pick a place or allow your location,
   which goes to the weather provider you choose rounded to about a kilometer (and, in the US, to the
   National Weather Service for alerts when your provider has none, unless you turn that off).

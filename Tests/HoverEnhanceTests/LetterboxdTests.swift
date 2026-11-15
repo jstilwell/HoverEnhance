@@ -16,12 +16,35 @@ struct LetterboxdLinkTests {
         #expect(ref("https://letterboxd.com/actor/lupita-nyongo/") == .person(role: "actor", slug: "lupita-nyongo"))
         #expect(ref("https://letterboxd.com/davidehrlich/list/christopher-nolan-films-ranked/") == .list(member: "davidehrlich", slug: "christopher-nolan-films-ranked"))
         #expect(ref("https://boxd.it/FtSXN") == .short("FtSXN"))
+        #expect(ref("https://letterboxd.com/maddmattw/") == .member("maddmattw"))
+    }
+
+    @Test func aFilmsOtherPagesAreTheFilm() {
+        #expect(ref("https://letterboxd.com/film/us-2019/crew/") == .film("us-2019"))
+        #expect(ref("https://letterboxd.com/film/us-2019/reviews/by/activity/") == .film("us-2019"))
+    }
+
+    @Test func filmsOnIMDbAndTMDB() {
+        #expect(ref("https://www.imdb.com/title/tt6857112/") == .external("imdb/tt6857112"))
+        #expect(ref("https://m.imdb.com/de/title/tt6857112/fullcredits?ref_=tt_ov") == .external("imdb/tt6857112"))
+        #expect(ref("https://www.themoviedb.org/movie/458723-us") == .external("tmdb/458723"))
+        #expect(ref("https://letterboxd.com/imdb/tt6857112/") == .external("imdb/tt6857112"))
+        #expect(ref("https://letterboxd.com/tmdb/458723") == .external("tmdb/458723"))
+        #expect(ref("https://www.imdb.com/name/nm1443502/") == nil)
+        #expect(ref("https://www.imdb.com/title/us/") == nil)
+        #expect(ref("https://www.imdb.com/list/title/tt6857112/") == nil)
+        #expect(ref("https://www.themoviedb.org/tv/1396-breaking-bad") == nil, "Letterboxd lists films")
+        #expect(ref("https://www.themoviedb.org/movie/us") == nil)
+        #expect(ref("https://imdb.com.example/title/tt6857112/") == nil)
     }
 
     @Test func otherPagesHaveNoCard() {
         #expect(ref("https://letterboxd.com/") == nil)
-        #expect(ref("https://letterboxd.com/maddmattw/") == nil, "profiles are behind a bot check")
-        #expect(ref("https://letterboxd.com/film/us-2019/crew/") == nil, "a film's tabs are the film's page")
+        #expect(ref("https://letterboxd.com/films/") == nil, "not a member")
+        #expect(ref("https://letterboxd.com/Journal/") == nil)
+        #expect(ref("https://letterboxd.com/director/") == nil)
+        #expect(ref("https://letterboxd.com/sign-in/") == nil)
+        #expect(ref("https://letterboxd.com/maddmattw/films/") == nil)
         #expect(ref("https://letterboxd.com/maddmattw/film/us-2019/likes/") == nil)
         #expect(ref("https://letterboxd.com/studio/universal-pictures/") == nil)
         #expect(ref("https://letterboxd.com/films/year/2019/") == nil)
@@ -35,6 +58,8 @@ struct LetterboxdLinkTests {
         #expect(LetterboxdRef.review(member: "maddmattw", film: "us-2019", viewing: 2).pageURL == URL(string: "https://letterboxd.com/maddmattw/film/us-2019/2/"))
         #expect(LetterboxdRef.list(member: "a", slug: "b").pageURL == URL(string: "https://letterboxd.com/a/list/b/"))
         #expect(LetterboxdRef.short("FtSXN").pageURL == URL(string: "https://boxd.it/FtSXN"))
+        #expect(LetterboxdRef.member("maddmattw").pageURL == URL(string: "https://letterboxd.com/maddmattw/"))
+        #expect(LetterboxdRef.external("imdb/tt6857112").pageURL == URL(string: "https://letterboxd.com/imdb/tt6857112/"))
     }
 }
 
@@ -66,6 +91,7 @@ struct LetterboxdPageTests {
         #expect(film.genres == ["Thriller", "Horror"])
         #expect(film.rating == 3.63)
         #expect(film.ratings == 2559990)
+        #expect(film.reviews == 340556)
         #expect(film.tagline == "Watch yourself.")
         #expect(film.synopsis == "A family’s beach trip turns strange.")
         #expect(film.cast == ["Lupita Nyong'o", "Winston Duke", "Elisabeth Moss", "Tim Heidecker"])
@@ -116,7 +142,7 @@ struct LetterboxdPageTests {
 
     @Test func aReview() throws {
         let page = review(reactions: fourAndAHalf + liked, date: watched,
-                          body: "<p>Scarier the second time &amp; funnier too.</p><p>That score!<br>Those scissors.</p>")
+                          body: "<p>Scarier the <i>second</i> time &amp; funnier too.</p><p>That score!<br>Those scissors.</p>")
         guard case .review(let review) = Letterboxd.card(inPage: page, at: reviewURL) else { Issue.record("not a review"); return }
         #expect(review.member == "Madd Matt W")
         #expect(review.avatar == URL(string: "https://a.ltrbxd.com/resized/avatar/upload/avtr-0-48-0-48-crop.jpg?v=1"))
@@ -129,6 +155,7 @@ struct LetterboxdPageTests {
         #expect(!review.rewatch)
         #expect(review.watched == "8 Oct 2026")
         #expect(review.text == "Scarier the second time & funnier too.\n\nThat score!\nThose scissors.")
+        #expect(String(review.styled.characters) == review.text)
         #expect(!review.hasSpoilers)
         #expect(review.likes == 2858)
         #expect(review.url == reviewURL)
@@ -202,6 +229,48 @@ struct LetterboxdPageTests {
         #expect(list.films.map(\.slug) == ["film-1", "film-2", "film-3", "film-4", "film-5"])
     }
 
+    /// A profile, trimmed, as its scripts leave it in a browser engine.
+    private let profile = """
+    <html><head><meta property="og:url" content="https://letterboxd.com/davidehrlich/"></head><body class="screen-member-profile">
+    <section class="profile-header js-profile-header -is-not-mini-nav" data-person="davidehrlich"><div class="profile-summary">
+    <div class="profile-avatar"><span class="avatar -a110 -large"> <img src="https://a.ltrbxd.com/resized/avatar/a-0-220-0-220-crop.jpg?v=e" alt="davidehrlich" width="110" height="110"> </span></div>
+    <h1 class="person-display-name js-display-name"> <span class="displayname tooltip" title="davidehrlich"><span class="label">David Ehrlich</span></span><span class="_inline-tail tail">&nbsp;<span class="badge -patron ">Patron</span></span> </h1>
+    <div class="profile-stats js-profile-stats">
+    <h4 class="profile-statistic statistic"><a href="/davidehrlich/films/" class="thousands"><span class="value">3,488</span><span class="definition title-all-caps -small">Films</span></a></h4>
+    <h4 class="profile-statistic statistic"><a href="/davidehrlich/diary/for/2026/"><span class="value">211</span><span class="definition title-all-caps -small">This year</span></a></h4>
+    <h4 class="profile-statistic statistic"><a href="/davidehrlich/followers/" class="thousands"><span class="value">220,662</span><span class="definition title-all-caps -small">Followers</span></a></h4>
+    </div></div></section>
+    <section id="favourites" class="section"><h2 class="section-heading">Favorite films</h2>
+    <div class="react-component" data-component-class="LazyPoster" data-request-poster-metadata="true" data-item-name="Marie Antoinette (2006)" data-item-slug="marie-antoinette-2006"></div>
+    <div class="react-component" data-component-class="LazyPoster" data-request-poster-metadata="true" data-item-name="Linda Linda Linda (2005)" data-item-slug="linda-linda-linda"></div>
+    </section>
+    <section><div class="react-component" data-component-class="LazyPoster" data-item-name="Recently watched" data-item-slug="mouse-2026"></div></section>
+    <section class="profile-person-bio section"><h2 class="section-heading">Bio</h2>
+    <div class="collapsible-text js-collapsible-text body-text -small" data-full-text-url="/s/full-text/person:32192/"> <p>chief film critic for IndieWire. </p><p><a href="https://letterboxd.com/indiewire/" rel="nofollow">follow IndieWire</a></p> </div></section>
+    </body></html>
+    """
+
+    @Test func aMember() throws {
+        guard case .member(let member) = Letterboxd.card(inPage: profile, at: URL(string: "https://letterboxd.com/davidehrlich/")!) else {
+            Issue.record("not a member"); return
+        }
+        #expect(member.name == "David Ehrlich")
+        #expect(member.username == "davidehrlich")
+        #expect(member.badge == "Patron")
+        #expect(member.avatar == URL(string: "https://a.ltrbxd.com/resized/avatar/a-0-220-0-220-crop.jpg?v=e"))
+        #expect(member.bio == "chief film critic for IndieWire.\n\nfollow IndieWire")
+        #expect(member.stats == [.init(name: "Films", count: 3488), .init(name: "This year", count: 211), .init(name: "Followers", count: 220662)])
+        // Only the favorites, not what else the profile shows posters of.
+        #expect(member.favorites.map(\.slug) == ["marie-antoinette-2006", "linda-linda-linda"])
+    }
+
+    @Test func pagesThatArentProfilesHaveNoMemberCard() {
+        let notFound = #"<html><head><title>Letterboxd - Not Found</title></head><body class="error message-dark"></body></html>"#
+        #expect(Letterboxd.card(inPage: notFound, at: URL(string: "https://letterboxd.com/nosuchmember/")!) == nil)
+        // Where a link to a film on IMDb ends up when Letterboxd doesn't have it.
+        #expect(Letterboxd.card(inPage: notFound, at: URL(string: "https://letterboxd.com/imdb/tt0903747/")!) == nil)
+    }
+
     @Test func pagesOfOtherKindsHaveNoCard() {
         // A short link that led somewhere without a card, and a page that isn't what its address says.
         #expect(Letterboxd.card(inPage: film, at: URL(string: "https://letterboxd.com/maddmattw/")!) == nil)
@@ -229,6 +298,14 @@ struct LetterboxdPageTests {
         #expect(HTMLText.plain("<p>One &amp; two</p>\n<p>Three<br/>four &#039;five&#x27; &lrm;</p>") == "One & two\n\nThree\nfour 'five'")
         #expect(HTMLText.decode("&unknown; &#128512;") == "&unknown; 😀")
     }
+
+    @Test func styledTextKeepsItalicsAndBold() {
+        let styled = HTMLText.styled(#"<p>Plain <i>slanted <b>both</b></i> <strong>heavy</strong> <a href="/x/">link</a> &amp; <em>more</em></p>"#)
+        #expect(String(styled.characters) == "Plain slanted both heavy link & more")
+        let runs = styled.runs.map { (String(styled[$0.range].characters), $0.inlinePresentationIntent ?? []) }
+        #expect(runs.map(\.0) == ["Plain ", "slanted ", "both", " ", "heavy", " link & ", "more"])
+        #expect(runs.map(\.1) == [[], .emphasized, [.emphasized, .stronglyEmphasized], [], .stronglyEmphasized, [], .emphasized])
+    }
 }
 
 struct LetterboxdHoverRuleTests {
@@ -247,6 +324,34 @@ struct LetterboxdHoverRuleTests {
         #expect(MediaResolver.source(for: info(link: "https://letterboxd.com/maddmattw/film/us-2019/", image: poster))
             == .letterboxd(.review(member: "maddmattw", film: "us-2019", viewing: nil)))
         #expect(MediaResolver.source(for: info(link: "https://letterboxd.com/film/us-2019/", image: poster, page: "https://www.reddit.com/r/movies/"))
+            == .letterboxd(.film("us-2019")))
+    }
+
+    @Test func membersGetACardFromTheirAvatar() {
+        let avatar = "https://a.ltrbxd.com/resized/avatar/upload/avtr-0-48-0-48-crop.jpg?v=1"
+        #expect(MediaResolver.source(for: info(link: "https://letterboxd.com/maddmattw/", image: avatar)) == .letterboxd(.member("maddmattw")))
+        // Not on their own profile.
+        #expect(MediaResolver.source(for: info(link: "https://letterboxd.com/maddmattw/", page: "https://letterboxd.com/maddmattw/")) == nil)
+    }
+
+    @Test func linksToFilmsOnIMDbGetTheFilmsCard() {
+        var onText = info(link: "https://www.imdb.com/title/tt6857112/", page: "https://www.reddit.com/r/movies/")
+        onText.isOnText = true
+        #expect(MediaResolver.source(for: onText) == .letterboxd(.external("imdb/tt6857112")))
+        // A poster there is to enlarge is enlarged, as with other sites' cards.
+        let imdbPoster = "https://m.media-amazon.com/images/M/poster.jpg"
+        #expect(MediaResolver.source(for: info(link: "https://www.imdb.com/title/tt6857112/", image: imdbPoster, page: "https://www.imdb.com/chart/top/"))
+            == .images([URL(string: imdbPoster)!]))
+        // Not the film's own page, or the pages under it.
+        var ownPage = info(link: "https://www.imdb.com/title/tt6857112/fullcredits", page: "https://www.imdb.com/title/tt6857112/")
+        ownPage.isOnText = true
+        #expect(MediaResolver.source(for: ownPage) == nil)
+        #expect(!PreviewFilter(disabledSites: [.letterboxd]).allows(.letterboxd(.external("imdb/tt6857112"))))
+    }
+
+    @Test func aFilmsTabsOnItsOwnPageGetNoCard() {
+        #expect(MediaResolver.source(for: info(link: "https://letterboxd.com/film/us-2019/crew/", page: "https://letterboxd.com/film/us-2019/")) == nil)
+        #expect(MediaResolver.source(for: info(link: "https://letterboxd.com/film/us-2019/reviews/", page: "https://letterboxd.com/"))
             == .letterboxd(.film("us-2019")))
     }
 

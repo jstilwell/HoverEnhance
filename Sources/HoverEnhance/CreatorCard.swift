@@ -66,9 +66,7 @@ private struct VideoSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            AsyncImage(url: video.thumbnail) { image in
-                image.resizable().scaledToFill()
-            } placeholder: {
+            CardImage(url: video.thumbnail) {
                 YouTubeTheme.tonal
             }
             .frame(width: CreatorCardView.width - 28, height: ((CreatorCardView.width - 28) * 9 / 16).rounded())
@@ -121,9 +119,7 @@ private struct ChannelHeader: View {
 
     var body: some View {
         if let banner = channel.banner {
-            AsyncImage(url: banner) { image in
-                image.resizable().scaledToFill()
-            } placeholder: {
+            CardImage(url: banner) {
                 YouTubeTheme.tonal
             }
             // YouTube's banners are cropped to about 6.2:1 on the channel page.
@@ -182,9 +178,7 @@ private struct Avatar: View {
     let size: CGFloat
 
     var body: some View {
-        AsyncImage(url: url) { image in
-            image.resizable().scaledToFill()
-        } placeholder: {
+        CardImage(url: url) {
             Circle().fill(YouTubeTheme.tonal)
         }
         .frame(width: size, height: size)

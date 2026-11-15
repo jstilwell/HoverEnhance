@@ -2,7 +2,7 @@ import AppKit
 import SwiftUI
 
 /// What the preview shows for a link to Letterboxd, in Letterboxd's look: a film with its poster and
-/// rating, a member's review, someone's films, or a list. Clicking it opens the page.
+/// rating, a member's review, someone's films, a list, or a member. Clicking it opens the page.
 struct LetterboxdCardView: View {
     let card: LetterboxdCard
 
@@ -16,6 +16,7 @@ struct LetterboxdCardView: View {
             case .review(let review): ReviewCard(review: review, url: card.url)
             case .person(let person): PersonCard(person: person, url: card.url)
             case .list(let list): ListCard(list: list, url: card.url)
+            case .member(let member): MemberCard(member: member, url: card.url)
             }
         }
         .buttonStyle(.plain)
@@ -60,7 +61,7 @@ private struct FilmCard: View {
                         Text(facts).font(.system(size: 12)).foregroundStyle(LetterboxdTheme.muted).lineLimit(1)
                     }
                     if let rating = film.rating {
-                        AverageRating(rating: rating, ratings: film.ratings).padding(.vertical, 2)
+                        AverageRating(rating: rating, ratings: film.ratings, reviews: film.reviews).padding(.vertical, 2)
                     }
                     if let tagline = film.tagline {
                         Text(tagline.uppercased())
@@ -175,7 +176,7 @@ private struct ReviewCard: View {
     }
 
     private var reviewText: some View {
-        Text(review.text)
+        Text(review.styled)
             .font(Font(Self.textFont))
             .lineSpacing(Self.lineSpacing)
             .foregroundStyle(LetterboxdTheme.body)
@@ -291,6 +292,68 @@ private struct ListCard: View {
     }
 }
 
+private struct MemberCard: View {
+    let member: LetterboxdMember
+    let url: URL
+
+    var body: some View {
+        OpenButton(url: url) {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(alignment: .top, spacing: 14) {
+                    Avatar(url: member.avatar, size: 72)
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(member.name)
+                            .font(.system(size: 22, weight: .bold, design: .serif))
+                            .foregroundStyle(LetterboxdTheme.title)
+                            .lineLimit(2)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Text([member.name == member.username ? nil : member.username, member.badge].compactMap { $0 }.joined(separator: " · "))
+                            .font(.system(size: 12))
+                            .foregroundStyle(LetterboxdTheme.muted)
+                            .lineLimit(1)
+                        if !member.bio.isEmpty {
+                            // Paragraphs run together: the card has a few lines for it.
+                            Text(member.bio.replacing(/\n+/, with: " "))
+                                .font(.system(size: 13))
+                                .lineSpacing(2)
+                                .lineLimit(5)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                }
+                if !member.stats.isEmpty {
+                    HStack(alignment: .top, spacing: 0) {
+                        ForEach(Array(member.stats.prefix(5).enumerated()), id: \.offset) { _, stat in
+                            VStack(spacing: 2) {
+                                Text(stat.count.formatted(.number.notation(.compactName)))
+                                    .font(.system(size: 17, weight: .semibold))
+                                    .foregroundStyle(LetterboxdTheme.title)
+                                Text(stat.name.uppercased())
+                                    .font(.system(size: 10, weight: .semibold))
+                                    .tracking(0.6)
+                                    .foregroundStyle(LetterboxdTheme.label)
+                                    .lineLimit(1)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .accessibilityElement(children: .combine)
+                        }
+                    }
+                }
+                if member.favorites.contains(where: { $0.image != nil }) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("FAVORITE FILMS")
+                            .font(.system(size: 11, weight: .semibold))
+                            .tracking(0.8)
+                            .foregroundStyle(LetterboxdTheme.label)
+                        PosterRow(films: member.favorites)
+                    }
+                }
+            }
+            .padding(LetterboxdCardView.padding)
+        }
+    }
+}
+
 // MARK: - Parts
 
 /// "Us 2019": the title in Letterboxd's serif, the year beside it.
@@ -319,10 +382,11 @@ private struct Stars: View {
     }
 }
 
-/// The average of everyone's ratings: "★ 3.6 from 2.6M ratings".
+/// The average of everyone's ratings: "★ 3.6 from 2.6M ratings · 341K reviews".
 private struct AverageRating: View {
     let rating: Double
     let ratings: Int?
+    let reviews: Int?
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 6) {
@@ -331,7 +395,8 @@ private struct AverageRating: View {
                 .font(.system(size: 17, weight: .semibold))
                 .foregroundStyle(LetterboxdTheme.title)
             if let ratings {
-                Text("from \(ratings.formatted(.number.notation(.compactName))) \(ratings == 1 ? "rating" : "ratings")")
+                Text("from \(ratings.formatted(.number.notation(.compactName))) \(ratings == 1 ? "rating" : "ratings")"
+                     + (reviews.flatMap { $0 > 0 ? " · \($0.formatted(.number.notation(.compactName))) \($0 == 1 ? "review" : "reviews")" : nil } ?? ""))
                     .font(.system(size: 12))
                     .foregroundStyle(LetterboxdTheme.muted)
             }
@@ -376,9 +441,7 @@ private struct Picture: View {
     var cornerRadius: CGFloat = 4
 
     var body: some View {
-        AsyncImage(url: url) { image in
-            image.resizable().scaledToFill()
-        } placeholder: {
+        CardImage(url: url) {
             LetterboxdTheme.raised
         }
         .frame(width: size.width, height: size.height)
@@ -397,9 +460,7 @@ private struct Avatar: View {
     let size: CGFloat
 
     var body: some View {
-        AsyncImage(url: url) { image in
-            image.resizable().scaledToFill()
-        } placeholder: {
+        CardImage(url: url) {
             LetterboxdTheme.raised
         }
         .frame(width: size, height: size)

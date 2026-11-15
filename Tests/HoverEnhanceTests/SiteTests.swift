@@ -283,7 +283,7 @@ final class StubAPIServer: URLProtocol, @unchecked Sendable {
     override func startLoading() {
         guard let url = request.url else { return }
         Self.counts.withLock { $0[url.path(), default: 0] += 1 }
-        let status = url.path().contains("nothing") ? 200 : 503
+        let status = url.path().contains("nothing") ? 200 : url.path().contains("notfound") ? 404 : 503
         client?.urlProtocol(self, didReceive: HTTPURLResponse(url: url, statusCode: status, httpVersion: "HTTP/1.1", headerFields: nil)!,
                             cacheStoragePolicy: .notAllowed)
         client?.urlProtocol(self, didLoad: Data("{}".utf8))
@@ -298,6 +298,29 @@ struct MediaFetcherTests {
         #expect(await fetcher.lookUp(.streamable(id: id)) == .failed)
         #expect(await fetcher.lookUp(.streamable(id: id)) == .failed)
         #expect(StubAPIServer.requests(for: "/videos/\(id)") == 1)
+    }
+
+    @Test func aFailedLookupIsTriedAgainSoon() async {
+        // The network may be back: a failure isn't held for as long as an empty answer.
+        let fetcher = MediaFetcher(configuration: StubAPIServer.configuration(), failLifetime: 0)
+        let id = "gone\(UUID().uuidString.prefix(8))"
+        #expect(await fetcher.lookUp(.streamable(id: id)) == .failed)
+        #expect(await fetcher.lookUp(.streamable(id: id)) == .failed)
+        #expect(StubAPIServer.requests(for: "/videos/\(id)") == 2)
+    }
+
+    @Test func anEmptyAnswerIsntAskedForAgainRightAway() async {
+        let fetcher = MediaFetcher(configuration: StubAPIServer.configuration(), failLifetime: 0)
+        let id = "nothing\(UUID().uuidString.prefix(8))"
+        #expect(await fetcher.lookUp(.streamable(id: id)) == .nothing)
+        #expect(await fetcher.lookUp(.streamable(id: id)) == .nothing)
+        #expect(StubAPIServer.requests(for: "/videos/\(id)") == 1)
+    }
+
+    @Test func aLetterboxdPageThatIsntThereIsntAFailure() async {
+        // As for a link to a series on IMDb, which Letterboxd doesn't list.
+        let fetcher = MediaFetcher(configuration: StubAPIServer.configuration())
+        #expect(await fetcher.lookUp(.letterboxd(.film("notfound-\(UUID().uuidString.prefix(8).lowercased())"))) == .nothing)
     }
 
     @Test func aSiteThatAnswersWithNothingIsntAFailure() async {

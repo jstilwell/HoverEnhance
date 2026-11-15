@@ -229,9 +229,7 @@ private struct Avatar: View {
     let square: Bool
 
     var body: some View {
-        AsyncImage(url: url) { image in
-            image.resizable().scaledToFill()
-        } placeholder: {
+        CardImage(url: url) {
             GitHubTheme.topic
         }
         .frame(width: size, height: size)

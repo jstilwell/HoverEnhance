@@ -22,6 +22,8 @@ final class HoverMonitor {
     var policy: () -> InspectionPolicy = { InspectionPolicy() }
     /// Whether a rest is worth a look at all, as it isn't while previews need a key that isn't held.
     var shouldInspect: () -> Bool = { true }
+    /// Whether another look at the same spot could still change what's shown (see `lookAgain`).
+    var wantsSecondLook: () -> Bool = { true }
     /// Each inspection, and whether it's a second look at the same spot (see `lookAgain`).
     var onResult: ((Result<HoverInfo, InspectionError>, _ again: Bool) -> Void)?
     /// Every mouse move, with the cursor in global top-left-origin coordinates.
@@ -190,12 +192,13 @@ final class HoverMonitor {
 
     /// A page can still be building what's under a cursor that just stopped: Chromium fills in its
     /// accessibility tree after scrolling and loading, so a first look can come up short. While the
-    /// cursor stays put, look a few more times over the next two seconds, until a preview is up.
+    /// cursor stays put, look a few more times over the next two seconds, until a preview is up that
+    /// another look couldn't better: each look is a walk through the browser's tree.
     private func lookAgain(at point: CGPoint, generation requested: Int, policy: InspectionPolicy,
                            isWanted: @escaping @Sendable () -> Bool) async {
         for delay in [0.2, 0.3, 0.5, 1.0] {
             try? await Task.sleep(for: .seconds(delay))
-            guard requested == generation, !isPaused, !OwnWindows.areInFront(at: point) else { return }
+            guard requested == generation, !isPaused, wantsSecondLook(), !OwnWindows.areInFront(at: point) else { return }
             let result = await inspector.inspect(at: point, policy: policy, isWanted: isWanted)
             guard requested == generation, !isPaused else { return }
             onResult?(result, true)

@@ -10,6 +10,21 @@ final class WebPageLoader {
     /// Bumped per load; an older load still polling gives up when it sees a newer one.
     private var generation = 0
 
+    /// Only the page's text is wanted, so its pictures, video, and fonts aren't fetched: the page arrives
+    /// sooner, and the servers behind its ads' images never hear of it. Scripts stay, as the checks
+    /// these loads are for are scripts.
+    private static let textOnly = #"[{"trigger": {"url-filter": ".*", "resource-type": ["image", "media", "font"]}, "action": {"type": "block"}}]"#
+    private var rules: WKContentRuleList?
+    private var rulesCompiled = false
+
+    private func textOnlyRules() async -> WKContentRuleList? {
+        if !rulesCompiled {
+            rulesCompiled = true
+            rules = try? await WKContentRuleListStore.default().compileContentRuleList(forIdentifier: "HoverEnhance.textOnly", encodedContentRuleList: Self.textOnly)
+        }
+        return rules
+    }
+
     /// The outer HTML of the first element matching `selector` once the page has one, or nil if it
     /// doesn't appear within `timeout`.
     func html(at url: URL, selector: String, timeout: Duration = .seconds(10)) async -> String? {
@@ -29,7 +44,10 @@ final class WebPageLoader {
         let mine = generation
         // A view per load: a reused one would run `script` in the last page until the new one arrives.
         // Its cookies outlive it, in the shared website data store.
-        let webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 1280, height: 900))
+        let configuration = WKWebViewConfiguration()
+        if let rules = await textOnlyRules() { configuration.userContentController.add(rules) }
+        guard !Task.isCancelled, generation == mine else { return nil }
+        let webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 1280, height: 900), configuration: configuration)
         webView.load(URLRequest(url: url))
         defer { webView.stopLoading() }
 

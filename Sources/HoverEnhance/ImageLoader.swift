@@ -12,6 +12,9 @@ struct LoadedImage: Sendable {
 
 /// Fetches preview candidates in order and decodes the first one that works.
 actor ImageLoader {
+    /// The app's loader: previews and the pictures on cards share its cache.
+    static let shared = ImageLoader()
+
     /// Downloaded images, on disk. Settings shows its size and can clear it. Little is kept in memory:
     /// the decoded images below are what's shown again.
     static let diskCache = URLCache(
@@ -43,9 +46,10 @@ actor ImageLoader {
         downloader = LimitedDownloader(configuration: configuration, cookieStorage: cookieStorage) { url in
             url.host().flatMap(MediaSite.init(host:)) != nil
         }
-        // Enough for an album's neighbors and recent hovers; each can be as large as the screen, and an
-        // older one comes back from the disk cache quickly. NSCache also gives them up under memory pressure.
-        decoded.countLimit = 12
+        // Enough for an album's neighbors, a card's pictures, and recent hovers; each can be as large as the
+        // screen, and an older one comes back from the disk cache quickly. NSCache also gives them up
+        // under memory pressure.
+        decoded.countLimit = 24
         decoded.totalCostLimit = 128 << 20
     }
 
