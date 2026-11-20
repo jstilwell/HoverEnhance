@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.11.1 - 11-20-2026
+
+### Fixed
+
+- After a page scrolls or shifts, resting on a link in a Chrome-based browser previews that link instead of the one that was there before.
+
 ## 0.11.0 - 11-15-2026
 
 ### Added
