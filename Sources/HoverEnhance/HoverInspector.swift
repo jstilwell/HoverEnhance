@@ -112,6 +112,13 @@ final class HoverInspector: @unchecked Sendable {
             Thread.sleep(forTimeInterval: 0.3)
             if let retried = systemWide.element(at: point).0 { element = retried }
         }
+        // Chromium answers a hit test with the element it last found, while it asks the page again, if that
+        // element's old frame holds the point. Once the page has moved (a scroll, a feed filling in), that's
+        // the link that used to be there, which no longer covers the point. The page's answer comes soon.
+        for _ in 0..<4 where isWanted() && element.frame.map({ !$0.contains(point) }) == true {
+            Thread.sleep(forTimeInterval: 0.025)
+            if let retried = systemWide.element(at: point).0 { element = retried }
+        }
         guard isWanted() else { return .failure(.superseded) }
         let info = describe(element, pid: pid, at: point, isWanted: isWanted)
         // The walk stops partway once the cursor has moved on, and what it found by then isn't the whole story.
